@@ -1,0 +1,257 @@
+Hex	Opcode	Length	Cycles	After CB	Length	Cycles	After DDFDCB	Length	Cycles	After ED	Length	Cycles			Key	
+00	NOP	1	4	RLC B	1	8	"LD B, RLC (HL)"	1	0						^	16-bit number (two bytes)
+01	"LD BC, ^"	3	10	RLC C	1	8	"LD C, RLC (HL)"	1	0						$	8-bit number (one byte)
+02	"LD BC, (A)"	1	7	RLC D	1	8	"LD D, RLC (HL)"	1	0						%	2s comp offset (1 byte)
+03	INC BC	1	6	RLC E	1	8	"LD E, RLC (HL)"	1	0							
+04	INC B	1	4	RLC H	1	8	"LD H, RLC (HL)"	1	0							
+05	DEC B	1	4	RLC L	1	8	"LD L, RLC (HL)"	1	0							
+06	"LD B, $"	2	7	RLC (HL)	1	15	RLC (HL)	1	15							
+07	RLCA	1	4	RLC A	1	8	"LD A, RLC (HL)"	1	0							
+08	"EX AF, AF'"	1	4	RRC B	1	8	"LD B, RRC (HL)"	1	0							
+09	"ADD HL, BC"	1	11	RRC C	1	8	"LD C, RRC (HL)"	1	0							
+0A	"LD A, (BC)"	1	7	RRC D	1	8	"LD D, RRC (HL)"	1	0							
+0B	DEC BC	1	6	RRC E	1	8	"LD E, RRC (HL)"	1	0							
+0C	INC C	1	4	RRC H	1	8	"LD H, RRC (HL)"	1	0							
+0D	DEC C	1	4	RRC L	1	8	"LD L, RRC (HL)"	1	0							
+0E	"LD C, $"	2	7	RRC (HL)	1	15	RRC (HL)	1	15							
+0F	RRCA	1	4	RRC A	1	8	"LD A, RRC (HL)"	1	0							
+10	DJNZ %	2	13 / 8	RL B	1	8	"LD B, RL (HL)"	1	0							
+11	"LD DE, ^"	3	10	RL C	1	8	"LD C, RL (HL)"	1	0							
+12	"LD (DE), A"	1	7	RL D	1	8	"LD D, RL (HL)"	1	0							
+13	INC DE	1	6	RL E	1	8	"LD E, RL (HL)"	1	0							
+14	INC D	1	4	RL H	1	8	"LD H, RL (HL)"	1	0							
+15	DEC D	1	4	RL L	1	8	"LD L, RL (HL)"	1	0							
+16	"LD D, $"	2	7	RL (HL)	1	15	RL (HL)	1	15							
+17	RLA	1	4	RL A	1	8	"LD A, RL (HL)"	1	0							
+18	JR %	2	12	RR B	1	8	"LD B, RR (HL)"	1	0							
+19	"ADD HL, DE"	1	11	RR C	1	8	"LD C, RR (HL)"	1	0							
+1A	"LD A, (DE)"	1	7	RR D	1	8	"LD D, RR (HL)"	1	0							
+1B	DEC DE	1	6	RR E	1	8	"LD E, RR (HL)"	1	0							
+1C	INC E	1	4	RR H	1	8	"LD H, RR (HL)"	1	0							
+1D	DEC E	1	4	RR L	1	8	"LD L, RR (HL)"	1	0							
+1E	"LD E, $"	2	7	RR (HL)	1	15	RR (HL)	1	15							
+1F	RRA	1	4	RR A	1	8	"LD A, RR (HL)"	1	0							
+20	"JR NZ, %"	2	12 / 7	SLA B	1	8	"LD B, SLA (HL)"	1	0							
+21	"LD HL, ^"	3	10	SLA C	1	8	"LD C, SLA (HL)"	1	0							
+22	"LD (^), HL"	3	16	SLA D	1	8	"LD D, SLA (HL)"	1	0							
+23	INC HL	1	6	SLA E	1	8	"LD E, SLA (HL)"	1	0							
+24	INC H	1	4	SLA H	1	8	"LD H, SLA (HL)"	1	0							
+25	DEC H	1	4	SLA L	1	8	"LD L, SLA (HL)"	1	0							
+26	"LD H, $"	2	7	SLA (HL)	1	15	SLA (HL)	1	15							
+27	DAA	1	4	SLA A	1	8	"LD A, SLA (HL)"	1	0							
+28	"JR Z, %"	2	12 / 7	SRA B	1	8	"LD B, SRA (HL)"	1	0							
+29	"ADD HL, HL"	1	11	SRA C	1	8	"LD C, SRA (HL)"	1	0							
+2A	"LD HL, (^)"	3	16	SRA D	1	8	"LD D, SRA (HL)"	1	0							
+2B	DEC HL	1	6	SRA E	1	8	"LD E, SRA (HL)"	1	0							
+2C	INC L	1	4	SRA H	1	8	"LD H, SRA (HL)"	1	0							
+2D	DEC L	1	4	SRA L	1	8	"LD L, SRA (HL)"	1	0							
+2E	"LD L, $"	2	7	SRA (HL)	1	15	SRA (HL)	1	15							
+2F	CPL	1	4	SRA A	1	8	"LD A, SRA (HL)"	1	0							
+30	"JR NC, %"	2	12 / 7	SLL B	1	8	"LD B, SLL (HL)"	1	0							
+31	"LD SP, ^"	3	10	SLL C	1	8	"LD C, SLL (HL)"	1	0							
+32	"LD (^), A"	3	13	SLL D	1	8	"LD D, SLL (HL)"	1	0							
+33	INC SP	1	6	SLL E	1	8	"LD E, SLL (HL)"	1	0							
+34	INC (HL)	1	11	SLL H	1	8	"LD H, SLL (HL)"	1	0							
+35	DEC (HL)	1	11	SLL L	1	8	"LD L, SLL (HL)"	1	0							
+36	"LD (HL), $"	2	10	SLL (HL)	1	15	SLL (HL)	1	15							
+37	SCF	1	4	SLL A	1	8	"LD A, SLL (HL)"	1	0							
+38	"JR C, %"	2	12 / 7	SRL B	1	8	"LD B, SRL (HL)"	1	0							
+39	"ADD HL, SP"	1	11	SRL C	1	8	"LD C, SRL (HL)"	1	0							
+3A	"LD A, (^)"	3	13	SRL D	1	8	"LD D, SRL (HL)"	1	0							
+3B	DEC SP	1	6	SRL E	1	8	"LD E, SRL (HL)"	1	0							
+3C	INC A	1	4	SRL H	1	8	"LD H, SRL (HL)"	1	0							
+3D	DEC A	1	4	SRL L	1	8	"LD L, SRL (HL)"	1	0							
+3E	"LD A, $"	2	7	SRL (HL)	1	15	SRL (HL)	1	15							
+3F	CCF	1	4	SRL A	1	8	"LD A, SRL (HL)"	1	0							
+40	"LD B, B"	1	4	"BIT 0, B"	1	8	"BIT 0, (HL)"	1	12	"IN B, (C)"	1	12				
+41	"LD B, C"	1	4	"BIT 0, C"	1	8	"BIT 0, (HL)"	1	12	"OUT (C), B"	1	12				
+42	"LD B, D"	1	4	"BIT 0, D"	1	8	"BIT 0, (HL)"	1	12	"SBC HL, BC"	1	15				
+43	"LD B, E"	1	4	"BIT 0, E"	1	8	"BIT 0, (HL)"	1	12	"LD (^), BC"	3	20				
+44	"LD B, H"	1	4	"BIT 0, H"	1	8	"BIT 0, (HL)"	1	12	NEG	1	8				
+45	"LD B, L"	1	4	"BIT 0, L"	1	8	"BIT 0, (HL)"	1	12	RETN	1	14				
+46	"LD B, (HL)"	1	7	"BIT 0, (HL)"	1	12	"BIT 0, (HL)"	1	12	IM 0	1	8				
+47	"LD B, A"	1	4	"BIT 0, A"	1	8	"BIT 0, (HL)"	1	12	"LD I, A"	1	9				
+48	"LD C, B"	1	4	"BIT 1, B"	1	8	"BIT 1, (HL)"	1	12	"IN C, (C)"	1	12				
+49	"LD C, C"	1	4	"BIT 1, C"	1	8	"BIT 1, (HL)"	1	12	"OUT (C), C"	1	12				
+4A	"LD C, D"	1	4	"BIT 1, D"	1	8	"BIT 1, (HL)"	1	12	"ADC HL, BC"	1	15				
+4B	"LD C, E"	1	4	"BIT 1, E"	1	8	"BIT 1, (HL)"	1	12	"LD BC, (^)"	3	20				
+4C	"LD C, H"	1	4	"BIT 1, H"	1	8	"BIT 1, (HL)"	1	12	NEG	1	8				
+4D	"LD C, L"	1	4	"BIT 1, L"	1	8	"BIT 1, (HL)"	1	12	RETN	1	14				
+4E	"LD C, (HL)"	1	7	"BIT 1, (HL)"	1	12	"BIT 1, (HL)"	1	12	IM 0	1	8				
+4F	"LD C, A"	1	4	"BIT 1, A"	1	8	"BIT 1, (HL)"	1	12	"LD R, A"	1	9				
+50	"LD D, B"	1	4	"BIT 2, B"	1	8	"BIT 2, (HL)"	1	12	"IN D, (C)"	1	12				
+51	"LD D, C"	1	4	"BIT 2, C"	1	8	"BIT 2, (HL)"	1	12	"OUT (C), D"	1	12				
+52	"LD D, D"	1	4	"BIT 2, D"	1	8	"BIT 2, (HL)"	1	12	"SBC HL, DE"	1	15				
+53	"LD D, E"	1	4	"BIT 2, E"	1	8	"BIT 2, (HL)"	1	12	"LD (^), DE"	3	20				
+54	"LD D, H"	1	4	"BIT 2, H"	1	8	"BIT 2, (HL)"	1	12	NEG	1	8				
+55	"LD D, L"	1	4	"BIT 2, L"	1	8	"BIT 2, (HL)"	1	12	RETN	1	14				
+56	"LD D, (HL)"	1	7	"BIT 2, (HL)"	1	12	"BIT 2, (HL)"	1	12	IM 1	1	8				
+57	"LD D, A"	1	4	"BIT 2, A"	1	8	"BIT 2, (HL)"	1	12	"LD A, I"	1	9				
+58	"LD E, B"	1	4	"BIT 3, B"	1	8	"BIT 3, (HL)"	1	12	"IN E, (C)"	1	12				
+59	"LD E, C"	1	4	"BIT 3, C"	1	8	"BIT 3, (HL)"	1	12	"OUT (C), E"	1	12				
+5A	"LD E, D"	1	4	"BIT 3, D"	1	8	"BIT 3, (HL)"	1	12	"ADC HL, DE"	1	15				
+5B	"LD E, E"	1	4	"BIT 3, E"	1	8	"BIT 3, (HL)"	1	12	"LD DE, (^)"	3	20				
+5C	"LD E, H"	1	4	"BIT 3, H"	1	8	"BIT 3, (HL)"	1	12	NEG	1	8				
+5D	"LD E, L"	1	4	"BIT 3, L"	1	8	"BIT 3, (HL)"	1	12	RETN	1	14				
+5E	"LD E, (HL)"	1	7	"BIT 3, (HL)"	1	12	"BIT 3, (HL)"	1	12	IM 2	1	8				
+5F	"LD E, A"	1	4	"BIT 3, A"	1	8	"BIT 3, (HL)"	1	12	"LD A, R"	1	9				
+60	"LD H, B"	1	4	"BIT 4, B"	1	8	"BIT 4, (HL)"	1	12	"IN H, (C)"	1	12				
+61	"LD H, C"	1	4	"BIT 4, C"	1	8	"BIT 4, (HL)"	1	12	"OUT (C), H"	1	12				
+62	"LD H, D"	1	4	"BIT 4, D"	1	8	"BIT 4, (HL)"	1	12	"SBC HL, HL"	1	15				
+63	"LD H, E"	1	4	"BIT 4, E"	1	8	"BIT 4, (HL)"	1	12	"LD (^), HL"	3	20				
+64	"LD H, H"	1	4	"BIT 4, H"	1	8	"BIT 4, (HL)"	1	12	NEG	1	8				
+65	"LD H, L"	1	4	"BIT 4, L"	1	8	"BIT 4, (HL)"	1	12	RETN	1	14				
+66	"LD H, (HL)"	1	7	"BIT 4, (HL)"	1	12	"BIT 4, (HL)"	1	12	IM 0	1	8				
+67	"LD H, A"	1	4	"BIT 4, A"	1	8	"BIT 4, (HL)"	1	12	RRD	1	18				
+68	"LD L, B"	1	4	"BIT 5, B"	1	8	"BIT 5, (HL)"	1	12	"IN L, (C)"	1	12				
+69	"LD L, C"	1	4	"BIT 5, C"	1	8	"BIT 5, (HL)"	1	12	"OUT (C), L"	1	12				
+6A	"LD L, D"	1	4	"BIT 5, D"	1	8	"BIT 5, (HL)"	1	12	"ADC HL, HL"	1	15				
+6B	"LD L, E"	1	4	"BIT 5, E"	1	8	"BIT 5, (HL)"	1	12	"LD HL, (^)"	3	20				
+6C	"LD L, H"	1	4	"BIT 5, H"	1	8	"BIT 5, (HL)"	1	12	NEG	1	8				
+6D	"LD L, L"	1	4	"BIT 5, L"	1	8	"BIT 5, (HL)"	1	12	RETN	1	14				
+6E	"LD L, (HL)"	1	7	"BIT 5, (HL)"	1	12	"BIT 5, (HL)"	1	12	IM 0	1	8				
+6F	"LD L, A"	1	4	"BIT 5, A"	1	8	"BIT 5, (HL)"	1	12	RLD	1	18				
+70	"LD (HL), B"	1	7	"BIT 6, B"	1	8	"BIT 6, (HL)"	1	12	"IN F, (C)"	1	12				
+71	"LD (HL), C"	1	7	"BIT 6, C"	1	8	"BIT 6, (HL)"	1	12	"OUT (C), 0"	1	12				
+72	"LD (HL), D"	1	7	"BIT 6, D"	1	8	"BIT 6, (HL)"	1	12	"SBC HL, SP"	1	15				
+73	"LD (HL), E"	1	7	"BIT 6, E"	1	8	"BIT 6, (HL)"	1	12	"LD (^), SP"	3	20				
+74	"LD (HL), H"	1	7	"BIT 6, H"	1	8	"BIT 6, (HL)"	1	12	NEG	1	8				
+75	"LD (HL), L"	1	7	"BIT 6, L"	1	8	"BIT 6, (HL)"	1	12	RETN	1	14				
+76	HALT	1	4	"BIT 6, (HL)"	1	12	"BIT 6, (HL)"	1	12	IM 1	1	8				
+77	"LD (HL), A"	1	7	"BIT 6, A"	1	8	"BIT 6, (HL)"	1	12							
+78	"LD A, B"	1	4	"BIT 7, B"	1	8	"BIT 7, (HL)"	1	12	"IN A, (C)"	1	12				
+79	"LD A, C"	1	4	"BIT 7, C"	1	8	"BIT 7, (HL)"	1	12	"OUT (C), A"	1	12				
+7A	"LD A, D"	1	4	"BIT 7, D"	1	8	"BIT 7, (HL)"	1	12	"ADC HL, SP"	1	15				
+7B	"LD A, E"	1	4	"BIT 7, E"	1	8	"BIT 7, (HL)"	1	12	"LD SP, (^)"	3	20				
+7C	"LD A, H"	1	4	"BIT 7, H"	1	8	"BIT 7, (HL)"	1	12	NEG	1	8				
+7D	"LD A, L"	1	4	"BIT 7, L"	1	8	"BIT 7, (HL)"	1	12	RETN	1	14				
+7E	"LD A, (HL)"	1	7	"BIT 7, (HL)"	1	12	"BIT 7, (HL)"	1	12	IM 2	1	8				
+7F	"LD A, A"	1	4	"BIT 7, A"	1	8	"BIT 7, (HL)"	1	12							
+80	"ADD A, B"	1	4	"RES 0, B"	1	8	"LD B, RES 0, (HL)"	1	0							
+81	"ADD A, C"	1	4	"RES 0, C"	1	8	"LD C, RES 0, (HL)"	1	0							
+82	"ADD A, D"	1	4	"RES 0, D"	1	8	"LD D, RES 0, (HL)"	1	0							
+83	"ADD A, E"	1	4	"RES 0, E"	1	8	"LD E, RES 0, (HL)"	1	0							
+84	"ADD A, H"	1	4	"RES 0, H"	1	8	"LD H, RES 0, (HL)"	1	0							
+85	"ADD A, L"	1	4	"RES 0, L"	1	8	"LD L, RES 0, (HL)"	1	0							
+86	"ADD A, (HL)"	1	7	"RES 0, (HL)"	1	15	"RES 0, (HL)"	1	15							
+87	"ADD A, A"	1	4	"RES 0, A"	1	8	"LD L, RES 0, (HL)"	1	0							
+88	"ADC A, B"	1	4	"RES 1, B"	1	8	"LD B, RES 1, (HL)"	1	0							
+89	"ADC A, C"	1	4	"RES 1, C"	1	8	"LD C, RES 1, (HL)"	1	0							
+8A	"ADC A, D"	1	4	"RES 1, D"	1	8	"LD D, RES 1, (HL)"	1	0							
+8B	"ADC A, E"	1	4	"RES 1, E"	1	8	"LD E, RES 1, (HL)"	1	0							
+8C	"ADC A, H"	1	4	"RES 1, H"	1	8	"LD H, RES 1, (HL)"	1	0							
+8D	"ADC A, L"	1	4	"RES 1, L"	1	8	"LD L, RES 1, (HL)"	1	0							
+8E	"ADC A, (HL)"	1	7	"RES 1, (HL)"	1	15	"RES 1, (HL)"	1	15							
+8F	"ADC A, A"	1	4	"RES 1, A"	1	8	"LD L, RES 1, (HL)"	1	0							
+90	"SUB A, B"	1	4	"RES 2, B"	1	8	"LD B, RES 2, (HL)"	1	0							
+91	"SUB A, C"	1	4	"RES 2, C"	1	8	"LD C, RES 2, (HL)"	1	0							
+92	"SUB A, D"	1	4	"RES 2, D"	1	8	"LD D, RES 2, (HL)"	1	0							
+93	"SUB A, E"	1	4	"RES 2, E"	1	8	"LD E, RES 2, (HL)"	1	0							
+94	"SUB A, H"	1	4	"RES 2, H"	1	8	"LD H, RES 2, (HL)"	1	0							
+95	"SUB A, L"	1	4	"RES 2, L"	1	8	"LD L, RES 2, (HL)"	1	0							
+96	"SUB A, (HL)"	1	7	"RES 2, (HL)"	1	15	"RES 2, (HL)"	1	15							
+97	"SUB A, A"	1	4	"RES 2, A"	1	8	"LD L, RES 2, (HL)"	1	0							
+98	"SBC A, B"	1	4	"RES 3, B"	1	8	"LD B, RES 3, (HL)"	1	0							
+99	"SBC A, C"	1	4	"RES 3, C"	1	8	"LD C, RES 3, (HL)"	1	0							
+9A	"SBC A, D"	1	4	"RES 3, D"	1	8	"LD D, RES 3, (HL)"	1	0							
+9B	"SBC A, E"	1	4	"RES 3, E"	1	8	"LD E, RES 3, (HL)"	1	0							
+9C	"SBC A, H"	1	4	"RES 3, H"	1	8	"LD H, RES 3, (HL)"	1	0							
+9D	"SBC A, L"	1	4	"RES 3, L"	1	8	"LD L, RES 3, (HL)"	1	0							
+9E	"SBC A, (HL)"	1	7	"RES 3, (HL)"	1	15	"RES 3, (HL)"	1	15							
+9F	"SBC A, A"	1	4	"RES 3, A"	1	8	"LD L, RES 3, (HL)"	1	0							
+A0	"AND A, B"	1	4	"RES 4, B"	1	8	"LD B, RES 4, (HL)"	1	0	LDI	1	16				
+A1	"AND A, C"	1	4	"RES 4, C"	1	8	"LD C, RES 4, (HL)"	1	0	CPI	1	16				
+A2	"AND A, D"	1	4	"RES 4, D"	1	8	"LD D, RES 4, (HL)"	1	0	INI	1	16				
+A3	"AND A, E"	1	4	"RES 4, E"	1	8	"LD E, RES 4, (HL)"	1	0	OUTI	1	16				
+A4	"AND A, H"	1	4	"RES 4, H"	1	8	"LD H, RES 4, (HL)"	1	0							
+A5	"AND A, L"	1	4	"RES 4, L"	1	8	"LD L, RES 4, (HL)"	1	0							
+A6	"AND A, (HL)"	1	7	"RES 4, (HL)"	1	15	"RES 4, (HL)"	1	15							
+A7	"AND A, A"	1	4	"RES 4, A"	1	8	"LD L, RES 4, (HL)"	1	0							
+A8	"XOR A, B"	1	4	"RES 5, B"	1	8	"LD B, RES 5, (HL)"	1	0	LDD	1	16				
+A9	"XOR A, C"	1	4	"RES 5, C"	1	8	"LD C, RES 5, (HL)"	1	0	CPD	1	16				
+AA	"XOR A, D"	1	4	"RES 5, D"	1	8	"LD D, RES 5, (HL)"	1	0	IND	1	16				
+AB	"XOR A, E"	1	4	"RES 5, E"	1	8	"LD E, RES 5, (HL)"	1	0	OUTD	1	16				
+AC	"XOR A, H"	1	4	"RES 5, H"	1	8	"LD H, RES 5, (HL)"	1	0							
+AD	"XOR A, L"	1	4	"RES 5, L"	1	8	"LD L, RES 5, (HL)"	1	0							
+AE	"XOR A, (HL)"	1	7	"RES 5, (HL)"	1	15	"RES 5, (HL)"	1	15							
+AF	"XOR A, A"	1	4	"RES 5, A"	1	8	"LD L, RES 5, (HL)"	1	0							
+B0	"OR A, B"	1	4	"RES 6, B"	1	8	"LD B, RES 6, (HL)"	1	0	LDIR	1	21 / 16				
+B1	"OR A, C"	1	4	"RES 6, C"	1	8	"LD C, RES 6, (HL)"	1	0	CPIR	1	21 / 16				
+B2	"OR A, D"	1	4	"RES 6, D"	1	8	"LD D, RES 6, (HL)"	1	0	INIR	1	21 / 16				
+B3	"OR A, E"	1	4	"RES 6, E"	1	8	"LD E, RES 6, (HL)"	1	0	OTIR	1	21 / 16				
+B4	"OR A, H"	1	4	"RES 6, H"	1	8	"LD H, RES 6, (HL)"	1	0							
+B5	"OR A, L"	1	4	"RES 6, L"	1	8	"LD L, RES 6, (HL)"	1	0							
+B6	"OR A, (HL)"	1	7	"RES 6, (HL)"	1	15	"RES 6, (HL)"	1	15							
+B7	"OR A, A"	1	4	"RES 6, A"	1	8	"LD L, RES 6, (HL)"	1	0							
+B8	CP B	1	4	"RES 7, B"	1	8	"LD B, RES 7, (HL)"	1	0	LDDR	1	21 / 16				
+B9	CP C	1	4	"RES 7, C"	1	8	"LD C, RES 7, (HL)"	1	0	CPDR	1	21 / 16				
+BA	CP D	1	4	"RES 7, D"	1	8	"LD D, RES 7, (HL)"	1	0	INDR	1	21 / 16				
+BB	CP E	1	4	"RES 7, E"	1	8	"LD E, RES 7, (HL)"	1	0	OTDR	1	21 / 16				
+BC	CP H	1	4	"RES 7, H"	1	8	"LD H, RES 7, (HL)"	1	0							
+BD	CP L	1	4	"RES 7, L"	1	8	"LD L, RES 7, (HL)"	1	0							
+BE	CP (HL)	1	7	"RES 7, (HL)"	1	15	"RES 7, (HL)"	1	15							
+BF	CP A	1	4	"RES 7, A"	1	8	"LD L, RES 7, (HL)"	1	0							
+C0	RET NZ	1	11 / 5	"SET 0, B"	1	8	"LD B, SET 0, (HL)"	1	0							
+C1	POP BC	1	10	"SET 0, C"	1	8	"LD C, RES 0, (HL)"	1	0							
+C2	"JP NZ, ^"	3	12 / 7	"SET 0, D"	1	8	"LD D, RES 0, (HL)"	1	0							
+C3	JP ^	3	10	"SET 0, E"	1	8	"LD E, RES 0, (HL)"	1	0							
+C4	"CALL NZ, ^"	3	17 / 10	"SET 0, H"	1	8	"LD H, RES 0, (HL)"	1	0							
+C5	PUSH BC	1	11	"SET 0, L"	1	8	"LD L, RES 0, (HL)"	1	0							
+C6	"ADD A, $"	2	7	"SET 0, (HL)"	1	15	"RES 0, (HL)"	1	15							
+C7	RST 00	1	11	"SET 0, A"	1	8	"LD L, RES 0, (HL)"	1	0							
+C8	RET Z	1	11 / 5	"SET 1, B"	1	8	"LD B, RES 1, (HL)"	1	0							
+C9	RET	1	10	"SET 1, C"	1	8	"LD C, RES 1, (HL)"	1	0							
+CA	"JP Z, ^"	3	12 / 7	"SET 1, D"	1	8	"LD D, RES 1, (HL)"	1	0							
+CB		0		"SET 1, E"	1	8	"LD E, RES 1, (HL)"	1	0							
+CC	"CALL Z, ^"	3	17 / 10	"SET 1, H"	1	8	"LD H, RES 1, (HL)"	1	0							
+CD	CALL ^	3	17	"SET 1, L"	1	8	"LD L, RES 1, (HL)"	1	0							
+CE	"ADC A, $"	2	7	"SET 1, (HL)"	1	15	"RES 1, (HL)"	1	15							
+CF	RST 08	1	11	"SET 1, A"	1	8	"LD L, RES 1, (HL)"	1	0							
+D0	RET NC	1	11 / 5	"SET 2, B"	1	8	"LD B, RES 2, (HL)"	1	0							
+D1	POP DE	1	10	"SET 2, C"	1	8	"LD C, RES 2, (HL)"	1	0							
+D2	"JP NC, ^"	3	12 / 7	"SET 2, D"	1	8	"LD D, RES 2, (HL)"	1	0							
+D3	"OUT ($), A"	2	11	"SET 2, E"	1	8	"LD E, RES 2, (HL)"	1	0							
+D4	"CALL NC, ^"	3	17 / 10	"SET 2, H"	1	8	"LD H, RES 2, (HL)"	1	0							
+D5	PUSH DE	1	11	"SET 2, L"	1	8	"LD L, RES 2, (HL)"	1	0							
+D6	SUB $	2	7	"SET 2, (HL)"	1	15	"RES 2, (HL)"	1	15							
+D7	RST 10	1	11	"SET 2, A"	1	8	"LD L, RES 2, (HL)"	1	0							
+D8	RET C	1	11 / 5	"SET 3, B"	1	8	"LD B, RES 3, (HL)"	1	0							
+D9	EXX	1	4	"SET 3, C"	1	8	"LD C, RES 3, (HL)"	1	0							
+DA	"JP C, ^"	3	12 / 7	"SET 3, D"	1	8	"LD D, RES 3, (HL)"	1	0							
+DB	"IN A, ($)"	2	11	"SET 3, E"	1	8	"LD E, RES 3, (HL)"	1	0							
+DC	"CALL C, ^"	3	17 / 10	"SET 3, H"	1	8	"LD H, RES 3, (HL)"	1	0							
+DD		0		"SET 3, L"	1	8	"LD L, RES 3, (HL)"	1	0							
+DE	"SBC A, $"	2	7	"SET 3, (HL)"	1	15	"RES 3, (HL)"	1	15							
+DF	RST 18	1	11	"SET 3, A"	1	8	"LD L, RES 3, (HL)"	1	0							
+E0	RET PO	1	11 / 5	"SET 4, B"	1	8	"LD B, RES 4, (HL)"	1	0							
+E1	POP HL	1	10	"SET 4, C"	1	8	"LD C, RES 4, (HL)"	1	0							
+E2	"JP PO, ^"	3	12 / 7	"SET 4, D"	1	8	"LD D, RES 4, (HL)"	1	0							
+E3	"EX (SP), HL"	1	19	"SET 4, E"	1	8	"LD E, RES 4, (HL)"	1	0							
+E4	"CALL PO, ^"	3	17 / 10	"SET 4, H"	1	8	"LD H, RES 4, (HL)"	1	0							
+E5	PUSH HL	1	11	"SET 4, L"	1	8	"LD L, RES 4, (HL)"	1	0							
+E6	AND $	2	7	"SET 4, (HL)"	1	15	"RES 4, (HL)"	1	15							
+E7	RST 20	1	11	"SET 4, A"	1	8	"LD L, RES 4, (HL)"	1	0							
+E8	RET PE	1	11 / 5	"SET 5, B"	1	8	"LD B, RES 5, (HL)"	1	0							
+E9	JP HL	1	4	"SET 5, C"	1	8	"LD C, RES 5, (HL)"	1	0							
+EA	"JP PE, ^"	3	12 / 7	"SET 5, D"	1	8	"LD D, RES 5, (HL)"	1	0							
+EB	"EX DE, HL"	1	4	"SET 5, E"	1	8	"LD E, RES 5, (HL)"	1	0							
+EC	"CALL PE, ^"	3	17 / 10	"SET 5, H"	1	8	"LD H, RES 5, (HL)"	1	0							
+ED		0		"SET 5, L"	1	8	"LD L, RES 5, (HL)"	1	0							
+EE	XOR $	2	7	"SET 5, (HL)"	1	15	"RES 5, (HL)"	1	15							
+EF	RST 28	1	11	"SET 5, A"	1	8	"LD L, RES 5, (HL)"	1	0							
+F0	RET P	1	11 / 5	"SET 6, B"	1	8	"LD B, RES 6, (HL)"	1	0							
+F1	POP AF	1	10	"SET 6, C"	1	8	"LD C, RES 6, (HL)"	1	0							
+F2	"JP P, ^"	3	12 / 7	"SET 6, D"	1	8	"LD D, RES 6, (HL)"	1	0							
+F3	DI	1	4	"SET 6, E"	1	8	"LD E, RES 6, (HL)"	1	0							
+F4	"CALL P, ^"	3	17 / 10	"SET 6, H"	1	8	"LD H, RES 6, (HL)"	1	0							
+F5	PUSH AF	1	11	"SET 6, L"	1	8	"LD L, RES 6, (HL)"	1	0							
+F6	OR $	2	7	"SET 6, (HL)"	1	15	"RES 6, (HL)"	1	15							
+F7	RST 30	1	11	"SET 6, A"	1	8	"LD L, RES 6, (HL)"	1	0							
+F8	RET M	1	11 / 5	"SET 7, B"	1	8	"LD B, RES 7, (HL)"	1	0							
+F9	"LD SP, HL"	1	6	"SET 7, C"	1	8	"LD C, RES 7, (HL)"	1	0							
+FA	"JP M, ^"	3	12 / 7	"SET 7, D"	1	8	"LD D, RES 7, (HL)"	1	0							
+FB	EI	1	4	"SET 7, E"	1	8	"LD E, RES 7, (HL)"	1	0							
+FC	"CALL M, ^"	3	17 / 10	"SET 7, H"	1	8	"LD H, RES 7, (HL)"	1	0							
+FD	FDOP	0		"SET 7, L"	1	8	"LD L, RES 7, (HL)"	1	0							
+FE	CP $	2	7	"SET 7, (HL)"	1	15	"RES 7, (HL)"	1	15							
+FF	RST 38	1	11	"SET 7, A"	1	8	"LD L, RES 7, (HL)"	1	0							

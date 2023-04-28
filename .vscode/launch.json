@@ -1,0 +1,32 @@
+{
+    "version": "0.2.0",
+    "configuratons": [],
+    "externalConsole": true,
+    "configurations": [
+        {
+            "name": "C/C++: g++.exe build and debug active file",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${fileDirname}\\release\\win64\\${fileBasenameNoExtension}.exe",
+            "args": ["-f", "monitor.rom", "-l", "0", "firmware.lst", "-l", "23", "bios.lst", "-v", "8"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}\\release\\win64",
+            "environment": [{"name": "Path", "value":  "${workspaceFolder}\\release\\win64\\lib;${env:Path}"}],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "C/C++: g++.exe build active file"
+        }
+    ]
+}
