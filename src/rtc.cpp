@@ -14,10 +14,30 @@ void I2cRTC::tick(uint64_t* busState, uint64_t clock_time_ps) {
     }
     if( mem[REG_SEC] & OSC_EN ) {
         while( clock_time_ps-startTime > PICOSECONDS_IN_SECOND ) {
-            clock.tm_sec += 1;
             startTime += PICOSECONDS_IN_SECOND;
+
+            if( ++clock.tm_sec > 59 ) {
+                clock.tm_sec = 0;
+                if( ++clock.tm_min > 59 ) {
+                    clock.tm_min = 0;
+                    if( ++clock.tm_hour > 23 ) {
+                        clock.tm_hour = 0;
+                        clock.tm_wday = (clock.tm_wday+1) % 7;
+                        clock.tm_yday++;
+                        clock.tm_mday++;
+                        int leap = ((clock.tm_mon == 1) && (clock.tm_year % 4) == 0) ? 1: 0;
+                        if(clock.tm_mday > MONTH_DAYS[clock.tm_mon]+leap) {
+                            clock.tm_mday = 1;
+                            if(++clock.tm_mon > 11) {
+                                clock.tm_mon = 0;
+                                clock.tm_year++;
+                                clock.tm_yday = 0;
+                            }
+                        }
+                    }
+                }
+            }
         }
-        mktime(&clock);
     }
     if( mem[REG_CONTROL] & FLAG_SQWEN ) {
         uint64_t tickTime = 0;
