@@ -8,7 +8,8 @@
 class Digit {
     private:
         SDL_Texture   *digitTexture;
-
+        float zoom;
+        
         const static int SEGMENTS = 15;
 
         short segmentFlags;
@@ -29,7 +30,7 @@ class Digit {
         const static int DIGIT_WIDTH = 32;
         const static int DIGIT_HEIGHT = 64;
 
-        Digit(SDL_Renderer *sdlRenderer);
+        Digit(SDL_Renderer *sdlRenderer, float zoom);
 
         void onDraw(SDL_Renderer *renderer, int x, int y);
 

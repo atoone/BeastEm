@@ -1,8 +1,9 @@
 #include "digit.hpp"
 #include <iostream>
 
-Digit::Digit(SDL_Renderer *renderer) {
-    digitTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, DIGIT_WIDTH, DIGIT_HEIGHT);
+Digit::Digit(SDL_Renderer *renderer, float zoom) {
+    this->zoom = zoom;
+    digitTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, DIGIT_WIDTH*zoom, DIGIT_HEIGHT*zoom);
 
     createSegments();
 
@@ -14,8 +15,8 @@ Digit::Digit(SDL_Renderer *renderer) {
 
 void Digit::createSegments() {
 
-    short segWidth = round(DIGIT_WIDTH/8.0);
-    short segLen   = round(DIGIT_WIDTH-segWidth*1.5);
+    short segWidth = round(DIGIT_WIDTH*zoom/8.0);
+    short segLen   = round(DIGIT_WIDTH*zoom-segWidth*1.5);
 
     short bevel    = round(segWidth/4.0);
     short b2 = bevel*2;
@@ -110,10 +111,10 @@ void Digit::onDraw(SDL_Renderer *renderer, int x, int y) {
     }
     SDL_Rect digitRect;
 
-    digitRect.x = x;
-    digitRect.y = y;
-    digitRect.w = DIGIT_WIDTH;
-    digitRect.h = DIGIT_HEIGHT;
+    digitRect.x = x*zoom;
+    digitRect.y = y*zoom;
+    digitRect.w = DIGIT_WIDTH*zoom;
+    digitRect.h = DIGIT_HEIGHT*zoom;
 
     SDL_RenderCopy(renderer, digitTexture, NULL, &digitRect);
 }

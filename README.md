@@ -18,21 +18,21 @@ All of the main features of MicroBeast are emulated, allowing software to be dev
 
 # Running
 
-BeastEm requires a number of libraries and files to run. For Windows, these files are all supplied in the `release/win64` directory, which also contains two batch files to configure the library path and start the program.
+BeastEm requires a number of libraries and files to run. For Windows, these files are all supplied in the `release/win64` directory, which also contains a batch file to configure the library path and start the program.
+
+Linux users should copy the exectutable to a directory along with the files in the `assets` folder in order to run BeastEm.
 
 ## Run with a simple test ROM
 
-Windows users can run `demo.bat` in the `release/win64` directory. This will start the emulator up with an (incomplete) monitor ROM that exercises some of the features of MicroBeast.
+If no parameters are supplied, BeastEm will start the emulator up with an (incomplete) monitor ROM that exercises some of the features of MicroBeast. This is equivalent to running with the command line:
 
-Linux users can run BeastEm with the following command line to try the monitor rom:
+```
+beastem -f monitor.rom -l 0 firmware.lst -l 23 bios.lst
+```
 
-```beastem -f monitor.rom -l 0 firmware.lst -l 23 bios.lst```
+Windows users can run `beast.bat` in the `release/win64` directory.
 
-## Run with your own configuration
-
-Windows users can run `beast.bat` in the `release/win64` directory with command line options of your choice. This will start the emulator up with no initial state, and allows you to upload ROMs and file listings for the software of your choice.
-
-Linux users can simply run `beastem` directly.
+Linux users can run BeastEm with the executable name ``beastem`` on the command line.
 
 ## Command line options
 
@@ -43,9 +43,11 @@ The following command line options may be used:
 | `-f [address] filename` | Read binary file into memory at address (hex), or 0 if no address given |
 | `-l [page] listing` | Read listing file and link it to memory page (hex), or page 0 if no page given |
 | `-a device-id`  | Use audio device with the given ID, instead of default |
+| `-s sample-rate` | Sample audio at the given rate. Use 0 to turn off audio |
 | `-v volume`     | Set volume, 0-10. Default is 5 |
 | `-k cpu-speed`  | Set the CPU clock speed, in Kilohertz. Default is 8000 (for 8MHz) |
 | `-b breakpoint` | Stop at the given breakpoint (hex) |
+| `-z zoom`       | Zoom the display size by the given factor (float) |
 
 ## Listing Files
 

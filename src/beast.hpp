@@ -37,10 +37,10 @@ class Beast {
 
 
     public:
-        Beast(SDL_Renderer *sdlRenderer, int screenWidth, int screenHeight, Listing &listing);
+        Beast(SDL_Renderer *sdlRenderer, int screenWidth, int screenHeight, float zoom, Listing &listing);
         ~Beast();
 
-        void init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume);
+        void init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate);
         void mainLoop();
         uint64_t run(bool run, uint64_t tickCount);
 
@@ -67,6 +67,9 @@ class Beast {
         SDL_Renderer  *sdlRenderer;
         SDL_Texture   *keyboardTexture;
         TTF_Font *font, *smallFont, *monoFont;
+        int screenWidth, screenHeight;
+        float zoom = 1.0f;
+
         Listing &listing;
         Listing::Location currentLoc = {0,0, false};
         std::vector<uint16_t> decodedAddresses;         // Addresses decoded on screen
@@ -107,8 +110,6 @@ class Beast {
         char    *audioFilename = "audio.raw";
         FILE    *audioFile = nullptr;
 
-
-        int screenWidth, screenHeight;
         
         void drawBeast();
         void drawKeys();

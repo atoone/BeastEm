@@ -13,7 +13,10 @@ static inline void ltrim(std::string &s) {
 
 void Listing::addFile(const char *filename, int page) {
     std::ifstream myfile(filename);
-
+    if(!myfile) {
+        std::cout << "Listing file does not exist: " << filename << std::endl;
+        exit(1);
+    }
     std::string line;
     std::vector<std::string> lines;
 
@@ -56,6 +59,10 @@ void Listing::addFile(const char *filename, int page) {
     }
     std::cout << "Parsed listing, file "<< filename <<" for page " << page << " has " << lineNum << " lines." << std::endl;
     files.push_back(lines);
+}
+
+int Listing::fileCount() {
+    return files.size();
 }
 
 Listing::Location Listing::getLocation(uint32_t address) {

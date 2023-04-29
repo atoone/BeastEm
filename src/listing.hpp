@@ -14,7 +14,8 @@ class Listing {
         };
 
         void addFile(const char* filename, int page);
-
+        int fileCount();
+        
         Location getLocation(uint32_t address);
         std::string getLine(Location location);
 

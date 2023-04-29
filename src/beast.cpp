@@ -7,12 +7,13 @@
 #include "z80pio.h"
 #include "listing.hpp"
 
-Beast::Beast(SDL_Renderer *renderer, int screenWidth, int screenHeight, Listing &listing) 
+Beast::Beast(SDL_Renderer *renderer, int screenWidth, int screenHeight, float zoom, Listing &listing) 
     : rom {}, ram {}, memoryPage {0}, listing(listing) {
 
     this->sdlRenderer = renderer;
     this->screenWidth = screenWidth;
     this->screenHeight = screenHeight;
+    this->zoom = zoom;
 
     instr = new Instructions();
 
@@ -26,25 +27,25 @@ Beast::Beast(SDL_Renderer *renderer, int screenWidth, int screenHeight, Listing 
     i2c->addDevice(rtc);
     
     TTF_Init();
-    font = TTF_OpenFont(BEAST_FONT, FONT_SIZE);
+    font = TTF_OpenFont(BEAST_FONT, FONT_SIZE*zoom);
 
     if( !font) {
         std::cout << "Couldn't load font "<< BEAST_FONT << std::endl;
         exit(1);
     }
-    smallFont = TTF_OpenFont(BEAST_FONT, SMALL_FONT_SIZE);
+    smallFont = TTF_OpenFont(BEAST_FONT, SMALL_FONT_SIZE*zoom);
     if( !smallFont) {
         std::cout << "Couldn't load font "<< BEAST_FONT << std::endl;
         exit(1);
     }
 
-    monoFont = TTF_OpenFont(MONO_FONT, MONO_SIZE);
+    monoFont = TTF_OpenFont(MONO_FONT, MONO_SIZE*zoom);
 
-    keyboardTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, KEYBOARD_WIDTH, KEYBOARD_HEIGHT);
+    keyboardTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, KEYBOARD_WIDTH*zoom, KEYBOARD_HEIGHT*zoom);
     
     drawKeys();
     for( int i=0; i<DISPLAY_CHARS; i++) {
-        display.push_back(Digit(renderer));
+        display.push_back(Digit(renderer, zoom));
     }
 }
 
@@ -56,7 +57,7 @@ void audio_callback(void *_beast, Uint8 *_stream, int _length) {
     beast->loadSamples(stream, length);
 }
 
-void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume) {
+void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate) {
     pins = z80_init(&cpu);
 
     z80pio_init(&pio);
@@ -79,30 +80,35 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
 
     uart_init(&uart, UINT64_C(1843200), clock_time_ps);
 
-    audioSampleRatePs = UINT64_C(1000000000000) / AUDIO_FREQ;
-    this->volume = volume;
-    SDL_AudioSpec desiredSpec;
+    if( sampleRate > 0 ) {
+        audioSampleRatePs = UINT64_C(1000000000000) / sampleRate;
+        this->volume = volume;
+        SDL_AudioSpec desiredSpec;
 
-    desiredSpec.freq = AUDIO_FREQ;
-    desiredSpec.format = AUDIO_S16SYS;
-    desiredSpec.channels = 1;
-    desiredSpec.samples = AUDIO_BUFFER_SIZE/4;
-    desiredSpec.callback = audio_callback;
-    desiredSpec.userdata = this;
+        desiredSpec.freq = sampleRate;
+        desiredSpec.format = AUDIO_S16SYS;
+        desiredSpec.channels = 1;
+        desiredSpec.samples = AUDIO_BUFFER_SIZE/4;
+        desiredSpec.callback = audio_callback;
+        desiredSpec.userdata = this;
 
-    SDL_AudioSpec obtainedSpec;
+        SDL_AudioSpec obtainedSpec;
 
-    /* Handling audio devices */
-    int num_audio_dev = SDL_GetNumAudioDevices(false);
-    for (int i = 0; i < num_audio_dev; ++i) {
-        SDL_Log("Audio device %d: %s", i, SDL_GetAudioDeviceName(i, 0));
+        /* Handling audio devices */
+        int num_audio_dev = SDL_GetNumAudioDevices(false);
+        for (int i = 0; i < num_audio_dev; ++i) {
+            SDL_Log("Audio device %d: %s", i, SDL_GetAudioDeviceName(i, 0));
+        }
+
+        // you might want to look for errors here  SDL_GetAudioDeviceName(6, 0)
+        SDL_AudioDeviceID id = SDL_OpenAudioDevice((audioDevice >= 0) ? SDL_GetAudioDeviceName(audioDevice, 0): NULL, 0, &desiredSpec, &obtainedSpec, 0);
+
+        // start play audio
+        SDL_PauseAudioDevice(id, 0);
     }
-
-    // you might want to look for errors here  SDL_GetAudioDeviceName(6, 0)
-    SDL_AudioDeviceID id = SDL_OpenAudioDevice((audioDevice >= 0) ? SDL_GetAudioDeviceName(audioDevice, 0): NULL, 0, &desiredSpec, &obtainedSpec, 0);
-
-    // start play audio
-    SDL_PauseAudioDevice(id, 0);
+    else {
+        audioSampleRatePs = 0;
+    }
 }
 
 void Beast::loadSamples(Sint16 *stream, int length) {
@@ -160,12 +166,13 @@ void Beast::drawKeys() {
 
 void Beast::drawKey(int col, int row, int offsetX, int offsetY, bool pressed) {
     if( row == 3 && col == 0 ) return;
-    int x1 = offsetX + col*KEY_WIDTH + KEY_INDENTS[row];
-    int y1 = offsetY + row*KEY_HEIGHT;
+    int x1 = (offsetX + col*KEY_WIDTH + KEY_INDENTS[row])*zoom;
+    int y1 = (offsetY + row*KEY_HEIGHT)*zoom;
+    int rad = 5*zoom;
     SDL_Color keyColour = {0,0,0};
     
     if( pressed ) {
-        roundedBoxRGBA(sdlRenderer, x1+5, y1+5, x1+KEY_WIDTH-5, y1+KEY_HEIGHT-5, 5, 0xA0, 0xA0, 0xA0, 0xFF);
+        roundedBoxRGBA(sdlRenderer, x1+5*zoom, y1+5*zoom, x1+(KEY_WIDTH-5)*zoom, y1+(KEY_HEIGHT-5)*zoom, rad, 0xA0, 0xA0, 0xA0, 0xFF);
     }
 
     bool isSmall = strlen(KEY_CAPS[col+row*KEY_COLS]) > 1;
@@ -175,8 +182,8 @@ void Beast::drawKey(int col, int row, int offsetX, int offsetY, bool pressed) {
 
     SDL_Rect textRect;
 
-    textRect.x = offsetX + (col+0.5)*KEY_WIDTH - textSurface->w * 0.5 + KEY_INDENTS[row];
-    textRect.y = offsetY + (row+0.5)*KEY_HEIGHT - textSurface->h *0.5;
+    textRect.x = (offsetX + (col+0.5)*KEY_WIDTH  + KEY_INDENTS[row])*zoom - textSurface->w * 0.5;
+    textRect.y = (offsetY + (row+0.5)*KEY_HEIGHT)*zoom - textSurface->h *0.5;
     textRect.w = textSurface->w;
     textRect.h = textSurface->h;
 
@@ -184,7 +191,7 @@ void Beast::drawKey(int col, int row, int offsetX, int offsetY, bool pressed) {
     SDL_FreeSurface(textSurface);
     SDL_DestroyTexture(textTexture);
 
-    roundedRectangleRGBA(sdlRenderer, x1+5, y1+5, x1+KEY_WIDTH-5, y1+KEY_HEIGHT-5, 5, 0,0,0 , 0xFF);
+    roundedRectangleRGBA(sdlRenderer, x1+5*zoom, y1+5*zoom, x1+(KEY_WIDTH-5)*zoom, y1+(KEY_HEIGHT-5)*zoom, rad, 0,0,0 , 0xFF);
 }
 
 void Beast::mainLoop() {
@@ -401,11 +408,11 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
             SDL_Delay(1);
         }
 
-        if( clock_time_ps - lastAudioSample > audioSampleRatePs ) {
+        if( (audioSampleRatePs != 0) && clock_time_ps - lastAudioSample > audioSampleRatePs ) {
             lastAudioSample += audioSampleRatePs;
             int next = (audioWrite+1)%AUDIO_BUFFER_SIZE;
             if( next != audioRead ) {
-                audioBuffer[audioWrite] = (uart.modem_control_register & MCR_OUT2) ? 1000*volume : -1000*volume;
+                audioBuffer[audioWrite] = (uart.modem_control_register & MCR_OUT2) ? 400*volume : -400*volume;
                 audioWrite = next;
             }
         }
@@ -504,7 +511,7 @@ uint8_t Beast::readKeyboard(uint16_t port) {
 }
 
 void Beast::onDebug() {
-    boxRGBA(sdlRenderer, 40, 40, screenWidth-40, screenHeight-40, 0xF0, 0xF0, 0xE0, 0xF0);
+    boxRGBA(sdlRenderer, 40*zoom, 40*zoom, (screenWidth-40)*zoom, (screenHeight-40)*zoom, 0xF0, 0xF0, 0xE0, 0xF0);
     
     SDL_Color textColor = {0, 0x30, 0x30};
     SDL_Color highColor = {0x80, 0x30, 0x30};
@@ -722,18 +729,18 @@ void Beast::printb(int x, int y, SDL_Color color, int highlight, SDL_Color backg
         if( highlight > 0 ) {
             buffer[highlight] = (char)0;
             TTF_SizeUTF8(monoFont, buffer, &width, &height);
-            boxRGBA(sdlRenderer, x, y+1, x+width, y+height-2, background.r, background.g, background.b, 0xFF);
+            boxRGBA(sdlRenderer, x*zoom, (y+1)*zoom, x*zoom+width, (y-2)*zoom+height, background.r, background.g, background.b, 0xFF);
         }
         else if( highlight < 0 ) {
             buffer += strlen(buffer)+highlight;
             TTF_SizeUTF8(monoFont, buffer, &width, &height);
-            boxRGBA(sdlRenderer, x+textSurface->w-width, y+1, x+textSurface->w, y+height-2, background.r, background.g, background.b, 0xFF);
+            boxRGBA(sdlRenderer, x*zoom+textSurface->w-width, (y+1)*zoom, x*zoom+textSurface->w, (y-2)*zoom+height, background.r, background.g, background.b, 0xFF);
         }
     }
 
     SDL_Rect textRect;
-    textRect.x = x; 
-    textRect.y = y;
+    textRect.x = x*zoom; 
+    textRect.y = y*zoom;
     textRect.w = textSurface->w;
     textRect.h = textSurface->h;
 
@@ -759,12 +766,12 @@ void Beast::onDraw() {
 }
 
 void Beast::drawBeast() {
-    int keyboardTop = screenHeight - KEYBOARD_HEIGHT;
-    int displayTop = keyboardTop - Digit::DIGIT_HEIGHT - 8 ;
+    int keyboardTop = (screenHeight - KEYBOARD_HEIGHT);
+    int displayTop = (keyboardTop-8 - Digit::DIGIT_HEIGHT);
 
     SDL_SetRenderDrawColor(sdlRenderer, 0x0, 0x0, 0x0, SDL_ALPHA_OPAQUE);
     SDL_RenderClear(sdlRenderer);
-    SDL_Rect textRect = {0, keyboardTop, KEYBOARD_WIDTH, KEYBOARD_HEIGHT};
+    SDL_Rect textRect = {0, keyboardTop*zoom, KEYBOARD_WIDTH*zoom, KEYBOARD_HEIGHT*zoom};
     SDL_RenderCopy(sdlRenderer, keyboardTexture, NULL, &textRect);
 
     for( int i=0; i<DISPLAY_CHARS; i++) {

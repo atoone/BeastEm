@@ -8,7 +8,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}\\release\\win64\\${fileBasenameNoExtension}.exe",
-            "args": ["-f", "monitor.rom", "-l", "0", "firmware.lst", "-l", "23", "bios.lst", "-v", "8"],
+            "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}\\release\\win64",
             "environment": [{"name": "Path", "value":  "${workspaceFolder}\\release\\win64\\lib;${env:Path}"}],
