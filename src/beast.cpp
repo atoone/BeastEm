@@ -277,7 +277,10 @@ void Beast::mainLoop() {
             onDebug();
             SDL_Event windowEvent;
 
-            while( SDL_PollEvent(&windowEvent ) == 0 );
+            while( SDL_PollEvent(&windowEvent ) == 0 ) {
+                SDL_Delay(25);
+            };
+            
             if( SDL_QUIT == windowEvent.type ) {
                 mode = QUIT;
             }
