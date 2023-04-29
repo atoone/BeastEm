@@ -18,6 +18,8 @@ All of the main features of MicroBeast are emulated, allowing software to be dev
 
 # Running
 
+Precompiled binaries are available for Windows-64 in the Release section on GitHub.
+
 BeastEm requires a number of libraries and files to run. For Windows, these files are all supplied in the `release/win64` directory, which also contains a batch file to configure the library path and start the program.
 
 Linux users should copy the exectutable to a directory along with the files in the `assets` folder in order to run BeastEm.
