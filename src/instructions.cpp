@@ -164,7 +164,7 @@ std::string Instructions::decode(uint16_t address, std::function<uint8_t(uint16_
                         std::size_t pos = decoded.find("(HL)");
                         char buff[10];
                         if( pos != std::string::npos) {
-                            snprintf(buff, sizeof(buff), "(%s+0x%02X)", ixy, disp);
+                            snprintf(buff, sizeof(buff), "(%s+0x%02X)", ixy.c_str(), disp);
                             decoded.replace(pos, 4, buff);
                         }
                         return decodeOpcode(decoded, ++address, fetch);
@@ -206,7 +206,7 @@ std::string Instructions::decode(uint16_t address, std::function<uint8_t(uint16_
                     std::size_t pos = decoded.find("(HL)");
                     char buff[10];
                     if( pos != std::string::npos) {
-                        snprintf(buff, sizeof(buff), "(%s+0x%02X)", ixy, disp);
+                        snprintf(buff, sizeof(buff), "(%s+0x%02X)", ixy.c_str(), disp);
                         decoded.replace(pos, 4, buff);
                     }
                     return decoded;

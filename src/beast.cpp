@@ -621,7 +621,7 @@ void Beast::onDebug() {
 
 void Beast::drawListing(uint16_t address, SDL_Color textColor, SDL_Color highColor) {
     int length;
-    auto f = [this](auto address) { return this->readMem(address); };
+    auto f = [this](uint16_t address) { return this->readMem(address); };
 
     int matchedLine = -1;
 

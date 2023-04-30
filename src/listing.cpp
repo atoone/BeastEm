@@ -66,7 +66,8 @@ int Listing::fileCount() {
 }
 
 Listing::Location Listing::getLocation(uint32_t address) {
-    if (auto search = lineMap.find(address); search != lineMap.end()) {
+    auto search = lineMap.find(address);
+    if (search != lineMap.end()) {
         return search->second;
     }
 
