@@ -24,7 +24,7 @@ const int DEFAULT_SPEED = 8000;
 const int ROM_SIZE = (1<<19);
 const int RAM_SIZE = (1<<19);
 
-void readBinary(int offset, char *filename, Beast &beast) {
+void readBinary(int offset, const char *filename, Beast &beast) {
     std::ostringstream ss;
     ss << std::hex << offset;
     std::string destStr = ss.str();
@@ -92,9 +92,10 @@ void printHelp() {
 }
 
 struct BIN_FILE {
-    char *filename;
+    const char *filename;
     int  address;
-}; 
+};
+
 int main( int argc, char *argv[] ) {
 
     int targetSpeed = DEFAULT_SPEED;

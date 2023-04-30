@@ -162,7 +162,7 @@ void I2cRTC::write(uint8_t ioByte) {
                 mktime(&clock);  
                 break; 
             case REG_WKDAY:
-                weekOffset = ((clock.tm_wday) - ((ioByte)) & 0x07)-1;
+                weekOffset = (((clock.tm_wday) - ((ioByte))) & 0x07)-1;
                 clock.tm_wday = (ioByte & 0x07)-1;   
                 break;
             case REG_DATE:

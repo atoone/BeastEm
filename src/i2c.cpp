@@ -175,6 +175,8 @@ uint64_t I2c::tick(uint64_t *busState, uint64_t clock_time_ps) {
                 }
             }
             break;
+        default:
+            std::cout << "Unexpected stat for I2C handler " << state << std::endl;
     }
 
     return clock_time_ps;

@@ -357,7 +357,6 @@ void _z80pio_write_ctrl(z80pio_t* pio, int port_id, uint8_t data) {
     if (p->expect_io_select) {
         /* followup io_select mask */
         p->io_select = data;
-        bool oldInt = p->int_enabled;
         p->int_enabled = (p->int_control & Z80PIO_INTCTRL_EI) ? true:false;
         p->expect_io_select = false;
         //std::bitset<8> mask(data); 

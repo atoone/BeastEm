@@ -95,7 +95,7 @@ void Digit::refresh(SDL_Renderer *renderer) {
     SDL_RenderClear(renderer);
 
     for(int i=0; i<15; i++) {
-        if( (segmentFlags >> i) & 0x01 == 0x01) {
+        if( ((segmentFlags >> i) & 0x01) == 0x01) {
             filledPolygonRGBA(renderer, &DISPLAY_SEGMENTS_X[i][0], &DISPLAY_SEGMENTS_Y[i][0], DISPLAY_SEGMENTS_X[i].size(), 0xF0, 0xF0, 0xFF, brightness[i]);
         }
     }

@@ -142,7 +142,7 @@ uint64_t uart_tick(uart_t* uart, uint64_t time_ps) {
     }
 
     while( uart->last_tick_ps + (uart->cycle_ps * uart->divisor) <= time_ps ) {
-        if( uart->tx_bytes > 0 | uart->tx_bit > 0 ) {
+        if( (uart->tx_bytes > 0) | (uart->tx_bit > 0) ) {
             // Handle transmit
             if( uart->tx_cycles == 0 ) {
                 if( uart->tx_bit > 0 ) {
@@ -283,7 +283,7 @@ void uart_write(uart_t* uart, uint8_t addr, uint8_t data, uint64_t time_ps) {
             }
             break;
         case 2: // FIFO Control register (write)
-            if( uart->fifo_control_register & FIFO_ENABLE != data & FIFO_ENABLE ) {
+            if( (uart->fifo_control_register & FIFO_ENABLE) != (data & FIFO_ENABLE) ) {
                 // Reset both FIFOs on enable bit change
                 uart->rx_bytes = 0;
                 uart->tx_bytes = 0;

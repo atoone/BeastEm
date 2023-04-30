@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ctime>
-#include <SDL.h>
+#include "SDL.h"
 #include "i2c.hpp"
 #include "digit.hpp"
 

@@ -1,9 +1,9 @@
 #pragma once
 #include <set>
 #include <vector>
-#include <SDL.h>
-#include <SDL_ttf.h>
-#include <SDL2_gfxPrimitives.h>
+#include "SDL.h"
+#include "SDL_ttf.h"
+#include "SDL2_gfxPrimitives.h"
 
 #include "z80.h"
 #include "z80pio.h"
@@ -70,10 +70,6 @@ class Beast {
         int screenWidth, screenHeight;
         float zoom = 1.0f;
 
-        Listing &listing;
-        Listing::Location currentLoc = {0,0, false};
-        std::vector<uint16_t> decodedAddresses;         // Addresses decoded on screen
-
         Mode    mode = DEBUG;
         int     selection;
         z80_t    cpu;
@@ -100,15 +96,19 @@ class Beast {
         bool    pagingEnabled = false;
         uint8_t readMem(uint16_t address);
 
+        Listing &listing;
+        Listing::Location currentLoc = {0,0, false};
+        std::vector<uint16_t> decodedAddresses;         // Addresses decoded on screen
+
         static const int FRAME_RATE = 50;
 
-        int16_t audioBuffer[AUDIO_BUFFER_SIZE] = {0};
-        int     audioRead = 0;
-        int     audioWrite= 1;
-        uint64_t audioSampleRatePs;
-        int     volume;
-        char    *audioFilename = "audio.raw";
-        FILE    *audioFile = nullptr;
+        int16_t     audioBuffer[AUDIO_BUFFER_SIZE] = {0};
+        int         audioRead = 0;
+        int         audioWrite= 1;
+        uint64_t    audioSampleRatePs;
+        int         volume;
+        const char* audioFilename = "audio.raw";
+        FILE*       audioFile = nullptr;
 
         
         void drawBeast();
@@ -116,8 +116,8 @@ class Beast {
         void drawKey(int col, int row, int offsetX, int offsetY, bool pressed);
         void displayMem(uint16_t address, int x, int y, SDL_Color textColor, uint16_t markAddress);
         void drawListing(uint16_t address, SDL_Color textColor, SDL_Color highColor);
-        template<typename... Args> void print(int x, int y, SDL_Color color, char *fmt, Args... args);
-        template<typename... Args> void print(int x, int y, SDL_Color color, int highlight, SDL_Color background, char *fmt, Args... args);
+        template<typename... Args> void print(int x, int y, SDL_Color color, const char *fmt, Args... args);
+        template<typename... Args> void print(int x, int y, SDL_Color color, int highlight, SDL_Color background, const char *fmt, Args... args);
         void printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer);
         
         const static int DISPLAY_CHARS = 24;

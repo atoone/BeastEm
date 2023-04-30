@@ -34,7 +34,7 @@ class Instructions {
             };
 
         int instructionLength(uint8_t op1, uint8_t op2);
-        std::string decodeOpcode(Opcode *opcode, uint16_t address, std::function<uint8_t(uint16_t)> fetch);
+        std::string decodeOpcode(std::string mnemonic, uint16_t address, std::function<uint8_t(uint16_t)> fetch);
         std::string decode(uint16_t address, std::function<uint8_t(uint16_t)> fetch, int *length);
 
  
@@ -95,5 +95,5 @@ class Instructions {
 
         Opcode CB_OPCODES[256] = {0};
         Opcode ED_OPCODES[256] = {0};
-
+        Opcode IXYCB_OPCODES[256] = {0};
 };

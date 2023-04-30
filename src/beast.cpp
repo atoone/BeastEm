@@ -280,7 +280,7 @@ void Beast::mainLoop() {
             while( SDL_PollEvent(&windowEvent ) == 0 ) {
                 SDL_Delay(25);
             };
-            
+
             if( SDL_QUIT == windowEvent.type ) {
                 mode = QUIT;
             }
@@ -324,7 +324,6 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
     uint64_t startTime = SDL_GetTicks();
     uint64_t startClockPs = clock_time_ps;
     uint64_t lastAudioSample = clock_time_ps;
-    uint8_t lastAudio = 0;
 
     do {
         clock_time_ps += clock_cycle_ps;
@@ -391,7 +390,7 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                 if( (port & 0x0F0) == 0x70 ) {
                     // Memory system.
                     if( (port & 0x04) == 0) {
-                        uint8_t page = memoryPage[port & 0x03] = Z80_GET_DATA(pins);
+                        memoryPage[port & 0x03] = Z80_GET_DATA(pins);
                     }
                     else {
                         pagingEnabled = (pins & Z80_D0) != 0;
@@ -441,7 +440,7 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
             onDraw();
         }
         tickCount++;
-        if( cpu.pc-1 == breakpoint && z80_opdone(&cpu)) {
+        if( (uint64_t)(cpu.pc-1) == breakpoint && z80_opdone(&cpu)) {
             mode = DEBUG;
             run = false;
         }
@@ -626,7 +625,7 @@ void Beast::drawListing(uint16_t address, SDL_Color textColor, SDL_Color highCol
 
     int matchedLine = -1;
 
-    for( int i=0; i<decodedAddresses.size(); i++) {
+    for( size_t i=0; i<decodedAddresses.size(); i++) {
         if( decodedAddresses[i] == address ) {
             matchedLine = i;
             break;
@@ -639,7 +638,7 @@ void Beast::drawListing(uint16_t address, SDL_Color textColor, SDL_Color highCol
         address = decodedAddresses[0];
     }
 
-    for( int i=0; i<12; i++ ) {
+    for( size_t i=0; i<12; i++ ) {
         if( decodedAddresses.size() > i ) {
             decodedAddresses[i] = address;
         }
@@ -653,24 +652,25 @@ void Beast::drawListing(uint16_t address, SDL_Color textColor, SDL_Color highCol
 }
 
 void Beast::displayMem(uint16_t address, int x, int y, SDL_Color textColor, uint16_t markAddress) {
-    char buffer[200]; 
+    const int BUFFER_SIZE = 200;
+    char buffer[BUFFER_SIZE]; 
     for( int row=0; row<3; row++ ) {
-        int c = snprintf( buffer, sizeof(buffer), "0x%04X ", address);
-        if( c < 0 || c >= sizeof(buffer) ) {
+        int c = snprintf( buffer, BUFFER_SIZE, "0x%04X ", address);
+        if( c < 0 || c >= BUFFER_SIZE ) {
             break;
         }
         for( uint16_t i=0; i<16; i++ ) {
             uint8_t data = readMem(address+i);
 
-            int cs = snprintf( buffer+c, sizeof(buffer)-c, 
+            int cs = snprintf( buffer+c, BUFFER_SIZE-c, 
                 (address+i == markAddress) ? ">%02X" : " %02X", data);
-            if( cs < 0 || cs+c >= sizeof(buffer) ) {
+            if( cs < 0 || cs+c >= BUFFER_SIZE ) {
                 return;
             }
             c+=cs;
         }
-        int cn =snprintf(buffer+c, sizeof(buffer)-c, "   ");
-        if( cn < 0 || cn+c >= sizeof(buffer) ) {
+        int cn =snprintf(buffer+c, BUFFER_SIZE-c, "   ");
+        if( cn < 0 || cn+c >= BUFFER_SIZE ) {
             return;
         }
         c+=cn;
@@ -682,7 +682,7 @@ void Beast::displayMem(uint16_t address, int x, int y, SDL_Color textColor, uint
 
             buffer[c++] = data;
             buffer[c] = 0;
-            if( c+1 >= sizeof(buffer)) {
+            if( c+1 >= BUFFER_SIZE) {
                 return;
             }
         }
@@ -703,22 +703,22 @@ uint8_t Beast::readMem(uint16_t address) {
     return isRam ? ram[mappedAddr] : rom[mappedAddr];
 }
 
-template<typename... Args> void Beast::print(int x, int y, SDL_Color color, char *fmt, Args... args) {
+template<typename... Args> void Beast::print(int x, int y, SDL_Color color, const char *fmt, Args... args) {
     char buffer[200]; 
 
     int c = snprintf(buffer, sizeof(buffer), fmt, args...);
 
-    if( c > 0 && c<sizeof(buffer)) {
+    if( c > 0 && c<(int)sizeof(buffer)) {
         printb(x,y, color, 0, {0}, buffer);
     }
 }
 
-template<typename... Args> void Beast::print(int x, int y, SDL_Color color, int highlight, SDL_Color background, char *fmt, Args... args) {
+template<typename... Args> void Beast::print(int x, int y, SDL_Color color, int highlight, SDL_Color background, const char *fmt, Args... args) {
     char buffer[200]; 
 
     int c = snprintf(buffer, sizeof(buffer), fmt, args...);
 
-    if( c > 0 && c<sizeof(buffer)) {
+    if( c > 0 && c<(int)sizeof(buffer)) {
         printb(x,y, color, highlight, background, buffer);
     }
 }
@@ -774,7 +774,7 @@ void Beast::drawBeast() {
 
     SDL_SetRenderDrawColor(sdlRenderer, 0x0, 0x0, 0x0, SDL_ALPHA_OPAQUE);
     SDL_RenderClear(sdlRenderer);
-    SDL_Rect textRect = {0, keyboardTop*zoom, KEYBOARD_WIDTH*zoom, KEYBOARD_HEIGHT*zoom};
+    SDL_Rect textRect = {0, (int)(keyboardTop*zoom), (int)(KEYBOARD_WIDTH*zoom), (int)(KEYBOARD_HEIGHT*zoom)};
     SDL_RenderCopy(sdlRenderer, keyboardTexture, NULL, &textRect);
 
     for( int i=0; i<DISPLAY_CHARS; i++) {

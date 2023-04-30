@@ -1,4 +1,3 @@
-#pragma "once"
 #include <iostream>
 
 enum debug_option {

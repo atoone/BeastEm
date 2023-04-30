@@ -32,6 +32,9 @@ Instructions::Instructions() {
         if( parts.size() > 6 ) {
             parseOpcode(parts, 4, opcode, CB_OPCODES);
         }
+        if( parts.size() > 9 ) {
+            parseOpcode(parts, 7, opcode, IXYCB_OPCODES);
+        }
         if( parts.size() > 12 ) {
             parseOpcode(parts, 10, opcode, ED_OPCODES);
         }
@@ -112,30 +115,29 @@ bool Instructions::isTaken(uint8_t op1, uint8_t op2, uint8_t flags) {
     return false;
 }
 
-std::string Instructions::decodeOpcode(Opcode *opcode, uint16_t address, std::function<uint8_t(uint16_t)> fetch) {
-    std::string decoded = opcode->mnemonic;
-    std::size_t pos = decoded.find('$');
+std::string Instructions::decodeOpcode(std::string mnemonic, uint16_t address, std::function<uint8_t(uint16_t)> fetch) {
+    std::size_t pos = mnemonic.find('$');
     char buff[10];
     if( pos != std::string::npos) {
         uint8_t val = fetch(address);
         snprintf(buff, sizeof(buff), "0x%02X", val);
-        decoded.replace(pos, 1, buff);
+        mnemonic.replace(pos, 1, buff);
     }
-    pos = decoded.find('^');
+    pos = mnemonic.find('^');
     if( pos != std::string::npos) {
         uint16_t val_l = fetch(address++);
         uint16_t val_h = fetch(address);
         snprintf(buff, sizeof(buff), "0x%04X", val_l+(val_h<<8));
-        decoded.replace(pos, 1, buff);
+        mnemonic.replace(pos, 1, buff);
     }
-    pos = decoded.find('%');
+    pos = mnemonic.find('%');
     if( pos != std::string::npos) {
         int8_t offset = fetch(address++);
         uint16_t dest = address+offset;
         snprintf(buff, sizeof(buff), "0x%04X", dest);
-        decoded.replace(pos, 1, buff);
+        mnemonic.replace(pos, 1, buff);
     }
-    return decoded;
+    return mnemonic;
 }
 
 std::string Instructions::decode(uint16_t address, std::function<uint8_t(uint16_t)> fetch, int *length) {
@@ -144,11 +146,81 @@ std::string Instructions::decode(uint16_t address, std::function<uint8_t(uint16_
 
     *length = 0;
 
+    if( (op1 == 0xDD) || (op1 == 0xFD) ) {
+        if( (op2 == 0xDD) || (op2 == 0xED) || (op2 == 0xFD) ) {
+            *length = 1;
+            return "NONI";
+        }
+
+        std::string ixy = (op1 == 0xDD) ? "IX" : "IY";
+
+        if( op2 != 0xCB ) {
+            for(auto opcode: OPCODES) {
+                if( opcode.opcode == op2 ) {
+                    if( opcode.isIXIY ) {
+                        *length = 2+opcode.length;
+                        uint8_t disp = fetch(++address);
+                        std::string decoded = opcode.mnemonic;
+                        std::size_t pos = decoded.find("(HL)");
+                        char buff[10];
+                        if( pos != std::string::npos) {
+                            snprintf(buff, sizeof(buff), "(%s+0x%02X)", ixy, disp);
+                            decoded.replace(pos, 4, buff);
+                        }
+                        return decodeOpcode(decoded, ++address, fetch);
+                    }
+
+                    *length = 1+opcode.length;
+                    std::string decoded = opcode.mnemonic;
+
+                    if( op2 != 0xEB ) {
+                        // Only if this isn't EX DE,HL 
+                        std::size_t pos = decoded.find("HL");
+                        if( pos != std::string::npos) {
+                            decoded.replace(pos, 2, ixy);
+                        }
+                        else {
+                            pos = decoded.find(' ');
+                            std::size_t reg = decoded.find('H', pos);
+                            if( reg == std::string::npos ) {
+                                reg = decoded.find('L', pos);
+                            }
+                            if( reg != std::string::npos ) {
+                                decoded.insert(reg, ixy);
+                            }
+                        }
+                    }
+                    return decodeOpcode(decoded, ++address, fetch);
+                }
+            }
+            *length = 1;
+            return "Unknown";
+        }
+        else {
+            uint8_t disp = fetch(++address);
+            op1 = fetch(++address);
+            for(auto opcode: IXYCB_OPCODES) {
+                if( opcode.opcode == op1 ) {
+                    *length = 4;
+                    std::string decoded = opcode.mnemonic;
+                    std::size_t pos = decoded.find("(HL)");
+                    char buff[10];
+                    if( pos != std::string::npos) {
+                        snprintf(buff, sizeof(buff), "(%s+0x%02X)", ixy, disp);
+                        decoded.replace(pos, 4, buff);
+                    }
+                    return decoded;
+                }
+            }
+            *length = 1;
+            return "Unknown";
+        }
+    }
     if( op1 == 0xCB ) {
         for(auto opcode: CB_OPCODES) {
             if( opcode.opcode == op2 ) {
                 *length += opcode.length;
-                return decodeOpcode(&opcode, address, fetch);
+                return decodeOpcode(opcode.mnemonic, address, fetch);
             }
         }
         return "Unknown";
@@ -157,7 +229,7 @@ std::string Instructions::decode(uint16_t address, std::function<uint8_t(uint16_
         for(auto opcode: ED_OPCODES) {
             if( opcode.opcode == op2 ) {
                 *length += opcode.length;
-                return decodeOpcode(&opcode, address, fetch);
+                return decodeOpcode(opcode.mnemonic, address, fetch);
             }
         }
         return "Unknown";
@@ -165,10 +237,10 @@ std::string Instructions::decode(uint16_t address, std::function<uint8_t(uint16_
     for(auto opcode: OPCODES) {
         if( opcode.opcode == op1 ) {
             if( *length > 0 && opcode.isIXIY ) {
-                *length++;
+                *length += 1;
             }
             *length += opcode.length;
-            return decodeOpcode(&opcode, address, fetch);
+            return decodeOpcode(opcode.mnemonic, address, fetch);
         }
     }
 

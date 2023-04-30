@@ -1,4 +1,5 @@
 {
+    "C_Cpp.default.includePath": ["${workspaceFolder}/src/**"],
     "files.associations": {
         "array": "cpp",
         "atomic": "cpp",

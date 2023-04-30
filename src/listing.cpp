@@ -22,7 +22,7 @@ void Listing::addFile(const char *filename, int page) {
 
     int fileNum = files.size();
 
-    uint16_t address;
+    uint16_t address = 0;
     bool foundAddress = false;
     int lineNum = 0;
     int addressLine = 0;
