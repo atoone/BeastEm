@@ -286,36 +286,105 @@ void Beast::mainLoop() {
             }
 
             if( SDL_KEYDOWN == windowEvent.type ) {
-                switch( windowEvent.key.keysym.sym ) {
-                    case SDLK_PAGEUP  : if( selection > 0 ) selection--; break;
-                    case SDLK_PAGEDOWN: if( selection < 16 ) selection++; break;
+                if( editMode ) {
+                    int digit = -1;
 
-                    case SDLK_q    : mode = QUIT;   break;
-                    case SDLK_r    : mode = RUN;    break;
-                    case SDLK_s    : mode = STEP;   break;
-                    case SDLK_u    : mode = OUT;    break;
-                    case SDLK_o    : mode = OVER;   break;
-                    case SDLK_t    : 
-                        if( instr->isConditional(readMem(cpu.pc-1), readMem(cpu.pc))) {
-                            mode = TAKE;
+                    switch( windowEvent.key.keysym.sym ) {
+                        case SDLK_ESCAPE: editMode = false; break;
+                        case SDLK_RETURN: editComplete(); break;
+                        case SDLK_BACKSPACE: 
+                            if( editIndex < editDigits-1 ) {
+                                editIndex++;
+                                editValue = (editValue & ~(0x000F << (editIndex*4))) | (editOldValue & (0x000F << (editIndex*4)));
+                            } 
+                            break;
+                        case SDLK_0 ... SDLK_9: digit = windowEvent.key.keysym.sym - SDLK_0; break;
+                        case SDLK_a ... SDLK_f: digit = windowEvent.key.keysym.sym - SDLK_a + 10; break;
+                    }
+                    if( digit >= 0 ) {
+                        editValue = (editValue & ~(0x000F << (editIndex*4))) | (digit << (editIndex*4));
+                        editIndex--;
+                        if(editIndex < 0) {
+                            editComplete();
                         }
-                        else {
-                            mode = STEP;
-                        }
-                        break;
-                    case SDLK_a     :
-                        if( audioFile ) {
-                            fclose(audioFile);
-                            audioFile = nullptr;
-                        }
-                        else {
-                            audioFile = fopen(audioFilename, "ab");
-                        }
-                        break;
+                    }
+                }
+                else {
+                    int maxSelection = (breakpoint == NO_BREAKPOINT) ? static_cast<int>(SEL_BREAKPOINT) : static_cast<int>(SEL_END_MARKER);
+
+                    switch( windowEvent.key.keysym.sym ) {
+                        case SDLK_PAGEUP  : updateSelection(-1, maxSelection); break;
+                        case SDLK_PAGEDOWN: updateSelection(1, maxSelection); break;
+                        case SDLK_RIGHT : itemSelect(1); break;
+                        case SDLK_LEFT:   itemSelect(-1); break;
+                        case SDLK_UP  :
+                            if( itemEdit() ) {
+                                editValue = (editValue-1) & (0x0FFFF >> ((4-editDigits)*4));
+                                editComplete();
+                            };
+                            break;
+                        case SDLK_DOWN  :
+                            if( itemEdit() ) {
+                                editValue = (editValue+1) & (0x0FFFF >> ((4-editDigits)*4));
+                                editComplete();
+                            };
+                            break;
+                        case SDLK_RETURN: itemEdit(); break;
+
+                        case SDLK_b    : 
+                            if( breakpoint != NO_BREAKPOINT ) {
+                                lastBreakpoint = breakpoint;
+                                breakpoint = NO_BREAKPOINT;
+                                selection = SEL_PC;
+                            }
+                            else {
+                                selection = SEL_BREAKPOINT;
+                                editMode = true;
+                                editOldValue = editValue = lastBreakpoint;
+                                editDigits = 4;
+                                editIndex = 3;
+                                editY = END_ROW;
+                                editX = 390;
+                                editOffset = 18;
+                                breakpoint = lastBreakpoint;
+                            }
+                            break;
+                        case SDLK_q    : mode = QUIT;   break;
+                        case SDLK_r    : mode = RUN;    break;
+                        case SDLK_s    : mode = STEP;   break;
+                        case SDLK_u    : mode = OUT;    break;
+                        case SDLK_o    : mode = OVER;   break;
+                        case SDLK_t    : 
+                            if( instr->isConditional(readMem(cpu.pc-1), readMem(cpu.pc))) {
+                                mode = TAKE;
+                            }
+                            else {
+                                mode = STEP;
+                            }
+                            break;
+                        case SDLK_a     :
+                            if( audioFile ) {
+                                fclose(audioFile);
+                                audioFile = nullptr;
+                            }
+                            else {
+                                audioFile = fopen(audioFilename, "ab");
+                            }
+                            break;
+                    }
                 }
             }
         }
     }
+}
+
+void Beast::updateSelection(int direction, int maxSelection) {
+    selection += direction;
+    if( selection < 0 ) selection = maxSelection-1;
+    if( selection >= maxSelection ) selection = 0;
+    if( selection == SEL_VIEWPAGE0 && memView[0] != MV_MEM ) selection += direction;
+    if( selection == SEL_VIEWPAGE1 && memView[1] != MV_MEM ) selection += direction;
+    if( selection == SEL_VIEWPAGE2 && memView[2] != MV_MEM ) selection += direction;
 }
 
 uint64_t Beast::run(bool run, uint64_t tickCount) {
@@ -353,7 +422,7 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
 
         if (pins & Z80_MREQ) {
             const uint16_t addr = Z80_GET_ADDR(pins);
-            uint16_t mappedAddr = addr & 0x3FFF;
+            uint32_t mappedAddr = addr & 0x3FFF;
             bool isRam = false;
             
             if( pagingEnabled ) {
@@ -512,20 +581,128 @@ uint8_t Beast::readKeyboard(uint16_t port) {
     return result;
 }
 
+void Beast::startEdit(uint16_t value, int x, int y, int offset, int digits) {
+    editMode = true;
+    editValue = value;
+    editOldValue = value;
+    editX = x;
+    editY = y;
+    editOffset = offset;
+    editDigits = digits;
+    editIndex = digits-1;
+}
+
+bool Beast::itemEdit() {
+    switch( selection ) {
+        case SEL_PC: startEdit( cpu.pc-1, COL1, ROW1,  8, 4); break;
+        case SEL_A : startEdit( cpu.a, COL1, ROW2, 8, 2); break;
+        case SEL_HL: startEdit( cpu.hl, COL1, ROW3, 8, 4); break;
+        case SEL_BC: startEdit( cpu.bc, COL1, ROW4, 8, 4); break;
+        case SEL_DE: startEdit( cpu.de, COL1, ROW5, 8, 4); break;
+
+        case SEL_SP: startEdit( cpu.sp, COL2, ROW3, 8, 4); break;
+        case SEL_IX: startEdit( cpu.ix, COL2, ROW4, 8, 4); break;
+        case SEL_IY: startEdit( cpu.iy, COL2, ROW5, 8, 4); break;
+
+        case SEL_PAGING: pagingEnabled = !pagingEnabled; break;
+        case SEL_PAGE0 : startEdit( memoryPage[0], COL3, ROW2, 10, 2); break;
+        case SEL_PAGE1 : startEdit( memoryPage[1], COL3, ROW3, 10, 2);  break;
+        case SEL_PAGE2 : startEdit( memoryPage[2], COL3, ROW4, 10, 2); break;
+        case SEL_PAGE3 : startEdit( memoryPage[3], COL3, ROW5, 10, 2); break;
+
+        case SEL_MEM0 : 
+            if( memView[0] == MV_Z80) startEdit( memAddress[0], 104, ROW8, 3, 4); 
+            if( memView[0] == MV_MEM) startEdit( memPageAddress[0], 104, ROW8, 3, 4); 
+            break;
+        case SEL_MEM1 : 
+            if( memView[1] == MV_Z80) startEdit( memAddress[1], 104, ROW12, 3, 4); 
+            if( memView[1] == MV_MEM) startEdit( memPageAddress[1], 104, ROW12, 3, 4); 
+            break;
+        case SEL_MEM2 : 
+            if( memView[2] == MV_Z80) startEdit( memAddress[2], 104, ROW16, 3, 4); 
+            if( memView[2] == MV_MEM) startEdit( memPageAddress[2], 104, ROW16, 3, 4);
+            break;
+
+        case SEL_VIEWPAGE0 : startEdit( memViewPage[0], COL1, ROW8+14, 1, 2); break;
+        case SEL_VIEWPAGE1 : startEdit( memViewPage[1], COL1, ROW12+14, 1, 2); break;
+        case SEL_VIEWPAGE2 : startEdit( memViewPage[2], COL1, ROW16+14, 1, 2); break;
+
+        case SEL_A2: startEdit( cpu.af2 & 0xFF, COL4, ROW2, 9, 2); break;
+        case SEL_HL2: startEdit( cpu.hl2, COL4, ROW3, 9, 4); break;
+        case SEL_BC2: startEdit( cpu.bc2, COL4, ROW4, 9, 4);  break;
+        case SEL_DE2: startEdit( cpu.de2, COL4, ROW5, 9, 4); break;
+
+        case SEL_BREAKPOINT:  startEdit( breakpoint, 390, END_ROW, 18, 4); break;
+    }
+
+    return editMode;
+}
+
+void Beast::editComplete() {
+    switch( selection ) {
+        case SEL_PC: pins = z80_prefetch(&cpu, editValue); run(false, 0);  break;
+        case SEL_A: cpu.a = editValue; break;
+        case SEL_HL: cpu.hl = editValue; break;
+        case SEL_BC: cpu.bc = editValue; break;
+        case SEL_DE: cpu.de = editValue; break;
+        
+        case SEL_SP: cpu.sp = editValue; break;
+        case SEL_IX: cpu.ix = editValue; break;
+        case SEL_IY: cpu.iy = editValue; break;
+
+        case SEL_PAGE0: memoryPage[0] = editValue; break;
+        case SEL_PAGE1: memoryPage[1] = editValue; break;
+        case SEL_PAGE2: memoryPage[2] = editValue; break;
+        case SEL_PAGE3: memoryPage[3] = editValue; break;
+
+        case SEL_MEM0: 
+            if( memView[0] == MV_Z80 ) memAddress[0] = editValue;
+            if( memView[0] == MV_MEM ) memPageAddress[0] = editValue & 0x3FFF;
+            break;
+        case SEL_MEM1: 
+            if( memView[1] == MV_Z80 ) memAddress[1] = editValue;
+            if( memView[1] == MV_MEM ) memPageAddress[1] = editValue & 0x3FFF;
+            break;
+        case SEL_MEM2: 
+            if( memView[2] == MV_Z80 ) memAddress[2] = editValue;
+            if( memView[2] == MV_MEM ) memPageAddress[2] = editValue & 0x3FFF;
+            break;
+
+        case SEL_VIEWPAGE0 : memViewPage[0] = editValue; break;
+        case SEL_VIEWPAGE1 : memViewPage[1] = editValue; break;
+        case SEL_VIEWPAGE2 : memViewPage[2] = editValue; break;
+
+        case SEL_A2: cpu.af2 = ((cpu.af2 & 0xFF00) | (editValue & 0x0FF)); break;
+        case SEL_HL2: cpu.hl2 = editValue; break;
+        case SEL_BC2: cpu.bc2 = editValue; break;
+        case SEL_DE2: cpu.de2 = editValue; break;
+
+        case SEL_BREAKPOINT: breakpoint = editValue; break;
+    }
+    editMode = false;
+}
+
 void Beast::onDebug() {
-    boxRGBA(sdlRenderer, 40*zoom, 40*zoom, (screenWidth-40)*zoom, (screenHeight-40)*zoom, 0xF0, 0xF0, 0xE0, 0xF0);
+    boxRGBA(sdlRenderer, 32*zoom, 32*zoom, (screenWidth-24)*zoom, (screenHeight-24)*zoom, 0xF0, 0xF0, 0xE0, 0xE8);
     
     SDL_Color textColor = {0, 0x30, 0x30};
-    SDL_Color highColor = {0x80, 0x30, 0x30};
+    SDL_Color highColor = {0xA0, 0x30, 0x30};
     SDL_Color bright =    {0xD0, 0xFF, 0xD0};
+    SDL_Color menuColor = {0x30, 0x30, 0xA0};
+
+    print(COL1, 34, menuColor, "[R]un");
+    print(COL2, 34, menuColor, "[S]tep");
+    print(COL3, 34, menuColor, "Step [O]ver");
+    print(COL4, 34, menuColor, "Step o[U]t");
+    print(640, 34, menuColor, "Until [T]aken");
 
     int id = selection;
 
-    print(50, 48, textColor, id--?0:2, bright, "PC = 0x%04X", (uint16_t)(cpu.pc-1));
-    print(50, 64, textColor, id--?0:2, bright, " A = 0x%02X", cpu.a );
-    print(50, 80, textColor, id--?0:2, bright, "HL = 0x%04X", cpu.hl);
-    print(50, 96, textColor, id--?0:2, bright, "BC = 0x%04X", cpu.bc);
-    print(50, 112, textColor, id--?0:2, bright, "DE = 0x%04X", cpu.de);
+    print(COL1, ROW1, textColor, id--?0:2, bright, "PC = 0x%04X", (uint16_t)(cpu.pc-1));
+    print(COL1, ROW2, textColor, id--?0:2, bright, " A = 0x%02X", cpu.a );
+    print(COL1, ROW3, textColor, id--?0:2, bright, "HL = 0x%04X", cpu.hl);
+    print(COL1, ROW4, textColor, id--?0:2, bright, "BC = 0x%04X", cpu.bc);
+    print(COL1, ROW5, textColor, id--?0:2, bright, "DE = 0x%04X", cpu.de);
 
     char carry = (cpu.f & Z80_CF) ? 'C' : 'c';
     char neg = (cpu.f & Z80_NF) ? 'N' : 'n';
@@ -537,57 +714,70 @@ void Beast::onDebug() {
     char hflag = (cpu.f & Z80_HF) ? '1' : '0';
     char yflag = (cpu.f & Z80_YF) ? '1' : '0';
 
-    print(200, 48, textColor, id--?0:5, bright, "Flags = %c%c%c%c%c%c%c%c", sign, zero, yflag, hflag, xflag, overflow, neg, carry);
-    print(200, 80, textColor, id--?0:2, bright, "SP = 0x%04X", cpu.sp);
-    print(200, 96, textColor, id--?0:2, bright, "IX = 0x%04X", cpu.ix);
-    print(200, 112, textColor, id--?0:2, bright, "IY = 0x%04X", cpu.iy);
+    print(COL2, ROW1, textColor, id--?0:5, bright, "Flags %c%c%c%c%c%c%c%c", sign, zero, yflag, hflag, xflag, overflow, neg, carry);
+    print(COL2, ROW3, textColor, id--?0:2, bright, "SP = 0x%04X", cpu.sp);
+    print(COL2, ROW4, textColor, id--?0:2, bright, "IX = 0x%04X", cpu.ix);
+    print(COL2, ROW5, textColor, id--?0:2, bright, "IY = 0x%04X", cpu.iy);
 
     if( pagingEnabled ) {
-        print(390, 48, textColor, id--?0:-7, bright, "Paging enabled" );
+        print(COL3, ROW1, textColor, id--?0:-2, bright, "Paging ON" );
     }
     else {
-        print(390, 48, textColor, id--?0:-8, bright, "Paging disabled" );
+        print(COL3, ROW1, textColor, id--?0:-3, bright, "Paging OFF" );
     }
 
-    print(390, 64, textColor, id--?0:6, bright, "Page 0 0x%02X", memoryPage[0]);
-    print(390, 80, textColor, id--?0:6, bright, "Page 1 0x%02X", memoryPage[1]);
-    print(390, 96, textColor, id--?0:6, bright, "Page 2 0x%02X", memoryPage[2]);
-    print(390, 112, textColor, id--?0:6, bright, "Page 3 0x%02X", memoryPage[3]);
+    print(COL3, ROW2, textColor, id--?0:6, bright, "Page 0 0x%02X", memoryPage[0]);
+    print(COL3, ROW3, textColor, id--?0:6, bright, "Page 1 0x%02X", memoryPage[1]);
+    print(COL3, ROW4, textColor, id--?0:6, bright, "Page 2 0x%02X", memoryPage[2]);
+    print(COL3, ROW5, textColor, id--?0:6, bright, "Page 3 0x%02X", memoryPage[3]);
 
-    print(580, 48, textColor, "[R]un");
-    print(580, 64, textColor, "[S]tep");
-    print(580, 80, textColor, "Step [O]ver");
-    print(580, 96, textColor, "Step o[U]t");
-    print(580, 112, textColor, "Until branch [T]aken");
+    print(COL4, ROW2, textColor, id--?0:3, bright, " A' = 0x%02X", cpu.af2 & 0x0FF );
+    print(COL4, ROW3, textColor, id--?0:3, bright, "HL' = 0x%04X", cpu.hl2);
+    print(COL4, ROW4, textColor, id--?0:3, bright, "BC' = 0x%04X", cpu.bc2);
+    print(COL4, ROW5, textColor, id--?0:3, bright, "DE' = 0x%04X", cpu.de2);
 
-    uint16_t address = ((cpu.pc-1) & 0xFFF0)-16;
-    print(50, 154, textColor, id--?0:2, bright, "PC");
-    displayMem(address, 100, 140, textColor, cpu.pc-1);
+    print(640, ROW1, textColor, "%s", (cpu.iff1 == cpu.iff2) ? (cpu.iff1 ? "EI" : "DI") : (cpu.iff1 ? "??" : "NMI"));
+    print(640, ROW2, textColor, "IM%01X", cpu.im);
+    print(640, ROW3, textColor, "I   = 0x%02X", cpu.i);
+    print(640, ROW4, textColor, "R   = 0x%02X", cpu.r);
 
-    address = (cpu.sp & 0xFFF0)-16;
-    print(50, 210, textColor, id--?0:2, bright, "SP");
-    displayMem(address, 100, 196, textColor, cpu.sp);
+    print(COL1, ROW8, textColor, id--?0:4, bright, "%s", nameFor(memView[0]).c_str());
+    displayMem(104, ROW7, textColor, addressFor(0), memView[0] == MV_MEM ? memViewPage[0] : -1);
+    if( memView[0] == MV_MEM ) {
+        print(COL1, ROW8+14, textColor, id--?0:2, bright, "%02X", memViewPage[0]);
+    }
+    else id--;
 
-    address = (cpu.hl & 0xFFF0)-16;
-    print(50, 266, textColor, id--?0:2, bright, "HL");
-    displayMem(address, 100, 252, textColor, cpu.hl);
+    print(COL1, ROW12, textColor, id--?0:4, bright, "%s", nameFor(memView[1]).c_str());
+    displayMem(104, ROW11, textColor, addressFor(1), memView[1] == MV_MEM ? memViewPage[1] : -1);
+    if( memView[1] == MV_MEM ) {
+        print(COL1, ROW12+14, textColor, id--?0:2, bright, "%02X", memViewPage[1]);
+    }
+    else id--;
+
+    print(COL1, ROW16, textColor, id--?0:4, bright, "%s", nameFor(memView[2]).c_str());
+    displayMem(104, ROW15, textColor, addressFor(2), memView[2] == MV_MEM ? memViewPage[2] : -1);
+    if( memView[2] == MV_MEM ) {
+        print(COL1, ROW16+14, textColor, id--?0:2, bright, "%02X", memViewPage[2]);
+    }
+    else id--;
 
     std::bitset<8> ioSelectA(pio.port[0].io_select);
     std::bitset<8> portDataA(Z80PIO_GET_PA(pins));
 
-    print(50, 308, textColor, "Port A");
-    print(120, 308, textColor, (char*)ioSelectA.to_string('O', 'I').c_str());
-    print(120, 324, textColor, (char*)portDataA.to_string().c_str());
+    print(COL1, ROW19, textColor, "Port A");
+    print(120, ROW19, textColor, (char*)ioSelectA.to_string('O', 'I').c_str());
+    print(120, ROW20, textColor, (char*)portDataA.to_string().c_str());
 
     std::bitset<8> ioSelectB(pio.port[1].io_select);
     std::bitset<8> portDataB(Z80PIO_GET_PB(pins));
 
-    print(320, 308, textColor, "Port B");
-    print(390, 308, textColor, (char*)ioSelectB.to_string('O', 'I').c_str());
-    print(390, 324, textColor, (char*)portDataB.to_string().c_str());
+    print(320, ROW19, textColor, "Port B");
+    print(390, ROW19, textColor, (char*)ioSelectB.to_string('O', 'I').c_str());
+    print(390, ROW20, textColor, (char*)portDataB.to_string().c_str());
 
-    print(580, 308, textColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
-    print(580, 324, textColor, "File \"%s\"", audioFilename);
+    print(580, ROW19, textColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
+    print(580, ROW20, textColor, "File \"%s\"", audioFilename);
 
     int page = pagingEnabled ? memoryPage[((cpu.pc-1) >> 14) & 0x03] : 0;
     currentLoc = listing.getLocation(page << 16 | (cpu.pc-1));
@@ -600,23 +790,86 @@ void Beast::onDebug() {
         for( int i=0; i<12; i++ ) {
             displayLoc.lineNum = i+startLine;
             std::string line = listing.getLine(displayLoc);
-            print(50, 350+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.c_str()));
+            print(COL1, ROW22+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.c_str()));
         }
     }
     else {
         drawListing( cpu.pc-1, textColor, highColor );
     }
 
-    print( 50, 532, textColor, "[L]ist address");
-    print( 200, 532, textColor, "[C]urrent address");
+    print( COL1, END_ROW, menuColor, "[L]ist address");
+    print( 200, END_ROW, menuColor, "[C]urrent address");
 
-    if( breakpoint <= 0xFFFF ) {
-        print(390, 532, textColor, "[B]reakpoint = 0x%04X", breakpoint);
+    if( breakpoint != NO_BREAKPOINT ) {
+        print(390, END_ROW, menuColor, id--?0:-4, bright, "[B]reakpoint = 0x%04X", breakpoint);
+    }
+    else {
+        print(390, END_ROW, menuColor, "[B]reakpoint");
     }
     
-    print(620, 532, textColor, "[Q]uit");
+    print(620, END_ROW, menuColor, "[Q]uit");
+
+    if( editMode ) {
+        displayEdit();
+    }
 
     SDL_RenderPresent(sdlRenderer);
+}
+
+std::string Beast::nameFor(MemView view) {
+    switch(view) {
+        case MV_PC : return "PC";
+        case MV_SP : return "SP";
+        case MV_HL : return "HL";
+        case MV_BC : return "BC";
+        case MV_DE : return "DE";
+        case MV_IX : return "IX";
+        case MV_IY : return "IY";
+        case MV_Z80: return "Z80";
+        case MV_MEM: return "PAGE";
+        default:
+            return "???";
+    }
+}
+
+uint16_t Beast::addressFor(int view) {
+switch(memView[view]) {
+        case MV_PC : return cpu.pc-1;
+        case MV_SP : return cpu.sp;
+        case MV_HL : return cpu.hl;
+        case MV_BC : return cpu.bc;
+        case MV_DE : return cpu.de;
+        case MV_IX : return cpu.ix;
+        case MV_IY : return cpu.iy;
+        case MV_Z80: return memAddress[view];
+        case MV_MEM: return memPageAddress[view];
+        default:
+            return 0;
+    }
+}
+
+Beast::MemView Beast::nextView(MemView view, int dir) {
+    switch(view) {
+        case MV_PC : return dir == 1 ? MV_SP : MV_MEM;
+        case MV_SP : return dir == 1 ? MV_HL : MV_PC;
+        case MV_HL : return dir == 1 ? MV_BC : MV_SP;
+        case MV_BC : return dir == 1 ? MV_DE : MV_HL;
+        case MV_DE : return dir == 1 ? MV_IX : MV_BC;
+        case MV_IX : return dir == 1 ? MV_IY : MV_DE;
+        case MV_IY : return dir == 1 ? MV_Z80 : MV_IX;
+        case MV_Z80 : return dir == 1 ? MV_MEM : MV_IY;
+        case MV_MEM : return dir == 1 ? MV_PC : MV_Z80;
+        default:
+            return MV_PC;
+    }
+}
+
+void Beast::itemSelect(int direction) {
+    switch(selection) {
+        case SEL_MEM0 : memView[0] = nextView(memView[0], direction); break;
+        case SEL_MEM1 : memView[1] = nextView(memView[1], direction); break;
+        case SEL_MEM2 : memView[2] = nextView(memView[2], direction); break; 
+    }
 }
 
 void Beast::drawListing(uint16_t address, SDL_Color textColor, SDL_Color highColor) {
@@ -646,21 +899,25 @@ void Beast::drawListing(uint16_t address, SDL_Color textColor, SDL_Color highCol
             decodedAddresses.push_back(address);
         }
         std::string line = instr->decode(address, f, &length);
-        print(50, 350+(14*i), (address == cpu.pc-1) ? highColor: textColor, "%04X             %s", address, const_cast<char*>(line.c_str()));
+        print(COL1, 350+(14*i), (address == cpu.pc-1) ? highColor: textColor, "%04X             %s", address, const_cast<char*>(line.c_str()));
         address += length;
     }
 }
 
-void Beast::displayMem(uint16_t address, int x, int y, SDL_Color textColor, uint16_t markAddress) {
+void Beast::displayMem(int x, int y, SDL_Color textColor, uint16_t markAddress, int page) {
+    uint16_t address = (markAddress & 0xFFF0)-16;
+
+    uint16_t addressMask = page < 0 ? 0xFFFF : 0x3FFF;
+
     const int BUFFER_SIZE = 200;
     char buffer[BUFFER_SIZE]; 
     for( int row=0; row<3; row++ ) {
-        int c = snprintf( buffer, BUFFER_SIZE, "0x%04X ", address);
+        int c = snprintf( buffer, BUFFER_SIZE, "0x%04X ", address & addressMask);
         if( c < 0 || c >= BUFFER_SIZE ) {
             break;
         }
         for( uint16_t i=0; i<16; i++ ) {
-            uint8_t data = readMem(address+i);
+            uint8_t data = page < 0 ? readMem(address+i): readPage(page, address+i);
 
             int cs = snprintf( buffer+c, BUFFER_SIZE-c, 
                 (address+i == markAddress) ? ">%02X" : " %02X", data);
@@ -675,7 +932,7 @@ void Beast::displayMem(uint16_t address, int x, int y, SDL_Color textColor, uint
         }
         c+=cn;
         for( int i=0; i<16; i++ ) {
-            uint8_t data = readMem(address+i);
+            uint8_t data = page < 0 ? readMem(address+i): readPage(page, address+i);
             if( data < 32 || data > 127 ) {
                 data = '.';
             }
@@ -686,7 +943,7 @@ void Beast::displayMem(uint16_t address, int x, int y, SDL_Color textColor, uint
                 return;
             }
         }
-        print(x, y+(14*row), textColor, buffer);
+        print(x, y+2+(14*row), textColor, buffer);
         address += 16;
     }
 }
@@ -700,6 +957,12 @@ uint8_t Beast::readMem(uint16_t address) {
         isRam = (page & 0xE0) == 0x20;
         mappedAddr |= (page & 0x1F) << 14;
     }
+    return isRam ? ram[mappedAddr] : rom[mappedAddr];
+}
+
+uint8_t Beast::readPage(int page, uint16_t address) {
+    bool isRam = (page & 0xE0) == 0x20;
+    uint16_t mappedAddr = (address & 0x3FFF) | (page & 0x1F) << 14;
     return isRam ? ram[mappedAddr] : rom[mappedAddr];
 }
 
@@ -723,9 +986,46 @@ template<typename... Args> void Beast::print(int x, int y, SDL_Color color, int 
     }
 }
 
+void Beast::displayEdit() {
+    char buffer[2] = {'0', 0};
+    int width;
+    int height;
+
+    SDL_Color background = {0xFF, 0xFF, 0xFF};
+
+    TTF_SizeUTF8(monoFont, buffer, &width, &height);
+    boxRGBA(sdlRenderer, editX*zoom+(width*(editOffset-1)), (editY+1)*zoom, editX*zoom+(width*(editOffset+editDigits-1)), (editY-2)*zoom+height, background.r, background.g, background.b, 0xFF);
+
+    SDL_Rect textRect;
+
+    SDL_Color normal = {0x00, 0x00, 0x00};
+    SDL_Color edited = {0xF0, 0x40, 0x40};
+
+    for( int i=editDigits-1; i>=0; i--) {
+        snprintf(buffer, sizeof(buffer), "%01X", (editValue >> (i*4)) & 0x0F);
+
+        SDL_Color color = i == editIndex ? edited: normal;
+
+        SDL_Surface *textSurface = TTF_RenderText_Blended(monoFont, buffer, color);
+        SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
+
+        textRect.x = editX*zoom+(width*(editOffset+(editDigits-i)-2)); 
+        textRect.y = editY*zoom;
+        textRect.w = textSurface->w;
+        textRect.h = textSurface->h;
+
+        SDL_RenderCopy(sdlRenderer, textTexture, NULL, &textRect);
+
+        SDL_DestroyTexture(textTexture);
+        SDL_FreeSurface(textSurface);
+    }
+}
+
 void Beast::printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer) {
     SDL_Surface *textSurface = TTF_RenderText_Blended(monoFont, buffer, color);
-    SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);{}    if( highlight != 0 ) {  
+    SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
+
+    if( highlight != 0 ) {  
         int width;
         int height;
 

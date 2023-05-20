@@ -28,6 +28,15 @@ class Beast {
 
     enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, QUIT};
 
+    enum Selection {SEL_PC, SEL_A, SEL_HL, SEL_BC, SEL_DE, SEL_FLAGS, SEL_SP, SEL_IX, SEL_IY, 
+        SEL_PAGING, SEL_PAGE0, SEL_PAGE1, SEL_PAGE2, SEL_PAGE3, 
+        SEL_A2, SEL_HL2, SEL_BC2, SEL_DE2, 
+        SEL_MEM0, SEL_VIEWPAGE0, SEL_MEM1, SEL_VIEWPAGE1, SEL_MEM2, SEL_VIEWPAGE2, 
+        SEL_BREAKPOINT,
+        SEL_END_MARKER };
+
+    enum MemView {MV_PC, MV_SP, MV_HL, MV_BC, MV_DE, MV_IX, MV_IY, MV_Z80, MV_MEM};
+
     struct BeastKey {
         SDL_KeyCode key;
         int row;
@@ -88,6 +97,7 @@ class Beast {
         uint64_t clock_time_ps  = 0;
         uint64_t targetSpeedHz;
         uint64_t breakpoint = 0xF20D;
+        uint64_t lastBreakpoint = 0;
 
         uint8_t rom[(1<<19)]; // 512K rom
         uint8_t ram[(1<<19)]; // 512K ram
@@ -95,6 +105,44 @@ class Beast {
         uint8_t memoryPage[4];
         bool    pagingEnabled = false;
         uint8_t readMem(uint16_t address);
+        uint8_t readPage(int page, uint16_t address);
+
+        MemView memView[3] = {MV_PC, MV_SP, MV_HL};
+        uint16_t memAddress[3] = {0};
+        uint16_t memPageAddress[3] = {0};
+        uint8_t  memViewPage[3] = {0};
+
+        bool       editMode = false;
+        uint16_t   editValue, editOldValue;
+        int        editIndex;
+        int        editDigits;
+        int        editX, editY, editOffset;
+
+        const int COL1 = 50;
+        const int COL2 = 190;
+        const int COL3 = 330;
+        const int COL4 = 470;
+
+        const int ROW1 = 56;
+        const int ROW2 = ROW1+16;
+        const int ROW3 = ROW2+16;
+        const int ROW4 = ROW3+16;
+        const int ROW5 = ROW4+16;
+
+        const int ROW7 = ROW5+32;
+        const int ROW8 = ROW7+16;
+
+        const int ROW11 = ROW8+40;
+        const int ROW12 = ROW11+16;
+
+        const int ROW15 = ROW12+40;
+        const int ROW16 = ROW15+16;
+
+        const int ROW19 = ROW16+44;
+        const int ROW20 = ROW19+16;
+
+        const int ROW22 = ROW20+28;
+        const int END_ROW = ROW22+(13*14);
 
         Listing &listing;
         Listing::Location currentLoc = {0,0, false};
@@ -114,7 +162,17 @@ class Beast {
         void drawBeast();
         void drawKeys();
         void drawKey(int col, int row, int offsetX, int offsetY, bool pressed);
-        void displayMem(uint16_t address, int x, int y, SDL_Color textColor, uint16_t markAddress);
+        void displayMem(int x, int y, SDL_Color textColor, uint16_t markAddress, int page);
+        std::string nameFor(MemView view);
+        uint16_t addressFor(int view);
+        MemView nextView(MemView view, int dir);
+        void updateSelection(int direction, int maxSelection);
+        void itemSelect(int direction);
+        void startEdit(uint16_t value, int x, int y, int offset, int digits);
+        bool itemEdit();
+        void editComplete();
+        void displayEdit();
+
         void drawListing(uint16_t address, SDL_Color textColor, SDL_Color highColor);
         template<typename... Args> void print(int x, int y, SDL_Color color, const char *fmt, Args... args);
         template<typename... Args> void print(int x, int y, SDL_Color color, int highlight, SDL_Color background, const char *fmt, Args... args);
