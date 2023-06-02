@@ -949,7 +949,7 @@ void Beast::displayMem(int x, int y, SDL_Color textColor, uint16_t markAddress, 
 }
 
 uint8_t Beast::readMem(uint16_t address) {
-    uint16_t mappedAddr = address & 0x3FFF;
+    uint32_t mappedAddr = address & 0x3FFF;
     bool isRam = false;
     
     if( pagingEnabled ) {
@@ -961,8 +961,8 @@ uint8_t Beast::readMem(uint16_t address) {
 }
 
 uint8_t Beast::readPage(int page, uint16_t address) {
-    bool isRam = (page & 0xE0) == 0x20;
-    uint16_t mappedAddr = (address & 0x3FFF) | (page & 0x1F) << 14;
+    bool isRam = page > 0x1F;
+    uint32_t mappedAddr = (address & 0x3FFF) | (page & 0x1F) << 14;
     return isRam ? ram[mappedAddr] : rom[mappedAddr];
 }
 
