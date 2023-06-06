@@ -2,6 +2,7 @@
 #include <sstream>
 #include <fstream>
 #include <SDL.h>
+#include <SDL_net.h>
 #include <regex>
 #define CHIPS_IMPL
 #include "src/z80.h"
@@ -255,6 +256,10 @@ int main( int argc, char *argv[] ) {
         }
 
         zoom *= widthScale;
+    }
+
+    if (SDLNet_Init() == -1) {
+        std::cout << "SDLNet_Init error: " << SDLNet_GetError() << std::endl;
     }
 
     Beast beast = Beast(renderer, WIDTH, HEIGHT, zoom, listing);

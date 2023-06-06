@@ -153,12 +153,13 @@ class Beast {
         int16_t     audioBuffer[AUDIO_BUFFER_SIZE] = {0};
         int         audioRead = 0;
         int         audioWrite= 1;
+        int         audioAvailable = 0;
         uint64_t    audioSampleRatePs;
         int         volume;
         const char* audioFilename = "audio.raw";
         FILE*       audioFile = nullptr;
 
-        
+        void redrawScreen();
         void drawBeast();
         void drawKeys();
         void drawKey(int col, int row, int offsetX, int offsetY, bool pressed);

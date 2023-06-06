@@ -19,6 +19,7 @@
                 "-lSDL2main",
                 "-lSDL2",
                 "-lSDL2_ttf",
+                "-lSDL2_net",
                 "-llibSDL2_gfx-1-0-0"
             ],
             "options": {

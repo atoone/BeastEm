@@ -113,9 +113,12 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
 
 void Beast::loadSamples(Sint16 *stream, int length) {
     int index = 0;
+    if( audioAvailable < length ) return;
+
     while(index < length && ((audioRead+1)%AUDIO_BUFFER_SIZE) != audioWrite) {
         audioRead = (audioRead+1)%AUDIO_BUFFER_SIZE;
         stream[index++] = audioBuffer[audioRead];
+        audioAvailable--;
     }
 
     if( index > 0 && audioFile ) {
@@ -279,7 +282,15 @@ void Beast::mainLoop() {
 
             while( SDL_PollEvent(&windowEvent ) == 0 ) {
                 SDL_Delay(25);
-            };
+                if( !uart_connected(&uart) ) {
+                    uart_connect(&uart, true);
+                    break;
+                }
+            }
+
+            if( SDL_RENDER_TARGETS_RESET == windowEvent.type ) {
+                redrawScreen();
+            }
 
             if( SDL_QUIT == windowEvent.type ) {
                 mode = QUIT;
@@ -354,6 +365,7 @@ void Beast::mainLoop() {
                         case SDLK_s    : mode = STEP;   break;
                         case SDLK_u    : mode = OUT;    break;
                         case SDLK_o    : mode = OVER;   break;
+                        case SDLK_d    : uart_connect(&uart, false); break;
                         case SDLK_t    : 
                             if( instr->isConditional(readMem(cpu.pc-1), readMem(cpu.pc))) {
                                 mode = TAKE;
@@ -485,6 +497,7 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
             if( next != audioRead ) {
                 audioBuffer[audioWrite] = (uart.modem_control_register & MCR_OUT2) ? 400*volume : -400*volume;
                 audioWrite = next;
+                audioAvailable++;
             }
         }
 
@@ -494,7 +507,7 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                     mode = QUIT;
                     break;
                 }
-                if( SDL_KEYDOWN == windowEvent.type ) {
+                else if( SDL_KEYDOWN == windowEvent.type ) {
                     if( windowEvent.key.keysym.sym == SDLK_ESCAPE ) {
                         mode = DEBUG;
                         run = false;
@@ -502,8 +515,11 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                     else 
                         keyDown(windowEvent.key.keysym.sym);
                 }
-                if( SDL_KEYUP == windowEvent.type ) {
+                else if( SDL_KEYUP == windowEvent.type ) {
                     keyUp(windowEvent.key.keysym.sym);
+                }
+                else if( SDL_RENDER_TARGETS_RESET == windowEvent.type ) {
+                    redrawScreen();
                 }
             }
             onDraw();
@@ -772,12 +788,20 @@ void Beast::onDebug() {
     std::bitset<8> ioSelectB(pio.port[1].io_select);
     std::bitset<8> portDataB(Z80PIO_GET_PB(pins));
 
-    print(320, ROW19, textColor, "Port B");
-    print(390, ROW19, textColor, (char*)ioSelectB.to_string('O', 'I').c_str());
-    print(390, ROW20, textColor, (char*)portDataB.to_string().c_str());
+    print(220, ROW19, textColor, "Port B");
+    print(290, ROW19, textColor, (char*)ioSelectB.to_string('O', 'I').c_str());
+    print(290, ROW20, textColor, (char*)portDataB.to_string().c_str());
 
-    print(580, ROW19, textColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
-    print(580, ROW20, textColor, "File \"%s\"", audioFilename);
+    print(430, ROW19, textColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
+    print(430, ROW20, textColor, "File \"%s\"", audioFilename);
+
+    print(620, ROW19, textColor, "TTY :%d", uart_port(&uart));
+    if( uart_connected(&uart)) {
+        print(620, ROW20, textColor, "Connected [D]rop");
+    }
+    else {
+        print(620, ROW20, textColor, "Disconnected");
+    }
 
     int page = pagingEnabled ? memoryPage[((cpu.pc-1) >> 14) & 0x03] : 0;
     currentLoc = listing.getLocation(page << 16 | (cpu.pc-1));
@@ -899,7 +923,7 @@ void Beast::drawListing(uint16_t address, SDL_Color textColor, SDL_Color highCol
             decodedAddresses.push_back(address);
         }
         std::string line = instr->decode(address, f, &length);
-        print(COL1, 350+(14*i), (address == cpu.pc-1) ? highColor: textColor, "%04X             %s", address, const_cast<char*>(line.c_str()));
+        print(COL1, ROW22+(14*i), (address == cpu.pc-1) ? highColor: textColor, "%04X             %s", address, const_cast<char*>(line.c_str()));
         address += length;
     }
 }
@@ -1089,4 +1113,12 @@ void Beast::drawBeast() {
             drawKey(col, row, 0, keyboardTop, true);
         }
     }
+}
+
+void Beast::redrawScreen() {
+    for( int i=0; i<DISPLAY_CHARS; i++) {
+        display[i].changed = true;
+    }
+    drawKeys();
+    drawBeast();
 }

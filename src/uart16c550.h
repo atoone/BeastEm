@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <SDL_net.h>
 
 #ifdef __cplusplus
 #include <iostream> // TODO: Remove debug
@@ -13,6 +14,7 @@ extern "C" {
 #endif
 
 #define FIFO_SIZE   16
+#define RX_BUFFER_SIZE 512
 
 // Bit numbers for registers
 #define LCR_BIT_PARITY (3)
@@ -23,6 +25,7 @@ extern "C" {
 #define FIFO_ENABLE       (0x01)
 #define LCR_PARITY_EVEN   (0x10)
 #define LCR_PARITY_STICKY (0x20)
+#define LSR_DR            (0x01)
 #define LSR_THRE          (0x20)
 #define LSR_TEMT          (0x40)
 #define MCR_OUT2          (0x08)
@@ -68,6 +71,12 @@ typedef struct {
     uint8_t modem_status_register;
     uint8_t scratch_register;
 
+    TCPsocket  client, server;
+    SDLNet_SocketSet socketSet;
+    int        port;
+    uint8_t    rx_buffer[RX_BUFFER_SIZE];
+    uint16_t   rx_available;
+    uint16_t   rx_offset;
 } uart_t;
 
 void uart_init(uart_t* uart, uint64_t clock_hz, uint64_t time_ps);
@@ -77,6 +86,12 @@ uint64_t uart_tick(uart_t* uart, uint64_t time_ps);
 void uart_write(uart_t* uart, uint8_t addr, uint8_t data, uint64_t time_ps);
 
 uint8_t uart_read(uart_t* uart, uint8_t addr);
+
+void uart_connect(uart_t* uart, bool connect);
+
+bool uart_connected(uart_t* uart);
+
+int  uart_port(uart_t* uart);
 
 #ifdef __cplusplus
 } // extern C
@@ -121,6 +136,57 @@ void uart_init(uart_t* uart, uint64_t clock_hz, uint64_t time_ps) {
 
     uart->pins |= UART_SO;  // CTS and DSR are clear
     std::cout << "Divisor "<< uart->divisor << " Baud rate : " << (uart->clock_hz / (uart->divisor) / 16) << std::endl;
+
+    uart->port = 8456;
+
+    IPaddress ip;
+
+    if (SDLNet_ResolveHost(&ip, NULL, uart->port) == -1) {
+      std::cout << "SDLNet_ResolveHost error: " << SDLNet_GetError() << std::endl;
+      return;
+    }
+
+    uart->server = SDLNet_TCP_Open(&ip);
+    if (!uart->server) {
+      std::cout << "SDLNet_TCP_Open error: " << SDLNet_GetError() << std::endl;
+      return;
+    }
+}
+
+void uart_connect(uart_t* uart, bool connect) {
+    if( !connect && uart->client ) {
+        SDLNet_TCP_Close(uart->client);
+        uart->client = NULL;
+        return;
+    }
+
+    uart->client = SDLNet_TCP_Accept(uart->server);
+
+    uart->rx_available = 0;
+
+    if( !uart->client ) {
+        return;
+    }
+    else {
+        std::cout << "Network client created on port " << uart->port << std::endl;
+
+        uart->socketSet = SDLNet_AllocSocketSet(1);
+        if( uart->socketSet ) {
+            SDLNet_TCP_AddSocket(uart->socketSet, uart->client);
+        }
+        else {
+            std::cout << "Couldn't create socket set, closing connection" <<std::endl;
+            uart->client = NULL;
+        }
+    }
+}
+
+bool uart_connected(uart_t* uart) {
+    return uart->client;
+}
+
+int  uart_port(uart_t* uart) {
+    return uart->port;
 }
 
 #define MSR_DELTA_CTS    (0x01)
@@ -186,7 +252,11 @@ uint64_t uart_tick(uart_t* uart, uint64_t time_ps) {
                             uart->tx_bit = 0;
 
                             // DEBUG OUTPUT
+                            //std::cout << "Sent byte :" << (0+uart->tx_shift) << "(" << (char)uart->tx_shift << ")" << std::endl;
                             std::cout << (char)uart->tx_shift;
+                            if( uart->client ) {
+                                SDLNet_TCP_Send(uart->client, &uart->tx_shift, 1);
+                            }
                         }
                         else {
                             uart->tx_bit += 1;
@@ -221,6 +291,63 @@ uint64_t uart_tick(uart_t* uart, uint64_t time_ps) {
         if( uart->is_receiving ) {
             // Handle receieve
             uart->rx_cycles = (uart->rx_cycles+1) & 0x0F;
+            if( uart->rx_cycles == 0 ) {
+                int bits = 5 + (uart->line_control_register & 0x03);
+                int parity = (uart->line_control_register >> LCR_BIT_PARITY) & 0x01;
+
+                uart->rx_bit++;
+
+                if( uart->rx_bit == bits+parity+2+((uart->line_control_register >> 2)&1) ) {
+                    uart->rx_bit = 0;
+
+                    if( uart->fifo_control_register & FIFO_ENABLE ) {
+                        uart->rx_fifo[uart->rx_bytes++] = uart->rx_buffer[uart->rx_offset++];  // Receive the next byte
+
+                        if( uart->rx_bytes == FIFO_SIZE) {
+                            std::cout << "Buffer overrun " << std::endl;
+                            uart->rx_bytes--;
+                        }
+                        // TODO - Interrupt on FIFO size
+                    }
+                    else {
+                        uart->rx_fifo[0] = uart->rx_buffer[uart->rx_offset++];  // Receive the next byte
+                        uart->rx_bytes = 1;
+                    }
+
+                    uart->line_status_register |= LSR_DR;
+
+                    if(uart->rx_offset == uart->rx_available) {
+                        uart->is_receiving = false;
+                    }
+                } 
+            }
+        } else {
+            if( uart->client ) {
+                int check = SDLNet_CheckSockets(uart->socketSet, 0);
+                if( check > 0) {
+                    int available = SDLNet_TCP_Recv(uart->client, uart->rx_buffer, RX_BUFFER_SIZE);
+                    if( available > 0 ) {
+                        uart->rx_available = available;
+                        uart->is_receiving = true;
+                        uart->rx_offset = 0;
+                        uart->rx_cycles = 0;
+                        /**
+                        std::cout << "Read " << available << " bytes:\n"<<std::endl;
+                        int index = 0;
+                        while( index < available ) {
+                            std::cout << std::hex << "Read " << (index) << ": ";
+                            for( int i=0; i<16; i++ ) {
+                                if(index+i < available) {
+                                    std::cout << (0+uart->rx_buffer[index+i]) << " ";
+                                }
+                            }
+                            std::cout << std::dec << std::endl;
+                            index+=16;
+                        }
+                        */
+                    }
+                }
+            }
         }
 
         uart->last_tick_ps += (uart->cycle_ps * uart->divisor);
@@ -328,6 +455,28 @@ uint8_t uart_read(uart_t* uart, uint8_t addr) {
 
     switch( addr & 0x07 ) {
         case 0: // receive holding register OR Divisor latch LSB
+            if(uart->line_control_register & 0x80) {
+                return uart->divisor & 0x0FF;
+            }
+            else {
+                uint8_t result = uart->rx_fifo[0];
+
+                if( uart->fifo_control_register & FIFO_ENABLE ) {
+                    for( int i=0; i<FIFO_SIZE-1; i++) {
+                        uart->rx_fifo[i] = uart->rx_fifo[i+1];
+                    }
+                }
+                
+                if( uart->rx_bytes > 0 ) {
+                    uart->rx_bytes--;
+                }
+
+                if( uart->rx_bytes == 0 ) {
+                    uart->line_status_register &= ~LSR_DR;  // Clear data ready flag
+                }
+
+                return result;
+            }
             break;
         case 1: // Interrupt enable register OR Divisor latch MSB
             break;
