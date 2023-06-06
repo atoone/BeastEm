@@ -26,15 +26,15 @@ Linux users should copy the exectutable to a directory along with the files in t
 
 ## Run with a simple test ROM
 
+Windows users can run `beast.bat` in the `release/win64` directory.
+
+Linux users can run BeastEm with the executable name ``beastem`` on the command line.
+
 If no parameters are supplied, BeastEm will start the emulator up with an (incomplete) monitor ROM that exercises some of the features of MicroBeast. This is equivalent to running with the command line:
 
 ```
 beastem -f monitor.rom -l 0 firmware.lst -l 23 bios.lst
 ```
-
-Windows users can run `beast.bat` in the `release/win64` directory.
-
-Linux users can run BeastEm with the executable name ``beastem`` on the command line.
 
 ## Command line options
 
@@ -55,7 +55,9 @@ The following command line options may be used:
 
 BeastEm will synchronise debug with listing files in the TASM format (each line consisting of a line number, one or more spaces and then the assembly address in hex). Other formats may be supported in future.
 
-A listing file is pinned to the memory page it is loaded into, as well as the physical address in the listing itself. This allows code paged in to memory to be correctly identified.
+A listing file is pinned to the memory page it is loaded into, as well as the physical address in the listing itself. This allows code paged in to memory to be correctly identified. 
+
+Note that no checks are made that the memory contents match the provided listing, so the assembly shown may not be accurate.
 
 ## Controlling BeastEm
 
@@ -70,11 +72,32 @@ In the debug view, most commands take a single keypress. The currently implement
 | `R` | Run the emulator until `ESCAPE` pressed or breakpoint is reached                             |
 | `S` | Single step - execute one instruction                                                        |
 | `O` | Run until the following instruction is reached (eg. **O**ver a `CALL` or `DJNZ` instruction) |
-| `U` | Run until the current subroutine is **R**eturned from.                                       |
+| `U` | Run until the current subroutine is returned from.                                           |
 | `T` | Run until the current conditional branch is **T**aken                                        |
+| `B` | Toggle breakpoint, edit value when breakpoint enabled                                        |
+| `D` | When a terminal is connected over a network port, **D**isconnect it and await a new connection |
 | `Q` | Quit                                                                                         |
-| `A` | Toggles appending audio output to the chosen audio file                                      |
-| `PG-Up`, `PG-Down` | Select debug values for editing (editing not implemented yet)                 |
+| `A` | Toggles appending audio output to the chosen audio file                                      | 
+| `PG-Up`, `PG-Down` | Select debug values for editing                                               |
+| `Left`, `Right`    | When a memory view is selected, choose the register pair or address to view   |
+
+When a value is selected, hitting `Enter` will allow a new value to be set, or toggle a binary `On|Off` value.
+
+Besides showing the address pointed to by register pairs, the memory views also allow memory to be directly 
+inspected. The `Z80` option views the CPU's memory map (0-64K), whereas the `PAGE` option allows any page
+in the 1Mb paged memory (512K ROM, 512K RAM) to be examined.
+
+## Serial over Network
+
+A terminal can be connected to the emulated MicroBeast UART over a network socket. Data sent to and from the terminal
+will be handled as though sent to the UART at whatever Baud rate it is configured for.
+
+To connect a terminal, ensure the debug screen is visible and check the port number displayed next to the `TTY` menu
+option (default 8456). Open your preferred terminal program and connect to `localhost:8456`. The debug window will
+indicate when a connection is made, and the `D` key will disconnect and await a new connection.
+
+The UART simulates hardware handshake (no data is discarded or overrun), and the 16C550 RX/TX FIFO, but does not
+currently implement interrupts, so software must poll the UART directly for its state.
 
 
 # Building
@@ -87,10 +110,10 @@ Windows users can install g++ with MySys64, following [this guide](https://code.
 
 ## Linux
 
-Linux users will need to install the SDL2 development libraries, specifically `libsdl2-dev`, `libsdl2-gfx-dev` and `libsdl2-ttf-dev`. Build the executable with:
+Linux users will need to install the SDL2 development libraries, specifically `libsdl2-dev`, `libsdl2-gfx-dev`, `libsdl2-net-dev` and `libsdl2-ttf-dev`. Build the executable with:
 
 ```
-g++ -w -O2 -o beastem beastem.cpp src/*.cpp -I/usr/include/SDL2 -D_REENTRANT -lSDL2 -lSDL2_ttf -lSDL2_gfx
+g++ -w -O2 -o beastem beastem.cpp src/*.cpp -I/usr/include/SDL2 -D_REENTRANT -lSDL2 -lSDL2_ttf -lSDL2_gfx -lSDL2_net
 ```
 
 (This assumes all SDL2 include files have been installed to `/usr/include/SDL2`).
@@ -105,17 +128,14 @@ BeastEm is one part of a much bigger project to build a unique new computer, so 
 
 Some features are not yet implemented:
 
-* Serial input
 * RTC Alarms, battery monitoring
 * PIO inputs
 * Flash ROM erase and write
 
 The Debugger is also on early release, currently missing:
 
-* Register editing
 * Memory editing
 * Read / write binary files during emulation
-* Set, clear breakpoints
 * Navigating through listings/disassembly.
 
 The included monitor ROM is also early code, demonstrating some simple concepts on MicroBeast. It is included only for test purposes.
