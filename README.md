@@ -63,7 +63,7 @@ Note that no checks are made that the memory contents match the provided listing
 
 The Emulator starts in the debug view, showing the state of the CPU, PIO and a disassembly or listing of the current execution address. When the emulator is running, the debug view is hidden and keyboard input goes directly to MicroBeast. At any time, hitting `ESCAPE` will return to the debug view.
 
-![BeastEm Debug View](docs/beastem.png)
+![BeastEm Debug View](docs/beastem_0_6.png)
 
 In the debug view, most commands take a single keypress. The currently implemented commands are:
 
