@@ -109,7 +109,7 @@ uint8_t I2cRTC::readNext() {
             }
             break;
         case REG_WKDAY:
-            result = (((clock.tm_wday + weekOffset) % 7)+1) | 
+            result = (((clock.tm_wday + weekOffset + 7) % 7)+1) | 
                     ((mem[REG_SEC & OSC_EN])? FLAG_OSC : 0);
             break;
         case REG_DATE:
@@ -136,6 +136,7 @@ void I2cRTC::write(uint8_t ioByte) {
     else {
         // std::cout << "RTC: Write " << 0+currentAddress << " <- " << 0+ioByte << std::endl;
         mem[currentAddress] = ioByte;
+        int wkDay;
 
         switch( currentAddress ) {
             case REG_SEC:
@@ -162,20 +163,26 @@ void I2cRTC::write(uint8_t ioByte) {
                 mktime(&clock);  
                 break; 
             case REG_WKDAY:
-                weekOffset = (((clock.tm_wday) - ((ioByte))) & 0x07)-1;
-                clock.tm_wday = (ioByte & 0x07)-1;   
+                mktime(&clock);
+                weekOffset = (((ioByte & 0x07)-1) - clock.tm_wday);
                 break;
             case REG_DATE:
-                clock.tm_mday = ioByte & MASK_DATE;
+                wkDay = ((clock.tm_wday + weekOffset + 7) % 7);
+                clock.tm_mday = readBcd(ioByte & MASK_DATE);
                 mktime(&clock);
+                weekOffset = wkDay - clock.tm_wday;
                 break;
             case REG_MONTH:
+                wkDay = ((clock.tm_wday + weekOffset + 7) % 7);
                 clock.tm_mon = readBcd((ioByte & MASK_MONTH)-1);    
                 mktime(&clock);
+                weekOffset = wkDay - clock.tm_wday;
                 break;
             case REG_YEAR:
+                wkDay = ((clock.tm_wday + weekOffset + 7) % 7);
                 clock.tm_year = 100+readBcd(ioByte);
                 mktime(&clock);
+                weekOffset = wkDay - clock.tm_wday;
                 break;  
         }
         currentAddress++;
