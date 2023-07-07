@@ -102,12 +102,21 @@ class Beast {
         uint8_t rom[(1<<19)]; // 512K rom
         uint8_t ram[(1<<19)]; // 512K ram
 
+        bool     romOperation = false;
+        uint8_t  romSequence = 0;
+        uint8_t  romOperationMask = 0x80;
+        uint64_t romCompletePs = 0;
+
+        const uint64_t ROM_BYTE_WRITE_PS = 20 * 1000000ULL; 
+        const uint64_t ROM_CHIP_ERASE_PS = 100000 * 1000000ULL;
+        const uint64_t ROM_SECTOR_ERASE_PS = 25000 * 1000000ULL;
+
         uint8_t memoryPage[4];
         bool    pagingEnabled = false;
         uint8_t readMem(uint16_t address);
         uint8_t readPage(int page, uint16_t address);
 
-        MemView memView[3] = {MV_PC, MV_SP, MV_HL};
+        MemView  memView[3] = {MV_PC, MV_SP, MV_HL};
         uint16_t memAddress[3] = {0};
         uint16_t memPageAddress[3] = {0};
         uint8_t  memViewPage[3] = {0};
@@ -209,7 +218,7 @@ class Beast {
 
         bool changed = true;
 
-        static const int KEY_MAP_LENGTH = 58;
+        static const int KEY_MAP_LENGTH = 59;
 
         const BeastKey KEY_MAP[KEY_MAP_LENGTH] = {
             BeastKey{SDLK_UP, 0, 0, NONE},
@@ -252,6 +261,7 @@ class Beast {
             BeastKey{SDLK_RETURN, 2, 11, NONE},
 
             BeastKey{SDLK_LSHIFT, 3, 1, NONE},
+            BeastKey{SDLK_RSHIFT, 3, 1, NONE},
             BeastKey{SDLK_z, 3, 2, NONE},
             BeastKey{SDLK_x, 3, 3, NONE},
             BeastKey{SDLK_c, 3, 4, NONE},

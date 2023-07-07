@@ -443,13 +443,110 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                 mappedAddr |= (page & 0x1F) << 14;
             }
             if (pins & Z80_RD) {
-                uint8_t data = isRam ? ram[mappedAddr] : rom[mappedAddr];
-                Z80_SET_DATA(pins, data);
+                if( isRam ) {
+                    uint8_t data = ram[mappedAddr];
+                    Z80_SET_DATA(pins, data);
+                }
+                else if( romOperation ) {
+                    if( clock_time_ps >= romCompletePs ) {
+                        romSequence = 0;
+                        romOperation = false;
+                    }
+                    else {
+                        uint8_t data = rom[mappedAddr] ^ romOperationMask;
+                        romOperationMask ^= 0x40;
+                        Z80_SET_DATA(pins, data);
+                    }
+                }
+                else {
+                    uint8_t data = rom[mappedAddr];
+                    Z80_SET_DATA(pins, data);
+                }
             }
             else if (pins & Z80_WR) {
                 uint8_t data = Z80_GET_DATA(pins);
                 if( isRam ) {
                     ram[mappedAddr] = data;
+                }
+                else {
+                    if( romSequence == 3 && clock_time_ps >= romCompletePs ) {
+                        romSequence = 0;
+                        romOperation = false;
+                    }
+
+                    switch( romSequence ) {
+                        case 0: if( mappedAddr == 0x5555 && data == 0xaa ) {
+                                romSequence = 1;
+                            }
+                            else {
+                                romSequence = 0;
+                            }
+                            break;
+                        case 1: if( mappedAddr == 0x2AAA && data == 0x55 ) {
+                                romSequence = 2;
+                            }
+                            else {
+                                romSequence = 0;
+                            }
+                            break;
+                        case 2: if( mappedAddr == 0x5555 && ((data & 0xF0) != 0)) {
+                                romSequence = data;
+                            }
+                            else {
+                                romSequence = 0;
+                            }
+                            break;
+                        case 3:
+                            break;
+                        case 0xA0: 
+                            rom[mappedAddr] = data;
+                            romOperation = true;
+                            romCompletePs = clock_time_ps + ROM_BYTE_WRITE_PS;
+                            romSequence = 3;
+                            break;
+                        case 0x80:
+                            if( mappedAddr == 0x5555 && data == 0xaa ) {
+                                romSequence = 0x81;
+                            }
+                            else {
+                                romSequence = 0;
+                            }
+                            break;
+                        case 0x81: 
+                            if( mappedAddr == 0x2AAA && data == 0x55 ) {
+                                romSequence = 0x82;
+                            }
+                            else {
+                                romSequence = 0;
+                            }
+                            break;
+                        case 0x82: 
+                            if( mappedAddr == 0x5555 && data == 0x10 ) { // Chip erase
+                                std::cout << "Erasing chip " << std::endl;
+                                for( int i=1<<19; i>0; ) {
+                                    rom[--i] = 0xFF;
+                                }
+                                romOperation = true;
+                                romCompletePs = clock_time_ps + ROM_CHIP_ERASE_PS;
+                                romSequence  = 3;
+                            }
+                            else if (data == 0x30) { // Sector erase
+                                uint32_t sectorAddress = mappedAddr & ~0x0FFFULL;
+                                std::cout << "Erasing sector " << (sectorAddress >> 12) << std::endl;
+                                for( int i=0; i< 0x1000; i++) {
+                                    rom[sectorAddress+i] = 0xFF;
+                                }
+                                romOperation = true;
+                                romCompletePs = clock_time_ps + ROM_SECTOR_ERASE_PS;
+                                romSequence = 3;
+                            }
+                            else {
+                                romSequence = 0;
+                            }
+                            break;
+                        default:
+                            romSequence = 0;
+                    }
                 }
             }
         }
