@@ -38,6 +38,11 @@ Beast::Beast(SDL_Renderer *renderer, int screenWidth, int screenHeight, float zo
         std::cout << "Couldn't load font "<< BEAST_FONT << std::endl;
         exit(1);
     }
+    midFont = TTF_OpenFont(BEAST_FONT, MID_FONT_SIZE*zoom);
+    if( !midFont) {
+        std::cout << "Couldn't load font "<< BEAST_FONT << std::endl;
+        exit(1);
+    }
 
     monoFont = TTF_OpenFont(MONO_FONT, MONO_SIZE*zoom);
 
@@ -193,6 +198,34 @@ void Beast::drawKey(int col, int row, int offsetX, int offsetY, bool pressed) {
     SDL_RenderCopy(sdlRenderer, textTexture, NULL, &textRect);
     SDL_FreeSurface(textSurface);
     SDL_DestroyTexture(textTexture);
+
+    if( strlen(KEY_CAPS_SHIFT[col+row*KEY_COLS]) > 0 ) {
+        textSurface = TTF_RenderText_Blended(midFont, KEY_CAPS_SHIFT[col+row*KEY_COLS], keyColour);
+        textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
+
+        textRect.x = (offsetX + (col+0.75)*KEY_WIDTH  + KEY_INDENTS[row])*zoom - textSurface->w * 0.5;
+        textRect.y = (offsetY + (row+0.3)*KEY_HEIGHT)*zoom - textSurface->h *0.5;
+        textRect.w = textSurface->w;
+        textRect.h = textSurface->h;
+
+        SDL_RenderCopy(sdlRenderer, textTexture, NULL, &textRect);
+        SDL_FreeSurface(textSurface);
+        SDL_DestroyTexture(textTexture);
+    }
+
+    if( strlen(KEY_CAPS_CTRL[col+row*KEY_COLS]) > 0 ) {
+        textSurface = TTF_RenderText_Blended(midFont, KEY_CAPS_CTRL[col+row*KEY_COLS], keyColour);
+        textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
+
+        textRect.x = (offsetX + (col+0.75)*KEY_WIDTH  + KEY_INDENTS[row])*zoom - textSurface->w * 0.5;
+        textRect.y = (offsetY + (row+0.75)*KEY_HEIGHT)*zoom - textSurface->h *0.5;
+        textRect.w = textSurface->w;
+        textRect.h = textSurface->h;
+
+        SDL_RenderCopy(sdlRenderer, textTexture, NULL, &textRect);
+        SDL_FreeSurface(textSurface);
+        SDL_DestroyTexture(textTexture);
+    }
 
     roundedRectangleRGBA(sdlRenderer, x1+5*zoom, y1+5*zoom, x1+(KEY_WIDTH-5)*zoom, y1+(KEY_HEIGHT-5)*zoom, rad, 0,0,0 , 0xFF);
 }

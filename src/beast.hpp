@@ -75,7 +75,7 @@ class Beast {
     private:
         SDL_Renderer  *sdlRenderer;
         SDL_Texture   *keyboardTexture;
-        TTF_Font *font, *smallFont, *monoFont;
+        TTF_Font *font, *smallFont, *midFont, *monoFont;
         int screenWidth, screenHeight;
         float zoom = 1.0f;
 
@@ -206,13 +206,24 @@ class Beast {
         const char* MONO_FONT = "RobotoMono-VariableFont_wght.ttf";
         const int FONT_SIZE = 28;
         const int SMALL_FONT_SIZE = 14;
+        const int MID_FONT_SIZE = 14;
         const int MONO_SIZE = 14;
 
         const int MAX_KEYS = 48;
         const char* KEY_CAPS[48] = {"Up", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Del",
             "Down", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", ":",
-            "Ctrl", "A", "S", "D", "F", "G", "H", "J", "K", "L", ".", "Enter",
-            "@","Shift", "Z", "X", "C", "V", "B", "N", "M", "Space", "Left", "Right"};
+            "Shift", "A", "S", "D", "F", "G", "H", "J", "K", "L", ".", "Enter",
+            "@","Ctrl", "Z", "X", "C", "V", "B", "N", "M", "Space", "Left", "Right"};
+
+        const char* KEY_CAPS_SHIFT[48] = {"", "!", "\"", "#", "$", "%", "^", "&", "*", "(", ")", "",
+            "", "", "", "", "", "", "", "", "", "", "", ";",
+            "", "", "", "", "", "", "", "", "", "", ",", "",
+            "@","", "", "", "", "", "", "", "", "", "", ""};
+
+        const char* KEY_CAPS_CTRL[48] = {"", "", "", "", "", "", "", "", "", "", "", "",
+            "", "", "", "", "", "", "", "", "+", "=", "-", "",
+            "", "", "", "", "", "", "", "<", "@", ">", "", "",
+            "@","", "", "", "", "", "\\", "?", "/", "", "", ""};
 
         const int KEY_INDENTS[4] = {0, KEY_WIDTH/6, KEY_WIDTH/5, -2*KEY_WIDTH/3};
 
@@ -247,7 +258,7 @@ class Beast {
             BeastKey{SDLK_p, 1, 10, NONE},
             BeastKey{SDLK_COLON, 1, 11, NONE},
   
-            BeastKey{SDLK_LCTRL, 2, 0, NONE},
+            BeastKey{SDLK_LCTRL, 3, 1, NONE},
             BeastKey{SDLK_a, 2, 1, NONE},
             BeastKey{SDLK_s, 2, 2, NONE},
             BeastKey{SDLK_d, 2, 3, NONE},
@@ -260,8 +271,8 @@ class Beast {
             BeastKey{SDLK_PERIOD, 2, 10, NONE},
             BeastKey{SDLK_RETURN, 2, 11, NONE},
 
-            BeastKey{SDLK_LSHIFT, 3, 1, NONE},
-            BeastKey{SDLK_RSHIFT, 3, 1, NONE},
+            BeastKey{SDLK_LSHIFT, 2, 0, NONE},
+            BeastKey{SDLK_RSHIFT, 2, 0, NONE},
             BeastKey{SDLK_z, 3, 2, NONE},
             BeastKey{SDLK_x, 3, 3, NONE},
             BeastKey{SDLK_c, 3, 4, NONE},
@@ -288,8 +299,8 @@ class Beast {
 
         std::set<int> keySet = {}; 
 
-        const int KEY_SHIFT = 36;
-        const int KEY_CTRL = 24;
+        const int KEY_SHIFT = 24;
+        const int KEY_CTRL = 36;
 
 
 };

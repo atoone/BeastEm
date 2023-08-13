@@ -224,13 +224,13 @@ int main( int argc, char *argv[] ) {
     if( binaries.size() == 0 && listing.fileCount() == 0 ) {
         std::cout << "No file or listing arguments, loading demo firmware" << std::endl;
         listing.addFile("firmware.lst", 0);
-        listing.addFile("bios.lst", 35);
-        binaries.push_back(BIN_FILE{"monitor.rom", 0});
+        listing.addFile("monitor.lst", 35);
+        binaries.push_back(BIN_FILE{"flash_v1.2.bin", 0});
     }
 
     SDL_Init( SDL_INIT_EVERYTHING );
 
-    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator (Alpha) v0.6", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
+    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator (Alpha) v0.7", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
 
     if( NULL == window ) {
         std::cout << "Could not create window: " << SDL_GetError() << std::endl;
