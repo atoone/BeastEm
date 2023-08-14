@@ -55,7 +55,7 @@ The following command line options may be used:
 
 BeastEm will synchronise debug with listing files in the TASM format (each line consisting of a line number, one or more spaces and then the assembly address in hex). Other formats may be supported in future.
 
-A listing file is pinned to the memory page it is loaded into, as well as the physical address in the listing itself. This allows code paged in to memory to be correctly identified. 
+A listing file is pinned to the memory page it is loaded into, as well as the physical address in the listing itself. This allows code paged in to memory to be correctly identified.
 
 Note that no checks are made that the memory contents match the provided listing, so the assembly shown may not be accurate.
 
@@ -77,13 +77,13 @@ In the debug view, most commands take a single keypress. The currently implement
 | `B` | Toggle breakpoint, edit value when breakpoint enabled                                        |
 | `D` | When a terminal is connected over a network port, **D**isconnect it and await a new connection |
 | `Q` | Quit                                                                                         |
-| `A` | Toggles appending audio output to the chosen audio file                                      | 
+| `A` | Toggles appending audio output to the chosen audio file                                      |
 | `PG-Up`, `PG-Down` | Select debug values for editing                                               |
 | `Left`, `Right`    | When a memory view is selected, choose the register pair or address to view   |
 
 When a value is selected, hitting `Enter` will allow a new value to be set, or toggle a binary `On|Off` value.
 
-Besides showing the address pointed to by register pairs, the memory views also allow memory to be directly 
+Besides showing the address pointed to by register pairs, the memory views also allow memory to be directly
 inspected. The `Z80` option views the CPU's memory map (0-64K), whereas the `PAGE` option allows any page
 in the 1Mb paged memory (512K ROM, 512K RAM) to be examined.
 
@@ -104,7 +104,7 @@ currently implement interrupts, so software must poll the UART directly for its 
 
 ## Windows
 
-BeastEm uses SDL2, and is compiled with g++. 
+BeastEm uses SDL2, and is compiled with g++.
 
 Windows users can install g++ with MySys64, following [this guide](https://code.visualstudio.com/docs/cpp/config-mingw). The project can then be build in VisualCode, producing an executable with all supporting files in `release\win64`.
 
@@ -112,13 +112,29 @@ Windows users can install g++ with MySys64, following [this guide](https://code.
 
 Linux users will need to install the SDL2 development libraries, specifically `libsdl2-dev`, `libsdl2-gfx-dev`, `libsdl2-net-dev` and `libsdl2-ttf-dev`. Build the executable with:
 
-```
+```shell
 g++ -w -O2 -o beastem beastem.cpp src/*.cpp -I/usr/include/SDL2 -D_REENTRANT -lSDL2 -lSDL2_ttf -lSDL2_gfx -lSDL2_net
 ```
 
 (This assumes all SDL2 include files have been installed to `/usr/include/SDL2`).
 
 Once the executable is built, copy it and the files in the `assets` folder to the desired location to run BeastEm.
+
+## macOS
+
+Install the required SDL libraries, for example using [homebrew](https://brew.sh/):
+
+```shell
+brew install sdl2 sdl_2gfx sdl2_image sdl2_net sdl2_ttf
+```
+
+Assuming a homebrew installation on Apple Silicon, the libraries and include files will be in `/opt/homebrew`. To compile, install the Xcode command line tools, and then run:
+
+```shell
+clang++ -w --std=c++20 -O2 -o beastem beastem.cpp src/*.cpp -I /opt/homebrew/include/SDL2 -D_REENTRANT -lSDL2 -lSDL2_ttf -lSDL2_gfx -lSDL2_net
+```
+
+If all goes well this will create the `beastem` binary which can be copied with the files from the `assets` folder and run alongside them.
 
 # Limitations
 
@@ -150,4 +166,4 @@ If there are omissions, bugs or you have suggestions or code to contribute - you
 
 # License
 
-This tool depends on some fantastic libraries, including SDL2, SDL GFX, SDL TTF, and the excellent Z80 core emulators by Andre Weissflog. Accordingly, BeastEm is released under the Zlib license - 
+This tool depends on some fantastic libraries, including SDL2, SDL GFX, SDL TTF, and the excellent Z80 core emulators by Andre Weissflog. Accordingly, BeastEm is released under the Zlib license -
