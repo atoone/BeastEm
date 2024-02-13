@@ -14,6 +14,7 @@
 #include "uart16c550.h"
 #include "listing.hpp"
 #include "instructions.hpp"
+#include "videobeast.hpp"
 
 #define BEAST_IO_MASK (Z80_M1|Z80_IORQ|Z80_A7|Z80_A6|Z80_A5|Z80_A4)
 
@@ -49,7 +50,7 @@ class Beast {
         Beast(SDL_Renderer *sdlRenderer, int screenWidth, int screenHeight, float zoom, Listing &listing);
         ~Beast();
 
-        void init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate);
+        void init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate, VideoBeast *videoBeast);
         void mainLoop();
         uint64_t run(bool run, uint64_t tickCount);
 
@@ -91,6 +92,9 @@ class Beast {
         I2cDisplay *display2;
         I2cRTC     *rtc;
 
+        VideoBeast *videoBeast;
+        uint64_t   nextVideoBeastTickPs;
+        
         uint64_t pins;
         uint8_t portB;
         uint64_t clock_cycle_ps;
@@ -220,9 +224,9 @@ class Beast {
             "", "", "", "", "", "", "", "", "", "", ",", "",
             "@","", "", "", "", "", "", "", "", "", "", ""};
 
-        const char* KEY_CAPS_CTRL[48] = {"", "", "", "", "", "", "", "", "", "", "", "",
+        const char* KEY_CAPS_CTRL[48] = {"", "|", "'", "", "", "", "{", "}", "`", "[", "]", "",
             "", "", "", "", "", "", "", "", "+", "=", "-", "",
-            "", "", "", "", "", "", "", "<", "@", ">", "", "",
+            "", "", "", "", "", "", "", "<", "@", ">", "_", "",
             "@","", "", "", "", "", "\\", "?", "/", "", "", ""};
 
         const int KEY_INDENTS[4] = {0, KEY_WIDTH/6, KEY_WIDTH/5, -2*KEY_WIDTH/3};
@@ -256,7 +260,7 @@ class Beast {
             BeastKey{SDLK_i, 1, 8, NONE},
             BeastKey{SDLK_o, 1, 9, NONE},
             BeastKey{SDLK_p, 1, 10, NONE},
-            BeastKey{SDLK_COLON, 1, 11, NONE},
+            BeastKey{SDLK_SEMICOLON, 1, 11, NONE},
   
             BeastKey{SDLK_LCTRL, 3, 1, NONE},
             BeastKey{SDLK_a, 2, 1, NONE},
@@ -284,15 +288,14 @@ class Beast {
             BeastKey{SDLK_LEFT, 3, 10, NONE},
             BeastKey{SDLK_RIGHT, 3, 11, NONE},
 
-            BeastKey{SDLK_SEMICOLON, 1, 11, SHIFT},
             BeastKey{SDLK_COMMA, 2, 10, SHIFT},
-            BeastKey{SDLK_BACKSLASH, 3, 5, CTRL},
-            BeastKey{SDLK_QUESTION, 3, 6, CTRL},
-            BeastKey{SDLK_SLASH, 3, 7, CTRL},
-            BeastKey{SDLK_LESS, 2, 7, CTRL},
-            BeastKey{SDLK_AT, 2, 8, CTRL},
-            BeastKey{SDLK_GREATER, 2, 9, CTRL},
-            BeastKey{SDLK_PLUS, 1, 8, CTRL},
+            BeastKey{SDLK_BACKSLASH, 3, 6, CTRL},
+            //BeastKey{SDLK_QUESTION, 3, 7, CTRL},
+            BeastKey{SDLK_SLASH, 3, 8, CTRL},
+            //BeastKey{SDLK_LESS, 2, 7, CTRL},
+            //BeastKey{SDLK_AT, 2, 8, CTRL},
+            //BeastKey{SDLK_GREATER, 2, 9, CTRL},
+            //BeastKey{SDLK_PLUS, 1, 8, CTRL},
             BeastKey{SDLK_EQUALS, 1, 9, CTRL},
             BeastKey{SDLK_MINUS, 1, 10, CTRL}
         };
@@ -300,7 +303,7 @@ class Beast {
         std::set<int> keySet = {}; 
 
         const int KEY_SHIFT = 24;
-        const int KEY_CTRL = 36;
+        const int KEY_CTRL = 37;
 
 
 };

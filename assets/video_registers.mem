@@ -1,0 +1,135 @@
+08  // FF - Mode - [7:5] - Page map mode (0:16K 1:8K 2:4K (low) 3:4K (high) 4:Sinclair) [4] - Testcard [3] - Pixel double [2:0] - Resolution (0:640x480 1:848x480)
+F3  // FE - Unlock
+22  // FD - Background colour
+08
+00  // FB - Interrupt on line/Current line
+00
+00  // F9 - Page Offset[0]
+00  // F8 - Page Offset[1]
+00  // F7 - Page Offset[2]
+00  // F6 - Page Offset[3]
+00  // F5 - Lower registers select (pallete/sprites + bank number)
+00  // F4
+00  // F3
+00  // F2
+00  // F1
+00  // F0
+---
+00  // EF - SPI Status
+00  // EE - SPI Target Page
+00  // ED - SPI Read length (*256)
+00  // EC 
+00  // EB - SPI Read address (32 bits)
+00  // EA
+00  // E9
+00  // E8
+00  // E7 - Maths =- 32 bit product X * Y
+00  // E6
+00  // E5
+00  // E4
+00  // E3 - Maths: Y (16 bits)
+00  // E2
+00  // E1 - Maths: X (16 bits)
+00  // E0
+---                          Layer 6
+00  // DF
+00  // DE
+00  // DD
+00  // DC
+0C  // DB
+00  // DA
+10  // D9
+00  // D8
+00  // D7 - Scroll X ( byte 5 + lower nibble byte 6)
+00  // D6 - Scroll Y ( byte 7 + upper nibble byte 6)
+00  // D5
+30  // D4 - Window right
+02  // D3 - Window left
+1A  // D2 - Window bottom
+02  // D1 - Window top
+01  // D0 - Layer Type
+---                          Layer 5
+00  // CF
+00  // CE
+00  // CD
+00  // CC
+00  // CB
+00  // CA
+00  // C9
+00  // C8
+00  // C7 - Scroll X ( byte 5 + lower nibble byte 6)
+00  // C6 - Scroll Y ( byte 7 + upper nibble byte 6)
+00  // C5
+00  // C4 - Window right
+00  // C3 - Window left
+00  // C2 - Window bottom
+00  // C1 - Window top
+00  // C0 - Layer Type
+---                          Layer 4
+00  // BF
+00  // BE
+00  // BD
+00  // BC
+00  // BB
+00  // BA
+00  // B9
+00  // B8
+00  // B7 - Scroll X ( byte 5 + lower nibble byte 6)
+00  // B6 - Scroll Y ( byte 7 + upper nibble byte 6)
+00  // B5
+00  // B4 - Window right
+00  // B3 - Window left
+00  // B2 - Window bottom
+00  // B1 - Window top
+00  // B0 - Layer Type
+---                          Layer 3
+00  // AF
+00  // AE
+00  // AD
+00  // AC
+00  // AB
+00  // AA
+04  // A9
+04  // A8
+00  // A7 - Scroll X ( byte 5 + lower nibble byte 6)
+00  // A6 - Scroll Y ( byte 7 + upper nibble byte 6)
+00  // A5
+68  // A4 - Window right
+16  // A3 - Window left
+3A  // A2 - Window bottom
+02  // A1 - Window top
+03  // A0 - Layer Type
+---                          Layer 2
+00  // 9F
+00  // 9E
+00  // 9D
+00  // 9C
+00  // 9B
+00  // 9A
+00  // 99
+00  // 98
+00  // 97 - Scroll X ( byte 5 + lower nibble byte 6)
+00  // 96 - Scroll Y ( byte 7 + upper nibble byte 6)
+00  // 95
+00  // 94 - Window right
+00  // 93 - Window left
+00  // 92 - Window bottom
+00  // 91 - Window top
+00  // 90 - Layer Type
+---                          Layer 1
+00  // 8F
+00  // 8E
+00  // 8D
+00  // 8C
+00  // 8B
+01  // 8A
+00  // 89
+10  // 88
+28  // 87 - Scroll X ( byte 5 + lower nibble byte 6)
+00  // 86 - Scroll Y ( byte 7 + upper nibble byte 6)
+78  // 85
+14  // 84 - Window right
+01  // 83 - Window left
+28  // 82 - Window bottom
+04  // 81 - Window top
+05  // 80 - Layer Type

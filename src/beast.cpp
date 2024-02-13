@@ -62,7 +62,9 @@ void audio_callback(void *_beast, Uint8 *_stream, int _length) {
     beast->loadSamples(stream, length);
 }
 
-void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate) {
+void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate, VideoBeast *videoBeast) {
+    this->videoBeast = videoBeast;
+
     pins = z80_init(&cpu);
 
     z80pio_init(&pio);
@@ -84,6 +86,11 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
     }
 
     uart_init(&uart, UINT64_C(1843200), clock_time_ps);
+    
+    if( videoBeast ) {
+        videoBeast->init(clock_time_ps);
+        nextVideoBeastTickPs = 0;
+    }
 
     if( sampleRate > 0 ) {
         audioSampleRatePs = UINT64_C(1000000000000) / sampleRate;
@@ -469,15 +476,21 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
             const uint16_t addr = Z80_GET_ADDR(pins);
             uint32_t mappedAddr = addr & 0x3FFF;
             bool isRam = false;
-            
+            bool isVb  = false;
+
             if( pagingEnabled ) {
                 int page = memoryPage[(addr >> 14) & 0x03];
                 isRam = (page & 0xE0) == 0x20;
+                isVb  = (page & 0xE0) == 0x40;
                 mappedAddr |= (page & 0x1F) << 14;
             }
             if (pins & Z80_RD) {
                 if( isRam ) {
                     uint8_t data = ram[mappedAddr];
+                    Z80_SET_DATA(pins, data);
+                }
+                else if( videoBeast && isVb ) {
+                    uint8_t data = videoBeast->read(mappedAddr);
                     Z80_SET_DATA(pins, data);
                 }
                 else if( romOperation ) {
@@ -500,6 +513,9 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                 uint8_t data = Z80_GET_DATA(pins);
                 if( isRam ) {
                     ram[mappedAddr] = data;
+                }
+                else if( videoBeast && isVb ) {
+                    videoBeast->write(mappedAddr, data);
                 }
                 else {
                     if( romSequence == 3 && clock_time_ps >= romCompletePs ) {
@@ -616,6 +632,10 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
             }
         }
 
+        if( videoBeast && (nextVideoBeastTickPs <= clock_time_ps) ) {
+            nextVideoBeastTickPs = videoBeast->tick(clock_time_ps);
+        }
+
         uint64_t elapsed = SDL_GetTicks() - startTime;
         if( elapsed < (clock_time_ps - startClockPs)/1000000000ULL ) {
             SDL_Delay(1);
@@ -708,7 +728,7 @@ void Beast::keyUp(SDL_Keycode keyCode) {
 
 uint8_t Beast::readKeyboard(uint16_t port) {
     uint8_t result = 0x3F;
-
+    
     for( int key: keySet ) {
         int row = key / 12;
         int col = key % 12;
@@ -722,8 +742,7 @@ uint8_t Beast::readKeyboard(uint16_t port) {
                 result &= ~(0x020 >> (col));
             }
         }
-    }
-    
+    }\
     return result;
 }
 

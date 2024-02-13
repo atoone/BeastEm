@@ -9,6 +9,7 @@
 #include "src/z80pio.h"
 #include "src/uart16c550.h"
 #include "src/beast.hpp"
+#include "src/videobeast.hpp"
 #include "src/i2c.hpp"
 #include "src/display.hpp"
 #include "src/rtc.hpp"
@@ -107,6 +108,7 @@ int main( int argc, char *argv[] ) {
     
     uint64_t breakpoint = Beast::NO_BREAKPOINT;
     Listing listing;
+    VideoBeast *videoBeast = nullptr;
 
     std::vector<BIN_FILE> binaries;
 
@@ -160,6 +162,14 @@ int main( int argc, char *argv[] ) {
             else {
                 listing.addFile(first, 0);
             }
+        }
+        else if( strcmp(argv[index], "-d") == 0 ) {
+            if( index+1 >= argc ) {
+                std::cout << "Display: missing argument. Expected intitial data for VideoBeast" << std::endl;
+                printHelp();
+                exit(1);
+            }
+            videoBeast = new VideoBeast(argv[++index]);
         }
         else if( strcmp(argv[index], "-v") == 0 ) {
             if( index+1 >= argc || !isNum(argv[++index]) ) {
@@ -225,12 +235,12 @@ int main( int argc, char *argv[] ) {
         std::cout << "No file or listing arguments, loading demo firmware" << std::endl;
         listing.addFile("firmware.lst", 0);
         listing.addFile("monitor.lst", 35);
-        binaries.push_back(BIN_FILE{"flash_v1.2.bin", 0});
+        binaries.push_back(BIN_FILE{"flash_v1.5.bin", 0});
     }
 
     SDL_Init( SDL_INIT_EVERYTHING );
 
-    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator (Alpha) v0.7", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
+    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator (Beta) v1.0", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
 
     if( NULL == window ) {
         std::cout << "Could not create window: " << SDL_GetError() << std::endl;
@@ -268,9 +278,7 @@ int main( int argc, char *argv[] ) {
         readBinary(bf.address, bf.filename, beast);
     }
 
-    beast.init(targetSpeed*ONE_KILOHERTZ, breakpoint, audioDevice, volume, sampleRate);
-
-
+    beast.init(targetSpeed*ONE_KILOHERTZ, breakpoint, audioDevice, volume, sampleRate, videoBeast);
 
     beast.mainLoop();
 

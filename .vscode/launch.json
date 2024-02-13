@@ -8,7 +8,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}\\release\\win64\\${fileBasenameNoExtension}.exe",
-            "args": [],
+            "args": ["-d", "videobeast.dat"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}\\release\\win64",
             "environment": [{"name": "Path", "value":  "${workspaceFolder}\\release\\win64\\lib;${env:Path}"}],
