@@ -70,7 +70,7 @@ class VideoBeast {
     };
 
     public:
-        VideoBeast(char* initialMemFile);
+        VideoBeast(char* initialMemFile, float zoom);
         ~VideoBeast();
 
         void     init(uint64_t clock_time_ps);
@@ -115,7 +115,7 @@ class VideoBeast {
         SDL_Window *window;
         SDL_Surface *surface;
         SDL_PixelFormat *pixel_format;
-        float requestedZoom = 2.0;
+        float requestedZoom = 1.0;
         float zoom = 2.0;
 
         uint32_t line_buffer[MAX_LINE_WIDTH];

@@ -163,13 +163,15 @@ int main( int argc, char *argv[] ) {
                 listing.addFile(first, 0);
             }
         }
-        else if( strcmp(argv[index], "-d") == 0 ) {
+        else if( strcmp(argv[index], "-d") == 0 || strcmp(argv[index], "-d2") == 0) {
             if( index+1 >= argc ) {
                 std::cout << "Display: missing argument. Expected intitial data for VideoBeast" << std::endl;
                 printHelp();
                 exit(1);
             }
-            videoBeast = new VideoBeast(argv[++index]);
+            float zoom = strcmp(argv[index], "-d") == 0 ? 1.0 : 2.0;
+
+            videoBeast = new VideoBeast(argv[++index], zoom);
         }
         else if( strcmp(argv[index], "-v") == 0 ) {
             if( index+1 >= argc || !isNum(argv[++index]) ) {

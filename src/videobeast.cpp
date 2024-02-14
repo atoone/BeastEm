@@ -3,8 +3,9 @@
 #include <fstream>
 #include <algorithm> 
 
-VideoBeast::VideoBeast(char *initialMemFile) {
+VideoBeast::VideoBeast(char *initialMemFile, float zoom) {
     readMem(initialMemFile);
+    requestedZoom = zoom;
 }
 
 VideoBeast::~VideoBeast() {
@@ -230,7 +231,7 @@ uint64_t VideoBeast::tick(uint64_t clock_time_ps) {
             displayLine = 0;
             currentLine = 0;
             SDL_UpdateWindowSurface(window);
-            isDoubled = (registers[REG_MODE] & 0x08) == 1;
+            isDoubled = (registers[REG_MODE] & 0x08) != 0;
 
             if( mode != (registers[REG_MODE] & 0x7) ) {
                 mode = registers[REG_MODE] & 0x7;
@@ -346,7 +347,7 @@ void VideoBeast::write(uint16_t addr, uint8_t data) {
         if( (addr & 0xFF) >= 0x80 ) {
             registers[addr & 0xFF] = data;
         }
-        if( (registers[REG_LOWER_REG] & 0x10) == 0 ) {
+        else if( (registers[REG_LOWER_REG] & 0x10) == 0 ) {
             // Palettes
             int idx = ((registers[REG_LOWER_REG] & 0x03) << 6) | ((addr & 0x7F) >> 1);
 
