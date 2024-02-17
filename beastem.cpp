@@ -9,6 +9,7 @@
 #include "src/z80pio.h"
 #include "src/uart16c550.h"
 #include "src/beast.hpp"
+#include "src/videobeast.hpp"
 #include "src/i2c.hpp"
 #include "src/display.hpp"
 #include "src/rtc.hpp"
@@ -107,6 +108,7 @@ int main( int argc, char *argv[] ) {
     
     uint64_t breakpoint = Beast::NO_BREAKPOINT;
     Listing listing;
+    VideoBeast *videoBeast = nullptr;
 
     std::vector<BIN_FILE> binaries;
 
@@ -160,6 +162,16 @@ int main( int argc, char *argv[] ) {
             else {
                 listing.addFile(first, 0);
             }
+        }
+        else if( strcmp(argv[index], "-d") == 0 || strcmp(argv[index], "-d2") == 0) {
+            if( index+1 >= argc ) {
+                std::cout << "Display: missing argument. Expected intitial data for VideoBeast" << std::endl;
+                printHelp();
+                exit(1);
+            }
+            float zoom = strcmp(argv[index], "-d") == 0 ? 1.0 : 2.0;
+
+            videoBeast = new VideoBeast(argv[++index], zoom);
         }
         else if( strcmp(argv[index], "-v") == 0 ) {
             if( index+1 >= argc || !isNum(argv[++index]) ) {
@@ -225,52 +237,29 @@ int main( int argc, char *argv[] ) {
         std::cout << "No file or listing arguments, loading demo firmware" << std::endl;
         listing.addFile("firmware.lst", 0);
         listing.addFile("monitor.lst", 35);
-        binaries.push_back(BIN_FILE{"flash_v1.2.bin", 0});
+        binaries.push_back(BIN_FILE{"flash_v1.5.bin", 0});
     }
 
     SDL_Init( SDL_INIT_EVERYTHING );
 
-    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator (Alpha) v0.7", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
+    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator (Beta) v1.0", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
 
     if( NULL == window ) {
         std::cout << "Could not create window: " << SDL_GetError() << std::endl;
         return 1;
     }
 
-
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-
-    if( !renderer) {
-        std::cout << "Could not create renderer: " << SDL_GetError() << std::endl;
-        return 1;
-    }
-
-    int rw = 0, rh = 0;
-    SDL_GetRendererOutputSize(renderer, &rw, &rh);
-    if(rw != WIDTH*zoom) {
-        float widthScale = (float)rw / (float) (WIDTH*zoom);
-        float heightScale = (float)rh / (float) (HEIGHT*zoom);
-
-        if(widthScale != heightScale) {
-            std::cerr << "WARNING: width scale != height scale" << std::endl;
-        }
-
-        zoom *= widthScale;
-    }
-
     if (SDLNet_Init() == -1) {
         std::cout << "SDLNet_Init error: " << SDLNet_GetError() << std::endl;
     }
 
-    Beast beast = Beast(renderer, WIDTH, HEIGHT, zoom, listing);
+    Beast beast = Beast(window, WIDTH, HEIGHT, zoom, listing);
     
     for(auto bf: binaries) {
         readBinary(bf.address, bf.filename, beast);
     }
 
-    beast.init(targetSpeed*ONE_KILOHERTZ, breakpoint, audioDevice, volume, sampleRate);
-
-
+    beast.init(targetSpeed*ONE_KILOHERTZ, breakpoint, audioDevice, volume, sampleRate, videoBeast);
 
     beast.mainLoop();
 

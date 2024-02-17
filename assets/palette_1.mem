@@ -1,0 +1,128 @@
+8000 // Transparent
+739C // White
+7380 // Yellow
+701C // Magenta
+039C // Cyan
+7000 // Red
+0380 // Green
+001C // Blue
+0000 // Black
+318C // Grey
+718C 
+338C
+319C
+339C
+719C
+738C
+1084  // Beast palette
+2108
+0000
+1004
+2088
+318c
+5290
+420c
+3108
+3188
+1088
+6310
+6314
+4210
+418c
+528c
+0080   // Palette 0
+0000
+ffff
+5290
+2180
+5100
+6314
+4284
+6188
+1108
+4104
+5188
+7398
+628c
+6190
+408c
+0000   // Palette 1
+4080
+ffff
+5290
+2180
+5100
+6314
+4284
+2190
+3294
+7398
+628c
+4210
+6188
+4314
+108c
+0000   // Palette 2
+4080
+3084
+4104
+628c
+2190
+7290
+5290
+6190
+7398
+408c
+ffff
+5188
+6188
+620c
+1090
+ffff   // Palette 3
+0000
+5100
+5188
+6188
+620c
+2180
+5314
+4314
+5290
+6314
+108c
+628c
+528c
+0000   // Unused
+0000   // Unused
+ffff   // Palette 4
+0000
+7290
+2180
+5314
+4314
+7398
+6314
+108c
+628c
+5290
+3084
+0000   // Unused
+0000   // Unused
+0000   // Unused
+0000   // Unused
+0000 // Black - Palette 7: Sinclair
+0018 // Blue
+6000 // Red
+6018 // Magenta
+0300 // Green
+0318 // Cyan
+6300 // Yellow
+6318 // White
+0000 // Black  (Bright versions)
+001C // Blue
+7000 // Red
+701C // Magenta
+0380 // Green
+039C // Cyan
+7380 // Yellow
+739C // White

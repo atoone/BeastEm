@@ -7,13 +7,14 @@
 #include "z80pio.h"
 #include "listing.hpp"
 
-Beast::Beast(SDL_Renderer *renderer, int screenWidth, int screenHeight, float zoom, Listing &listing) 
+Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing) 
     : rom {}, ram {}, memoryPage {0}, listing(listing) {
 
-    this->sdlRenderer = renderer;
+    windowId = SDL_GetWindowID(window);
+
     this->screenWidth = screenWidth;
     this->screenHeight = screenHeight;
-    this->zoom = zoom;
+    this->zoom = createRenderer(window, screenWidth, screenHeight, zoom);
 
     instr = new Instructions();
 
@@ -46,12 +47,36 @@ Beast::Beast(SDL_Renderer *renderer, int screenWidth, int screenHeight, float zo
 
     monoFont = TTF_OpenFont(MONO_FONT, MONO_SIZE*zoom);
 
-    keyboardTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, KEYBOARD_WIDTH*zoom, KEYBOARD_HEIGHT*zoom);
+    keyboardTexture = SDL_CreateTexture(sdlRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, KEYBOARD_WIDTH*zoom, KEYBOARD_HEIGHT*zoom);
     
     drawKeys();
     for( int i=0; i<DISPLAY_CHARS; i++) {
-        display.push_back(Digit(renderer, zoom));
+        display.push_back(Digit(sdlRenderer, zoom));
     }
+}
+
+float Beast::createRenderer(SDL_Window *window, int screenWidth, int screenHeight, float zoom) {
+    sdlRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+
+    if( !sdlRenderer) {
+        std::cout << "Could not create renderer: " << SDL_GetError() << std::endl;
+        exit(1);
+    }
+
+    int rw = 0, rh = 0;
+    SDL_GetRendererOutputSize(sdlRenderer, &rw, &rh);
+    if(rw != screenWidth*zoom) {
+        float widthScale = (float)rw / (float) (screenWidth*zoom);
+        float heightScale = (float)rh / (float) (screenHeight*zoom);
+
+        if(widthScale != heightScale) {
+            std::cerr << "WARNING: width scale != height scale" << std::endl;
+        }
+
+        zoom *= widthScale;
+    }
+
+    return zoom;
 }
 
 void audio_callback(void *_beast, Uint8 *_stream, int _length) {
@@ -62,7 +87,9 @@ void audio_callback(void *_beast, Uint8 *_stream, int _length) {
     beast->loadSamples(stream, length);
 }
 
-void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate) {
+void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate, VideoBeast *videoBeast) {
+    this->videoBeast = videoBeast;
+
     pins = z80_init(&cpu);
 
     z80pio_init(&pio);
@@ -84,6 +111,11 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
     }
 
     uart_init(&uart, UINT64_C(1843200), clock_time_ps);
+    
+    if( videoBeast ) {
+        videoBeast->init(clock_time_ps);
+        nextVideoBeastTickPs = 0;
+    }
 
     if( sampleRate > 0 ) {
         audioSampleRatePs = UINT64_C(1000000000000) / sampleRate;
@@ -321,6 +353,11 @@ void Beast::mainLoop() {
                 }
             }
 
+            if( windowEvent.window.windowID != windowId && videoBeast) {
+                videoBeast->handleEvent(windowEvent);
+                continue;
+            }
+
             if( SDL_RENDER_TARGETS_RESET == windowEvent.type ) {
                 redrawScreen();
             }
@@ -469,15 +506,21 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
             const uint16_t addr = Z80_GET_ADDR(pins);
             uint32_t mappedAddr = addr & 0x3FFF;
             bool isRam = false;
-            
+            bool isVb  = false;
+
             if( pagingEnabled ) {
                 int page = memoryPage[(addr >> 14) & 0x03];
                 isRam = (page & 0xE0) == 0x20;
+                isVb  = (page & 0xE0) == 0x40;
                 mappedAddr |= (page & 0x1F) << 14;
             }
             if (pins & Z80_RD) {
                 if( isRam ) {
                     uint8_t data = ram[mappedAddr];
+                    Z80_SET_DATA(pins, data);
+                }
+                else if( videoBeast && isVb ) {
+                    uint8_t data = videoBeast->read(mappedAddr, clock_time_ps);
                     Z80_SET_DATA(pins, data);
                 }
                 else if( romOperation ) {
@@ -500,6 +543,9 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                 uint8_t data = Z80_GET_DATA(pins);
                 if( isRam ) {
                     ram[mappedAddr] = data;
+                }
+                else if( videoBeast && isVb ) {
+                    videoBeast->write(mappedAddr, data, clock_time_ps);
                 }
                 else {
                     if( romSequence == 3 && clock_time_ps >= romCompletePs ) {
@@ -616,6 +662,10 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
             }
         }
 
+        if( videoBeast && (nextVideoBeastTickPs <= clock_time_ps) ) {
+            nextVideoBeastTickPs = videoBeast->tick(clock_time_ps);
+        }
+
         uint64_t elapsed = SDL_GetTicks() - startTime;
         if( elapsed < (clock_time_ps - startClockPs)/1000000000ULL ) {
             SDL_Delay(1);
@@ -633,7 +683,10 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
 
         if( tickCount % (targetSpeedHz/FRAME_RATE) == 0 ) { 
             if( SDL_PollEvent(&windowEvent ) != 0 ) {
-                if( SDL_QUIT == windowEvent.type ) {
+                if( windowEvent.window.windowID != windowId && videoBeast) {
+                    videoBeast->handleEvent(windowEvent);
+                }
+                else if( SDL_QUIT == windowEvent.type ) {
                     mode = QUIT;
                     break;
                 }
@@ -708,7 +761,7 @@ void Beast::keyUp(SDL_Keycode keyCode) {
 
 uint8_t Beast::readKeyboard(uint16_t port) {
     uint8_t result = 0x3F;
-
+    
     for( int key: keySet ) {
         int row = key / 12;
         int col = key % 12;
@@ -722,8 +775,7 @@ uint8_t Beast::readKeyboard(uint16_t port) {
                 result &= ~(0x020 >> (col));
             }
         }
-    }
-    
+    }\
     return result;
 }
 
