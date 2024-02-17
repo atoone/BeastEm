@@ -8,6 +8,7 @@ class VideoBeast {
     static const uint8_t IDLE = 255;
     
     static const int MAX_LAYERS = 6;
+    static const int MAX_LAYER_TIMES = MAX_LAYERS + 3;
 
     static const int VIDEO_MODES = 2;
     static const int VIDEO_RAM_LENGTH = 1024*1024;
@@ -32,6 +33,16 @@ class VideoBeast {
     static const int REG_PAGE_2         = 0xF7;
     static const int REG_PAGE_3         = 0xF6;
     static const int REG_LOWER_REG      = 0xF5;
+
+    static const int REG_MULT_X_L       = 0xE0;
+    static const int REG_MULT_X_H       = 0xE1;
+    static const int REG_MULT_Y_L       = 0xE2;
+    static const int REG_MULT_Y_H       = 0xE3;
+
+    static const int REG_PRODUCT_B0     = 0xE4;
+    static const int REG_PRODUCT_B1     = 0xE5;
+    static const int REG_PRODUCT_B2     = 0xE6;
+    static const int REG_PRODUCT_B3     = 0xE7;
 
     static const int LAYER_TYPE_NONE    = 0;
     static const int LAYER_TYPE_TEXT    = 1;
@@ -77,8 +88,10 @@ class VideoBeast {
 
         uint64_t tick(uint64_t clock_time_ps);
 
-        void     write(uint16_t addr, uint8_t data);
-        uint8_t  read(uint16_t addr);
+        void     write(uint16_t addr, uint8_t data, uint64_t clock_time_ps);
+        uint8_t  read(uint16_t addr, uint64_t clock_time_ps);
+
+        void handleEvent(SDL_Event windowEvent);
     
     private:
         uint8_t mem[VIDEO_RAM_LENGTH];
@@ -99,6 +112,7 @@ class VideoBeast {
 
         uint64_t next_action_time_ps;
         uint64_t next_line_time_ps;
+        uint64_t next_multiply_available_ps;
 
         uint16_t currentLine = 0;
         uint16_t displayLine = 0;
@@ -106,6 +120,16 @@ class VideoBeast {
         bool drawNextLine = false;
 
         uint64_t debugFromNs = 0;
+
+        uint64_t layer_times_ps[MAX_LAYER_TIMES];
+        int      layer_time_index;
+        bool     debug_layers = true;
+
+        float    layer_time_alpha = 0.7;
+        
+        int layer_col_r[MAX_LAYER_TIMES];
+        int layer_col_g[MAX_LAYER_TIMES];
+        int layer_col_b[MAX_LAYER_TIMES];
 
         const VideoMode VIDEO_MODE[VIDEO_MODES] = {
             VideoMode{ 640, 480, 800, 525, 40000ULL }, // 25Mhz pixel clock
@@ -117,6 +141,7 @@ class VideoBeast {
         SDL_PixelFormat *pixel_format;
         float requestedZoom = 1.0;
         float zoom = 2.0;
+        uint32_t windowID;
 
         uint32_t line_buffer[MAX_LINE_WIDTH];
 
@@ -124,9 +149,13 @@ class VideoBeast {
 
         // Read a file into graphics ram
         void readMem(char* filename);
+
+        void tickNextFrame();
+
         void createWindow();
         void updateMode();
         void checkWindow(int width, int height);
+        void clearWindow();
 
         void loadPalette(const char *filename, uint32_t *palette, uint16_t *paletteReg);
         void loadRegisters(const char *filename);

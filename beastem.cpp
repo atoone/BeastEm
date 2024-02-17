@@ -249,32 +249,11 @@ int main( int argc, char *argv[] ) {
         return 1;
     }
 
-
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-
-    if( !renderer) {
-        std::cout << "Could not create renderer: " << SDL_GetError() << std::endl;
-        return 1;
-    }
-
-    int rw = 0, rh = 0;
-    SDL_GetRendererOutputSize(renderer, &rw, &rh);
-    if(rw != WIDTH*zoom) {
-        float widthScale = (float)rw / (float) (WIDTH*zoom);
-        float heightScale = (float)rh / (float) (HEIGHT*zoom);
-
-        if(widthScale != heightScale) {
-            std::cerr << "WARNING: width scale != height scale" << std::endl;
-        }
-
-        zoom *= widthScale;
-    }
-
     if (SDLNet_Init() == -1) {
         std::cout << "SDLNet_Init error: " << SDLNet_GetError() << std::endl;
     }
 
-    Beast beast = Beast(renderer, WIDTH, HEIGHT, zoom, listing);
+    Beast beast = Beast(window, WIDTH, HEIGHT, zoom, listing);
     
     for(auto bf: binaries) {
         readBinary(bf.address, bf.filename, beast);

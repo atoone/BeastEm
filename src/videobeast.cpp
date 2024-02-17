@@ -30,6 +30,7 @@ void VideoBeast::init(uint64_t clock_time_ps) {
     loadPalette("palette_2.mem", palette2, paletteReg2);
 
     background = getColour((registers[REG_BACKGROUND_H] << 8) + registers[REG_BACKGROUND_L]);
+    clearWindow();
 }
 
 uint32_t VideoBeast::getColour(uint16_t packedRGB) {
@@ -78,7 +79,7 @@ uint64_t VideoBeast::draw4ppBitmap(int layerBase) {
         }
         scrollX++;
     }
-    return (end-start) * RENDER_CLOCK_PS / 2;
+    return (end-start) * RENDER_CLOCK_PS / 4;
 }
 
 
@@ -222,30 +223,78 @@ void VideoBeast::loadRegisters(const char *filename) {
     myfile.close();
 }
 
+void VideoBeast::handleEvent(SDL_Event windowEvent) {
+    if( SDL_KEYDOWN == windowEvent.type && windowEvent.window.windowID == windowID ) {
+        switch( windowEvent.key.keysym.sym ) {
+            case SDLK_d : 
+                debug_layers  = !debug_layers;
+                break;
+            case SDLK_b :
+                layer_time_alpha = 1.0-layer_time_alpha;
+                break;
+        }
+    }
+}
+
+void VideoBeast::tickNextFrame() {
+    drawNextLine = true;
+    displayLine = 0;
+    currentLine = 0;
+    SDL_UpdateWindowSurface(window);
+    isDoubled = (registers[REG_MODE] & 0x08) != 0;
+
+    if( mode != (registers[REG_MODE] & 0x7) ) {
+        mode = registers[REG_MODE] & 0x7;
+        if( mode >= VIDEO_MODES ) {
+            std::cout << "Unsupported video mode " << mode << std::endl;
+        } 
+        else {
+            updateMode();
+        }
+    }
+}
+
 uint64_t VideoBeast::tick(uint64_t clock_time_ps) {
     if( clock_time_ps >= next_line_time_ps ) {
         next_line_time_ps += VIDEO_MODE[mode].totalWidth * VIDEO_MODE[mode].pixel_clock_ps;      
 
         if( ++displayLine >= VIDEO_MODE[mode].totalHeight ) {
-            drawNextLine = true;
-            displayLine = 0;
-            currentLine = 0;
-            SDL_UpdateWindowSurface(window);
-            isDoubled = (registers[REG_MODE] & 0x08) != 0;
-
-            if( mode != (registers[REG_MODE] & 0x7) ) {
-                mode = registers[REG_MODE] & 0x7;
-                if( mode >= VIDEO_MODES ) {
-                    std::cout << "Unsupported video mode " << mode << std::endl;
-                } 
-                else {
-                    updateMode();
-                }
-            }
+            tickNextFrame();
         }
         else if( !isDoubled || ((displayLine & 0x01) == 0)) {
             drawNextLine = true;
             currentLine++;
+        }
+
+        if (debug_layers && displayLine <= VIDEO_MODE[mode].pixelHeight ) {
+            int screenWidth = VIDEO_MODE[mode].pixelWidth;
+            if( isDoubled ) screenWidth /= 2;
+
+            float scale = ((float)screenWidth) / (VIDEO_MODE[mode].totalWidth * VIDEO_MODE[mode].pixel_clock_ps);
+
+            int current = 0;
+
+            for( int i=0; i<screenWidth; i++ ) {
+                int r = (int)((line_buffer[i] & 0x0FF) * layer_time_alpha);
+                int g = (int)(((line_buffer[i] >> 8) & 0x0FF) * layer_time_alpha);
+                int b = (int)(((line_buffer[i] >> 16) & 0x0FF) * layer_time_alpha);
+
+                if( current < MAX_LAYER_TIMES ) {
+                    if( layer_times_ps[current] < (i/scale) ) {
+                        r = std::min(r + (int)((1.0-layer_time_alpha) * 255), 255);
+                        g = std::min(g + (int)((1.0-layer_time_alpha) * 255), 255);
+                        b = std::min(b + (int)((1.0-layer_time_alpha) * 255), 255);
+                        current++;
+                    }
+                    else {
+                        r = std::min(r + (int)((1.0-layer_time_alpha) * layer_col_r[current]), 255);
+                        g = std::min(g + (int)((1.0-layer_time_alpha) * layer_col_g[current]), 255);
+                        b = std::min(b + (int)((1.0-layer_time_alpha) * layer_col_b[current]), 255);
+                    }
+                }
+
+                line_buffer[i] = r + (g<<8) + (b<<16);
+            }
         }
 
         if( displayLine > 0 && displayLine <= VIDEO_MODE[mode].pixelHeight ) {
@@ -278,6 +327,16 @@ uint64_t VideoBeast::tick(uint64_t clock_time_ps) {
             for( int i=0; i<MAX_LINE_WIDTH; i++ ) {
                 line_buffer[i] = background;
             }
+            if( debug_layers ) {
+                layer_time_index = 0;
+                for( int i=0; i<MAX_LAYER_TIMES; i++ ) {
+                    layer_times_ps[i] = 0;
+                }
+                layer_times_ps[0] =  MAX_LINE_WIDTH*RENDER_CLOCK_PS/4;
+                layer_col_r[0] = 196;
+                layer_col_g[0] = 196;
+                layer_col_b[0] = 196;
+            }
             currentLayer = 0;
             next_action_time_ps = clock_time_ps + MAX_LINE_WIDTH*RENDER_CLOCK_PS/4;
             drawNextLine = false;
@@ -289,9 +348,13 @@ uint64_t VideoBeast::tick(uint64_t clock_time_ps) {
     else if( next_action_time_ps <= clock_time_ps ) {
         next_action_time_ps = clock_time_ps + RENDER_CLOCK_PS*3;
 
+        int debug_colour = 1;
+
         int layer_base = 0x80 + (16 * currentLayer);
         if( currentLine >= 8* registers[layer_base + REG_OFF_LAYER_TOP] &&
             currentLine <  8*(registers[layer_base + REG_OFF_LAYER_BOTTOM]+1) ) {
+            
+            debug_colour = 1+registers[ layer_base + REG_OFF_LAYER_TYPE ];
 
             switch( registers[ layer_base + REG_OFF_LAYER_TYPE ]) {
                 case LAYER_TYPE_NONE : 
@@ -311,6 +374,14 @@ uint64_t VideoBeast::tick(uint64_t clock_time_ps) {
             }
         }
 
+        if( debug_layers ) {
+            if( ++layer_time_index < MAX_LAYER_TIMES ) {
+                layer_times_ps[layer_time_index] = layer_times_ps[layer_time_index-1] + next_action_time_ps - clock_time_ps;
+                layer_col_r[layer_time_index] = (debug_colour & 0x01) ? 255 : 0;
+                layer_col_g[layer_time_index] = (debug_colour & 0x02) ? 255 : 0;
+                layer_col_b[layer_time_index] = (debug_colour & 0x04) ? 255 : 0;
+            }
+        }
         currentLayer++;
 
         if( currentLayer == MAX_LAYERS) {
@@ -337,7 +408,7 @@ uint64_t VideoBeast::tick(uint64_t clock_time_ps) {
     return std::min( next_action_time_ps, next_line_time_ps );
 }
 
-void VideoBeast::write(uint16_t addr, uint8_t data) {
+void VideoBeast::write(uint16_t addr, uint8_t data, uint64_t clock_time_ps) {
     if( (addr & 0x3FFE) == 0x3FFE ) {
         // Top two registers, always visible
         registers[addr & 0xFF] = data;
@@ -346,6 +417,13 @@ void VideoBeast::write(uint16_t addr, uint8_t data) {
         // Register access
         if( (addr & 0xFF) >= 0x80 ) {
             registers[addr & 0xFF] = data;
+
+            if ( (addr & 0x0FF) == REG_MULT_X_L ||
+                 (addr & 0x0FF) == REG_MULT_X_H ||
+                 (addr & 0x0FF) == REG_MULT_Y_L ||
+                 (addr & 0x0FF) == REG_MULT_Y_H) {
+                next_multiply_available_ps = clock_time_ps + 12 * RENDER_CLOCK_PS;
+            }
         }
         else if( (registers[REG_LOWER_REG] & 0x10) == 0 ) {
             // Palettes
@@ -424,7 +502,7 @@ void VideoBeast::write(uint16_t addr, uint8_t data) {
     }
 }
 
-uint8_t VideoBeast::read(uint16_t addr) {
+uint8_t VideoBeast::read(uint16_t addr, uint64_t clock_time_ps) {
     if( (addr & 0x3FFE) == 0x3FFE ) {
         // Top two registers, always visible
         return registers[addr & 0xFF];
@@ -435,6 +513,18 @@ uint8_t VideoBeast::read(uint16_t addr) {
             registers[REG_CURRENT_LINE_L] = currentLine & 0x0FF;
             registers[REG_CURRENT_LINE_H] = currentLine >> 8;
 
+            if( next_multiply_available_ps != 0 && next_multiply_available_ps <= clock_time_ps ) {
+                int32_t mult_x = ((registers[REG_MULT_X_L] | (registers[REG_MULT_X_H] << 8)) << 16) >> 16;
+                int32_t mult_y = ((registers[REG_MULT_Y_L] | (registers[REG_MULT_Y_H] << 8)) << 16) >> 16;
+
+                int32_t product = mult_x * mult_y;
+                registers[REG_PRODUCT_B0] = product & 0x0FF;
+                registers[REG_PRODUCT_B1] = (product >>  8) & 0x0FF;
+                registers[REG_PRODUCT_B2] = (product >> 16) & 0x0FF;
+                registers[REG_PRODUCT_B3] = (product >> 24) & 0x0FF;
+
+                next_multiply_available_ps = 0;
+            }
             return registers[addr & 0xFF];
         }
         if( (registers[REG_LOWER_REG] & 0x10) == 0 ) {
@@ -556,6 +646,7 @@ void VideoBeast::createWindow() {
         exit(1);
     }
 
+    windowID = SDL_GetWindowID( window );
     checkWindow(width, height);
 }
 
@@ -584,3 +675,14 @@ void VideoBeast::checkWindow(int width, int height) {
     }
 }
 
+void VideoBeast::clearWindow() {
+    uint32_t dest = 0;
+    
+    for( int y=0; y < surface->h; y++ ) {
+        for(int x=0; x<surface->w; x++) {
+            *(Uint32 *)((uint8_t*)surface->pixels+dest) = background;
+            dest += surface->format->BytesPerPixel;
+        }
+    }
+    SDL_UpdateWindowSurface(window);
+}

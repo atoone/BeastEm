@@ -47,7 +47,7 @@ class Beast {
 
 
     public:
-        Beast(SDL_Renderer *sdlRenderer, int screenWidth, int screenHeight, float zoom, Listing &listing);
+        Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing);
         ~Beast();
 
         void init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate, VideoBeast *videoBeast);
@@ -76,6 +76,8 @@ class Beast {
     private:
         SDL_Renderer  *sdlRenderer;
         SDL_Texture   *keyboardTexture;
+        uint32_t windowId;
+
         TTF_Font *font, *smallFont, *midFont, *monoFont;
         int screenWidth, screenHeight;
         float zoom = 1.0f;
@@ -172,6 +174,7 @@ class Beast {
         const char* audioFilename = "audio.raw";
         FILE*       audioFile = nullptr;
 
+        float createRenderer(SDL_Window *window, int screenWidth, int screenHeight, float zoom);
         void redrawScreen();
         void drawBeast();
         void drawKeys();
