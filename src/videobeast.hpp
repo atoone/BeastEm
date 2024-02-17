@@ -123,7 +123,7 @@ class VideoBeast {
 
         uint64_t layer_times_ps[MAX_LAYER_TIMES];
         int      layer_time_index;
-        bool     debug_layers = true;
+        bool     debug_layers = false;
 
         float    layer_time_alpha = 0.7;
         
