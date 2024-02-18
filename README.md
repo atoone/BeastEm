@@ -33,7 +33,7 @@ Linux users can run BeastEm with the executable name ``beastem`` on the command 
 If no parameters are supplied, BeastEm will start the emulator up with an (incomplete) monitor ROM that exercises some of the features of MicroBeast. This is equivalent to running with the command line:
 
 ```
-beastem -f monitor.rom -l 0 firmware.lst -l 23 bios.lst
+beastem -f flash_v1.5.bin -l 0 firmware.lst -l 23 bios.lst
 ```
 
 ## Command line options
@@ -50,6 +50,7 @@ The following command line options may be used:
 | `-k cpu-speed`  | Set the CPU clock speed, in Kilohertz. Default is 8000 (for 8MHz) |
 | `-b breakpoint` | Stop at the given breakpoint (hex) |
 | `-z zoom`       | Zoom the display size by the given factor (float) |
+| `-d` or `-d2`   | Enable VideoBeast Emulation (`d2` scales display x2) |
 
 ## Listing Files
 
