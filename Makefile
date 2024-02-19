@@ -1,7 +1,7 @@
 SDL2_CFLAGS=$(shell sdl2-config --cflags)
 SDL2_LIBS=$(shell sdl2-config --libs)
 CXXFLAGS:=$(CXXFLAGS) $(SDL2_CFLAGS) -std=c++20 -O2 -D_REENTRANT
-LDFLAGS:=$(LDFLAGS) -lstdc++ $(SDL2_LIBS) -lSDL2_net -lSDL2_ttf -lSDL2_gfx
+LDFLAGS:=$(LDFLAGS) -lstdc++ -lm $(SDL2_LIBS) -lSDL2_net -lSDL2_ttf -lSDL2_gfx
 
 BINARY?=beastem
 OBJECTS=beastem.o 			\
