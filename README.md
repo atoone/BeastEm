@@ -50,7 +50,7 @@ The following command line options may be used:
 | `-k cpu-speed`  | Set the CPU clock speed, in Kilohertz. Default is 8000 (for 8MHz) |
 | `-b breakpoint` | Stop at the given breakpoint (hex) |
 | `-z zoom`       | Zoom the display size by the given factor (float) |
-| `-d` or `-d2`   | Enable VideoBeast Emulation (`d2` scales display x2) |
+| `-d filename` or `-d2 filename`   | Enable VideoBeast Emulation (`d2` scales display x2), loading file into video RAM. (e.g. use `videobeast.dat`) |
 
 ## Listing Files
 
