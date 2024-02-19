@@ -28,3 +28,4 @@ class Listing {
         const char* addressRegex = "\\s([0-9a-f]+)";
 
 };
+
