@@ -114,6 +114,12 @@ Windows users can install g++ with MySys64, following [this guide](https://code.
 Linux users will need to install the SDL2 development libraries, specifically `libsdl2-dev`, `libsdl2-gfx-dev`, `libsdl2-net-dev` and `libsdl2-ttf-dev`. Build the executable with:
 
 ```shell
+make clean all
+```
+
+which should find the appropriate includes and libraries for you. Alternatively, you can build manually with e.g:
+
+```shell
 g++ -w -O2 -o beastem beastem.cpp src/*.cpp -I/usr/include/SDL2 -D_REENTRANT -lSDL2 -lSDL2_ttf -lSDL2_gfx -lSDL2_net
 ```
 
@@ -127,6 +133,20 @@ Install the required SDL libraries, for example using [homebrew](https://brew.sh
 
 ```shell
 brew install sdl2 sdl_2gfx sdl2_image sdl2_net sdl2_ttf
+```
+
+And build with:
+
+```shell
+make clean all
+```
+
+This should find the appropriate includes and libraries for you, and should work on both Intel and Apple Silicon. 
+
+Alternatively, you can build manually with e.g:
+
+```shell
+g++ -w -O2 -o beastem beastem.cpp src/*.cpp -I/usr/include/SDL2 -D_REENTRANT -lSDL2 -lSDL2_ttf -lSDL2_gfx -lSDL2_net
 ```
 
 Assuming a homebrew installation on Apple Silicon, the libraries and include files will be in `/opt/homebrew`. To compile, install the Xcode command line tools, and then run:
