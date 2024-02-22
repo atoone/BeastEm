@@ -37,7 +37,7 @@ int VideoBeast::init(uint64_t clock_time_ps, int guiWidth) {
     int displayIndex = SDL_GetWindowDisplayIndex(window);
     if( SDL_GetDesktopDisplayMode(displayIndex, &display) == 0) {
         int space = (display.w - guiWidth - (VIDEO_MODE[mode].pixelWidth * zoom))/3;
-        if( space < 0 ) s[ace = 0;]
+        if( space < 0 ) space = 0;
         SDL_SetWindowPosition(window, display.w - (VIDEO_MODE[mode].pixelWidth * zoom) - space, SDL_WINDOWPOS_CENTERED);
 
         return space;
