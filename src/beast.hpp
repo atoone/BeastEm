@@ -27,12 +27,12 @@ class Beast {
 
     enum Modifier {NONE, CTRL, SHIFT, CTRL_SHIFT};
 
-    enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, QUIT};
+    enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, QUIT};
 
     enum Selection {SEL_PC, SEL_A, SEL_HL, SEL_BC, SEL_DE, SEL_FLAGS, SEL_SP, SEL_IX, SEL_IY, 
         SEL_PAGING, SEL_PAGE0, SEL_PAGE1, SEL_PAGE2, SEL_PAGE3, 
         SEL_A2, SEL_HL2, SEL_BC2, SEL_DE2, 
-        SEL_MEM0, SEL_VIEWPAGE0, SEL_MEM1, SEL_VIEWPAGE1, SEL_MEM2, SEL_VIEWPAGE2, 
+        SEL_MEM0, SEL_VIEWPAGE0, SEL_VIEWADDR0, SEL_MEM1, SEL_VIEWPAGE1, SEL_VIEWADDR1, SEL_MEM2, SEL_VIEWPAGE2, SEL_VIEWADDR2, 
         SEL_BREAKPOINT,
         SEL_END_MARKER };
 
@@ -61,8 +61,6 @@ class Beast {
         void keyUp(SDL_Keycode keyCode);
         void onDraw();
 
-        void onDebug();
-
         uint8_t readKeyboard(uint16_t port);
 
         Digit* getDigit(int index);
@@ -74,9 +72,13 @@ class Beast {
 
         static const uint64_t NO_BREAKPOINT = 0xFFFFFFFFULL;
     private:
+        SDL_Window    *window;
         SDL_Renderer  *sdlRenderer;
         SDL_Texture   *keyboardTexture;
+        SDL_Texture   *pcbTexture;
         uint32_t windowId;
+
+        const char* PCB_IMAGE="layout_2d.png";
 
         TTF_Font *font, *smallFont, *midFont, *monoFont;
         int screenWidth, screenHeight;
@@ -84,6 +86,8 @@ class Beast {
 
         Mode    mode = DEBUG;
         int     selection;
+        int     confirmRemove = -1;
+
         z80_t    cpu;
         z80pio_t pio;
         uart_t     uart;
@@ -102,7 +106,7 @@ class Beast {
         uint64_t clock_cycle_ps;
         uint64_t clock_time_ps  = 0;
         uint64_t targetSpeedHz;
-        uint64_t breakpoint = 0xF20D;
+        uint64_t breakpoint = NO_BREAKPOINT;
         uint64_t lastBreakpoint = 0;
 
         uint8_t rom[(1<<19)]; // 512K rom
@@ -138,6 +142,8 @@ class Beast {
         const int COL3 = 330;
         const int COL4 = 470;
 
+        const int ROW_HEIGHT = 16;
+
         const int ROW1 = 56;
         const int ROW2 = ROW1+16;
         const int ROW3 = ROW2+16;
@@ -146,12 +152,15 @@ class Beast {
 
         const int ROW7 = ROW5+32;
         const int ROW8 = ROW7+16;
+        const int ROW9 = ROW8+16;
 
         const int ROW11 = ROW8+40;
         const int ROW12 = ROW11+16;
+        const int ROW13 = ROW12+16;
 
         const int ROW15 = ROW12+40;
         const int ROW16 = ROW15+16;
+        const int ROW17 = ROW16+16;
 
         const int ROW19 = ROW16+44;
         const int ROW20 = ROW19+16;
@@ -175,6 +184,8 @@ class Beast {
         FILE*       audioFile = nullptr;
 
         float createRenderer(SDL_Window *window, int screenWidth, int screenHeight, float zoom);
+        SDL_Texture *loadTexture(SDL_Renderer *renderer, const char* filename);
+
         void redrawScreen();
         void drawBeast();
         void drawKeys();
@@ -189,6 +200,12 @@ class Beast {
         bool itemEdit();
         void editComplete();
         void displayEdit();
+        template<typename... Args> std::pair<int, int> drawPrompt(const char *fmt, Args... args);
+
+        void fileMenu(SDL_Event windowEvent);
+        void debugMenu(SDL_Event windowEvent);
+        void onFile();
+        void onDebug();
 
         void drawListing(uint16_t address, SDL_Color textColor, SDL_Color highColor);
         template<typename... Args> void print(int x, int y, SDL_Color color, const char *fmt, Args... args);

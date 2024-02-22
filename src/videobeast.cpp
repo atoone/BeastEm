@@ -11,7 +11,7 @@ VideoBeast::VideoBeast(char *initialMemFile, float zoom) {
 VideoBeast::~VideoBeast() {
 }
 
-void VideoBeast::init(uint64_t clock_time_ps) {
+int VideoBeast::init(uint64_t clock_time_ps, int guiWidth) {
     if( surface == nullptr ) {
         createWindow();
     }
@@ -31,6 +31,18 @@ void VideoBeast::init(uint64_t clock_time_ps) {
 
     background = getColour((registers[REG_BACKGROUND_H] << 8) + registers[REG_BACKGROUND_L]);
     clearWindow();
+
+    SDL_DisplayMode display;
+
+    int displayIndex = SDL_GetWindowDisplayIndex(window);
+    if( SDL_GetDesktopDisplayMode(displayIndex, &display) == 0) {
+        int space = (display.w - guiWidth - (VIDEO_MODE[mode].pixelWidth * zoom))/3;
+        if( space < 0 ) s[ace = 0;]
+        SDL_SetWindowPosition(window, display.w - (VIDEO_MODE[mode].pixelWidth * zoom) - space, SDL_WINDOWPOS_CENTERED);
+
+        return space;
+    }
+    return -1;
 }
 
 uint32_t VideoBeast::getColour(uint16_t packedRGB) {

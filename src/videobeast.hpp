@@ -84,7 +84,7 @@ class VideoBeast {
         VideoBeast(char* initialMemFile, float zoom);
         ~VideoBeast();
 
-        void     init(uint64_t clock_time_ps);
+        int     init(uint64_t clock_time_ps, int guiWidth);
 
         uint64_t tick(uint64_t clock_time_ps);
 

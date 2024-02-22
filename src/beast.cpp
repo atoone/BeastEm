@@ -3,15 +3,19 @@
 #include <cstring>
 #include <stdio.h>
 #include <iomanip>
+#include <algorithm>
 #include "z80.h"
 #include "z80pio.h"
 #include "listing.hpp"
+#include "SDL_image.h"
+#include "nfd.h"
 
 Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing) 
     : rom {}, ram {}, memoryPage {0}, listing(listing) {
 
     windowId = SDL_GetWindowID(window);
 
+    this->window = window;
     this->screenWidth = screenWidth;
     this->screenHeight = screenHeight;
     this->zoom = createRenderer(window, screenWidth, screenHeight, zoom);
@@ -47,12 +51,27 @@ Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, 
 
     monoFont = TTF_OpenFont(MONO_FONT, MONO_SIZE*zoom);
 
+    drawPrompt("Loading...");
+    SDL_RenderPresent(sdlRenderer);
+
     keyboardTexture = SDL_CreateTexture(sdlRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, KEYBOARD_WIDTH*zoom, KEYBOARD_HEIGHT*zoom);
-    
+    pcbTexture = loadTexture(sdlRenderer, PCB_IMAGE);
+
     drawKeys();
     for( int i=0; i<DISPLAY_CHARS; i++) {
         display.push_back(Digit(sdlRenderer, zoom));
     }
+}
+
+SDL_Texture* Beast::loadTexture(SDL_Renderer *sdlRenderer, const char* filename) {
+    SDL_Texture *texture = NULL;
+    texture = IMG_LoadTexture(sdlRenderer, filename);
+
+    if (texture == NULL) {
+        std::cout << "Failed to load texture, '" << filename << "' " << SDL_GetError() << std::endl;
+    }
+
+    return texture;
 }
 
 float Beast::createRenderer(SDL_Window *window, int screenWidth, int screenHeight, float zoom) {
@@ -113,8 +132,11 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
     uart_init(&uart, UINT64_C(1843200), clock_time_ps);
     
     if( videoBeast ) {
-        videoBeast->init(clock_time_ps);
+        int leftBorder = videoBeast->init(clock_time_ps, screenWidth*zoom);
         nextVideoBeastTickPs = 0;
+
+        if( leftBorder > 0 ) SDL_SetWindowPosition(window, leftBorder, SDL_WINDOWPOS_CENTERED);
+        SDL_RaiseWindow(window);
     }
 
     if( sampleRate > 0 ) {
@@ -150,7 +172,7 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
 
 void Beast::loadSamples(Sint16 *stream, int length) {
     int index = 0;
-    if( audioAvailable < length ) return;
+    //if( audioAvailable < length ) return;
 
     while(index < length && ((audioRead+1)%AUDIO_BUFFER_SIZE) != audioWrite) {
         audioRead = (audioRead+1)%AUDIO_BUFFER_SIZE;
@@ -340,9 +362,16 @@ void Beast::mainLoop() {
             mode = DEBUG;
         }
 
-        if( mode == DEBUG ) {
+        if( (mode == DEBUG) || (mode == FILES) ) {
             drawBeast();
-            onDebug();
+            
+            if( mode == DEBUG ) {
+                onDebug();
+            }
+            else {
+                onFile();
+            }
+
             SDL_Event windowEvent;
 
             while( SDL_PollEvent(&windowEvent ) == 0 ) {
@@ -353,16 +382,20 @@ void Beast::mainLoop() {
                 }
             }
 
-            if( windowEvent.window.windowID != windowId && videoBeast) {
-                videoBeast->handleEvent(windowEvent);
-                continue;
-            }
-
             if( SDL_RENDER_TARGETS_RESET == windowEvent.type ) {
                 redrawScreen();
             }
 
             if( SDL_QUIT == windowEvent.type ) {
+                mode = QUIT;
+            }
+
+            if( windowEvent.window.windowID != windowId && videoBeast) {
+                videoBeast->handleEvent(windowEvent);
+                continue;
+            }
+
+            if (windowEvent.window.event == SDL_WINDOWEVENT_CLOSE) {
                 mode = QUIT;
             }
 
@@ -390,83 +423,134 @@ void Beast::mainLoop() {
                         }
                     }
                 }
+                else if( mode == DEBUG ) {
+                    debugMenu(windowEvent);
+                }
                 else {
-                    int maxSelection = (breakpoint == NO_BREAKPOINT) ? static_cast<int>(SEL_BREAKPOINT) : static_cast<int>(SEL_END_MARKER);
-
-                    switch( windowEvent.key.keysym.sym ) {
-                        case SDLK_PAGEUP  : updateSelection(-1, maxSelection); break;
-                        case SDLK_PAGEDOWN: updateSelection(1, maxSelection); break;
-                        case SDLK_RIGHT : itemSelect(1); break;
-                        case SDLK_LEFT:   itemSelect(-1); break;
-                        case SDLK_UP  :
-                            if( itemEdit() ) {
-                                editValue = (editValue-1) & (0x0FFFF >> ((4-editDigits)*4));
-                                editComplete();
-                            };
-                            break;
-                        case SDLK_DOWN  :
-                            if( itemEdit() ) {
-                                editValue = (editValue+1) & (0x0FFFF >> ((4-editDigits)*4));
-                                editComplete();
-                            };
-                            break;
-                        case SDLK_RETURN: itemEdit(); break;
-
-                        case SDLK_b    : 
-                            if( breakpoint != NO_BREAKPOINT ) {
-                                lastBreakpoint = breakpoint;
-                                breakpoint = NO_BREAKPOINT;
-                                selection = SEL_PC;
-                            }
-                            else {
-                                selection = SEL_BREAKPOINT;
-                                editMode = true;
-                                editOldValue = editValue = lastBreakpoint;
-                                editDigits = 4;
-                                editIndex = 3;
-                                editY = END_ROW;
-                                editX = 390;
-                                editOffset = 18;
-                                breakpoint = lastBreakpoint;
-                            }
-                            break;
-                        case SDLK_q    : mode = QUIT;   break;
-                        case SDLK_r    : mode = RUN;    break;
-                        case SDLK_s    : mode = STEP;   break;
-                        case SDLK_u    : mode = OUT;    break;
-                        case SDLK_o    : mode = OVER;   break;
-                        case SDLK_d    : uart_connect(&uart, false); break;
-                        case SDLK_t    : 
-                            if( instr->isConditional(readMem(cpu.pc-1), readMem(cpu.pc))) {
-                                mode = TAKE;
-                            }
-                            else {
-                                mode = STEP;
-                            }
-                            break;
-                        case SDLK_a     :
-                            if( audioFile ) {
-                                fclose(audioFile);
-                                audioFile = nullptr;
-                            }
-                            else {
-                                audioFile = fopen(audioFilename, "ab");
-                            }
-                            break;
-                    }
+                    fileMenu(windowEvent);
                 }
             }
         }
     }
 }
 
+void Beast::fileMenu(SDL_Event windowEvent) {
+    int maxSelection = listing.fileCount();
+
+    if( confirmRemove >= 0 ) {
+        switch( windowEvent.key.keysym.sym ) {
+            case SDLK_y      : listing.removeFile(confirmRemove); selection = std::max(0, confirmRemove-1);
+            case SDLK_n      : 
+            case SDLK_ESCAPE : confirmRemove = -1; break;
+        }
+    }
+    else
+        switch( windowEvent.key.keysym.sym ) {
+            case SDLK_UP  : updateSelection(-1, maxSelection); break;
+            case SDLK_DOWN: updateSelection(1, maxSelection); break;
+            case SDLK_q    : mode = QUIT;    break;
+            case SDLK_b    : mode = DEBUG;   selection = 0; break;
+            case SDLK_RETURN: confirmRemove = selection; break;
+            case SDLK_1 ... SDLK_9: confirmRemove = windowEvent.key.keysym.sym - SDLK_1; if( confirmRemove >= listing.fileCount() ) confirmRemove = -1; break;
+            case SDLK_a    :
+                nfdchar_t *outPath;
+                nfdresult_t result = NFD_OpenDialog(&outPath, NULL, 0, NULL);
+                break;
+        }
+}
+
+void Beast::debugMenu(SDL_Event windowEvent) {
+    int maxSelection = (breakpoint == NO_BREAKPOINT) ? static_cast<int>(SEL_BREAKPOINT) : static_cast<int>(SEL_END_MARKER);
+
+    switch( windowEvent.key.keysym.sym ) {
+        case SDLK_UP       : updateSelection(-1, maxSelection); break;
+        case SDLK_DOWN     : updateSelection(1, maxSelection); break;
+        case SDLK_LEFT  :
+            if( itemEdit() ) {
+                editValue = (editValue-1) & (0x0FFFF >> ((4-editDigits)*4));
+                editComplete();
+            }
+            else
+                itemSelect(-1);
+            break;
+        case SDLK_RIGHT  :
+            if( itemEdit() ) {
+                editValue = (editValue+1) & (0x0FFFF >> ((4-editDigits)*4));
+                editComplete();
+            }
+            else
+                itemSelect(1);
+            break;
+        case SDLK_RETURN: itemEdit(); break;
+
+        case SDLK_b    : 
+            if( breakpoint != NO_BREAKPOINT ) {
+                lastBreakpoint = breakpoint;
+                breakpoint = NO_BREAKPOINT;
+                selection = SEL_PC;
+            }
+            else {
+                selection = SEL_BREAKPOINT;
+                editMode = true;
+                editOldValue = editValue = lastBreakpoint;
+                editDigits = 4;
+                editIndex = 3;
+                editY = END_ROW;
+                editX = 440;
+                editOffset = 18;
+                breakpoint = lastBreakpoint;
+            }
+            break;
+        case SDLK_q    : mode = QUIT;   break;
+        case SDLK_r    : mode = RUN;    break;
+        case SDLK_s    : mode = STEP;   break;
+        case SDLK_u    : mode = OUT;    break;
+        case SDLK_o    : mode = OVER;   break;
+        case SDLK_f    : mode = FILES;   selection = 0; break;
+        case SDLK_d    : uart_connect(&uart, false); break;
+        case SDLK_t    : 
+            if( instr->isConditional(readMem(cpu.pc-1), readMem(cpu.pc))) {
+                mode = TAKE;
+            }
+            else {
+                mode = STEP;
+            }
+            break;
+        case SDLK_a     :
+            if( audioFile ) {
+                fclose(audioFile);
+                audioFile = nullptr;
+            }
+            else {
+                audioFile = fopen(audioFilename, "ab");
+            }
+            break;
+    }
+}
+
 void Beast::updateSelection(int direction, int maxSelection) {
     selection += direction;
-    if( selection < 0 ) selection = maxSelection-1;
-    if( selection >= maxSelection ) selection = 0;
-    if( selection == SEL_VIEWPAGE0 && memView[0] != MV_MEM ) selection += direction;
-    if( selection == SEL_VIEWPAGE1 && memView[1] != MV_MEM ) selection += direction;
-    if( selection == SEL_VIEWPAGE2 && memView[2] != MV_MEM ) selection += direction;
+    bool skip;
+
+    do {    
+        skip = false;
+
+        if( selection < 0 ) selection = maxSelection-1;
+        if( selection >= maxSelection ) selection = 0;
+
+        if( selection == SEL_VIEWPAGE0 && memView[0] != MV_MEM ) skip = true;
+        if( selection == SEL_VIEWADDR0 && memView[0] != MV_MEM && memView[0] != MV_Z80 ) skip = true;
+
+        if( selection == SEL_VIEWPAGE1 && memView[1] != MV_MEM ) skip = true;
+        if( selection == SEL_VIEWADDR1 && memView[1] != MV_MEM && memView[1] != MV_Z80) skip = true;
+
+        if( selection == SEL_VIEWPAGE2 && memView[2] != MV_MEM ) skip = true;
+        if( selection == SEL_VIEWADDR2 && memView[2] != MV_MEM && memView[2] != MV_Z80) skip = true;
+
+        if( skip ) selection += direction;
+    } while( skip );
+
+
 }
 
 uint64_t Beast::run(bool run, uint64_t tickCount) {
@@ -808,29 +892,29 @@ bool Beast::itemEdit() {
         case SEL_PAGE2 : startEdit( memoryPage[2], COL3, ROW4, 10, 2); break;
         case SEL_PAGE3 : startEdit( memoryPage[3], COL3, ROW5, 10, 2); break;
 
-        case SEL_MEM0 : 
-            if( memView[0] == MV_Z80) startEdit( memAddress[0], 104, ROW8, 3, 4); 
-            if( memView[0] == MV_MEM) startEdit( memPageAddress[0], 104, ROW8, 3, 4); 
+        case SEL_VIEWADDR0 : 
+            if( memView[0] == MV_Z80) startEdit( memAddress[0], COL1, ROW9, 3, 4); 
+            if( memView[0] == MV_MEM) startEdit( memPageAddress[0], COL1, ROW9, 3, 4); 
             break;
-        case SEL_MEM1 : 
-            if( memView[1] == MV_Z80) startEdit( memAddress[1], 104, ROW12, 3, 4); 
-            if( memView[1] == MV_MEM) startEdit( memPageAddress[1], 104, ROW12, 3, 4); 
+        case SEL_VIEWADDR1 : 
+            if( memView[1] == MV_Z80) startEdit( memAddress[1], COL1, ROW13, 3, 4); 
+            if( memView[1] == MV_MEM) startEdit( memPageAddress[1], COL1, ROW13, 3, 4); 
             break;
-        case SEL_MEM2 : 
-            if( memView[2] == MV_Z80) startEdit( memAddress[2], 104, ROW16, 3, 4); 
-            if( memView[2] == MV_MEM) startEdit( memPageAddress[2], 104, ROW16, 3, 4);
+        case SEL_VIEWADDR2 : 
+            if( memView[2] == MV_Z80) startEdit( memAddress[2], COL1, ROW17, 3, 4); 
+            if( memView[2] == MV_MEM) startEdit( memPageAddress[2], COL1, ROW17, 3, 4);
             break;
 
-        case SEL_VIEWPAGE0 : startEdit( memViewPage[0], COL1, ROW8+14, 1, 2); break;
-        case SEL_VIEWPAGE1 : startEdit( memViewPage[1], COL1, ROW12+14, 1, 2); break;
-        case SEL_VIEWPAGE2 : startEdit( memViewPage[2], COL1, ROW16+14, 1, 2); break;
+        case SEL_VIEWPAGE0 : startEdit( memViewPage[0], 104, ROW8, 1, 2); break;
+        case SEL_VIEWPAGE1 : startEdit( memViewPage[1], 104, ROW12, 1, 2); break;
+        case SEL_VIEWPAGE2 : startEdit( memViewPage[2], 104, ROW16, 1, 2); break;
 
         case SEL_A2: startEdit( cpu.af2 & 0xFF, COL4, ROW2, 9, 2); break;
         case SEL_HL2: startEdit( cpu.hl2, COL4, ROW3, 9, 4); break;
         case SEL_BC2: startEdit( cpu.bc2, COL4, ROW4, 9, 4);  break;
         case SEL_DE2: startEdit( cpu.de2, COL4, ROW5, 9, 4); break;
 
-        case SEL_BREAKPOINT:  startEdit( breakpoint, 390, END_ROW, 18, 4); break;
+        case SEL_BREAKPOINT:  startEdit( breakpoint, 440, END_ROW, 18, 4); break;
     }
 
     return editMode;
@@ -853,15 +937,15 @@ void Beast::editComplete() {
         case SEL_PAGE2: memoryPage[2] = editValue; break;
         case SEL_PAGE3: memoryPage[3] = editValue; break;
 
-        case SEL_MEM0: 
+        case SEL_VIEWADDR0: 
             if( memView[0] == MV_Z80 ) memAddress[0] = editValue;
             if( memView[0] == MV_MEM ) memPageAddress[0] = editValue & 0x3FFF;
             break;
-        case SEL_MEM1: 
+        case SEL_VIEWADDR1: 
             if( memView[1] == MV_Z80 ) memAddress[1] = editValue;
             if( memView[1] == MV_MEM ) memPageAddress[1] = editValue & 0x3FFF;
             break;
-        case SEL_MEM2: 
+        case SEL_VIEWADDR2: 
             if( memView[2] == MV_Z80 ) memAddress[2] = editValue;
             if( memView[2] == MV_MEM ) memPageAddress[2] = editValue & 0x3FFF;
             break;
@@ -878,6 +962,45 @@ void Beast::editComplete() {
         case SEL_BREAKPOINT: breakpoint = editValue; break;
     }
     editMode = false;
+}
+
+void Beast::onFile() {
+    boxRGBA(sdlRenderer, 32*zoom, 32*zoom, (screenWidth-24)*zoom, (screenHeight-24)*zoom, 0xF0, 0xF0, 0xE0, 0xE8);
+    
+    SDL_Color textColor = {0, 0x30, 0x30};
+    SDL_Color highColor = {0xA0, 0x30, 0x30};
+    SDL_Color bright =    {0xD0, 0xFF, 0xD0};
+    SDL_Color menuColor = {0x30, 0x30, 0xA0};
+
+
+    print(COL1, 34, menuColor, "[A]dd Source");
+    print(COL2, 34, menuColor, "[L]oad Binary");
+
+    std::vector<Listing::Source> sources = listing.getFiles();
+
+    print( COL3, ROW2, textColor, "Source Files" );
+    int row = ROW4;
+    int index = 1;
+
+    int id = selection;
+
+    std::for_each(sources.begin(), sources.end(), [&](const Listing::Source source) { 
+        print( COL1, row, textColor, id--?0:4, bright, "[%2d] Page 0x%02X   %s", index++, source.page, source.filename);
+        row += ROW_HEIGHT;
+        }
+    );
+
+    if( confirmRemove >= 0 ) {
+        drawPrompt("Remove %s Y/N?", listing.getFiles()[confirmRemove].filename);
+    }
+
+    print(640, END_ROW, menuColor, "[B]ack");
+
+    if( editMode ) {
+        displayEdit();
+    }
+
+    SDL_RenderPresent(sdlRenderer);
 }
 
 void Beast::onDebug() {
@@ -940,23 +1063,38 @@ void Beast::onDebug() {
     print(640, ROW4, textColor, "R   = 0x%02X", cpu.r);
 
     print(COL1, ROW8, textColor, id--?0:4, bright, "%s", nameFor(memView[0]).c_str());
-    displayMem(104, ROW7, textColor, addressFor(0), memView[0] == MV_MEM ? memViewPage[0] : -1);
+    displayMem(140, ROW7, textColor, addressFor(0), memView[0] == MV_MEM ? memViewPage[0] : -1);
     if( memView[0] == MV_MEM ) {
-        print(COL1, ROW8+14, textColor, id--?0:2, bright, "%02X", memViewPage[0]);
+        print(104, ROW8, textColor, id--?0:2, bright, "%02X", memViewPage[0]);
+    }
+    else id--;
+
+    if( memView[0] == MV_MEM || memView[0] == MV_Z80 ) {
+        print(COL1, ROW9, textColor, id--?0:6, bright, "0x%04X",addressFor(0));
     }
     else id--;
 
     print(COL1, ROW12, textColor, id--?0:4, bright, "%s", nameFor(memView[1]).c_str());
-    displayMem(104, ROW11, textColor, addressFor(1), memView[1] == MV_MEM ? memViewPage[1] : -1);
+    displayMem(140, ROW11, textColor, addressFor(1), memView[1] == MV_MEM ? memViewPage[1] : -1);
     if( memView[1] == MV_MEM ) {
-        print(COL1, ROW12+14, textColor, id--?0:2, bright, "%02X", memViewPage[1]);
+        print(104, ROW12, textColor, id--?0:2, bright, "%02X", memViewPage[1]);
+    }
+    else id--;
+
+    if( memView[1] == MV_MEM || memView[1] == MV_Z80 ) {
+        print(COL1, ROW13, textColor, id--?0:6, bright, "0x%04X",addressFor(1));
     }
     else id--;
 
     print(COL1, ROW16, textColor, id--?0:4, bright, "%s", nameFor(memView[2]).c_str());
-    displayMem(104, ROW15, textColor, addressFor(2), memView[2] == MV_MEM ? memViewPage[2] : -1);
+    displayMem(140, ROW15, textColor, addressFor(2), memView[2] == MV_MEM ? memViewPage[2] : -1);
     if( memView[2] == MV_MEM ) {
-        print(COL1, ROW16+14, textColor, id--?0:2, bright, "%02X", memViewPage[2]);
+        print(104, ROW16, textColor, id--?0:2, bright, "%02X", memViewPage[2]);
+    }
+    else id--;
+
+    if( memView[2] == MV_MEM || memView[2] == MV_Z80 ) {
+        print(COL1, ROW17, textColor, id--?0:6, bright, "0x%04X",addressFor(2));
     }
     else id--;
 
@@ -974,12 +1112,12 @@ void Beast::onDebug() {
     print(290, ROW19, textColor, (char*)ioSelectB.to_string('O', 'I').c_str());
     print(290, ROW20, textColor, (char*)portDataB.to_string().c_str());
 
-    print(430, ROW19, textColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
+    print(430, ROW19, menuColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
     print(430, ROW20, textColor, "File \"%s\"", audioFilename);
 
     print(620, ROW19, textColor, "TTY :%d", uart_port(&uart));
     if( uart_connected(&uart)) {
-        print(620, ROW20, textColor, "Connected [D]rop");
+        print(620, ROW20, menuColor, "Connected [D]rop");
     }
     else {
         print(620, ROW20, textColor, "Disconnected");
@@ -1004,16 +1142,17 @@ void Beast::onDebug() {
     }
 
     print( COL1, END_ROW, menuColor, "[L]ist address");
-    print( 200, END_ROW, menuColor, "[C]urrent address");
+    print( COL2, END_ROW, menuColor, "[C]urrent address");
+    print( 360, END_ROW, menuColor, "[F]iles");
 
     if( breakpoint != NO_BREAKPOINT ) {
-        print(390, END_ROW, menuColor, id--?0:-4, bright, "[B]reakpoint = 0x%04X", breakpoint);
+        print(440, END_ROW, menuColor, id--?0:-4, bright, "[B]reakpoint = 0x%04X", breakpoint);
     }
     else {
-        print(390, END_ROW, menuColor, "[B]reakpoint");
+        print(440, END_ROW, menuColor, "[B]reakpoint");
     }
     
-    print(620, END_ROW, menuColor, "[Q]uit");
+    print(640, END_ROW, menuColor, "[Q]uit");
 
     if( editMode ) {
         displayEdit();
@@ -1105,6 +1244,7 @@ void Beast::drawListing(uint16_t address, SDL_Color textColor, SDL_Color highCol
             decodedAddresses.push_back(address);
         }
         std::string line = instr->decode(address, f, &length);
+
         print(COL1, ROW22+(14*i), (address == cpu.pc-1) ? highColor: textColor, "%04X             %s", address, const_cast<char*>(line.c_str()));
         address += length;
     }
@@ -1190,6 +1330,48 @@ template<typename... Args> void Beast::print(int x, int y, SDL_Color color, int 
     if( c > 0 && c<(int)sizeof(buffer)) {
         printb(x,y, color, highlight, background, buffer);
     }
+}
+
+template<typename... Args> std::pair<int, int> Beast::drawPrompt(const char *fmt, Args... args) {
+    char buffer[200]; 
+    char padding[2] = {'0', 0};
+    SDL_Color background = {0xF0, 0xF0, 0xFF};
+
+    int c = snprintf(buffer, sizeof(buffer), fmt, args...);
+    if( c > 0 && c<(int)sizeof(buffer)) {
+
+        int width;
+        int height;
+        int charWidth;
+        
+        TTF_SizeUTF8(monoFont, padding, &charWidth, &height);
+        TTF_SizeUTF8(monoFont, buffer, &width, &height);
+
+        int promptX = (screenWidth-width)/2;
+        int promptY = (screenHeight+height)/2;
+        boxRGBA(sdlRenderer, promptX-2*charWidth, promptY-3*height, promptX+width+2*charWidth, promptY+2*height, background.r, background.g, background.b, 0xFF);
+
+        SDL_Rect textRect;
+
+        SDL_Color color = {0x00, 0x00, 0x00};
+
+        SDL_Surface *textSurface = TTF_RenderText_Blended(monoFont, buffer, color);
+        SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
+
+        textRect.x = promptX*zoom; 
+        textRect.y = (promptY-height)*zoom;
+        textRect.w = textSurface->w;
+        textRect.h = textSurface->h;
+
+        SDL_RenderCopy(sdlRenderer, textTexture, NULL, &textRect);
+
+        SDL_DestroyTexture(textTexture);
+        SDL_FreeSurface(textSurface);
+
+        return std::make_pair(promptX, promptY);
+    }
+
+    return std::make_pair(0, 0);
 }
 
 void Beast::displayEdit() {
@@ -1278,10 +1460,18 @@ void Beast::drawBeast() {
     int keyboardTop = (screenHeight - KEYBOARD_HEIGHT);
     int displayTop = (keyboardTop-8 - Digit::DIGIT_HEIGHT);
 
+    SDL_Point size;
+    SDL_QueryTexture(pcbTexture, NULL, NULL, &size.x, &size.y);
+
+    int pcbHeight = (int)((screenWidth / (float)size.x) * size.y);
+
     SDL_SetRenderDrawColor(sdlRenderer, 0x0, 0x0, 0x0, SDL_ALPHA_OPAQUE);
     SDL_RenderClear(sdlRenderer);
     SDL_Rect textRect = {0, (int)(keyboardTop*zoom), (int)(KEYBOARD_WIDTH*zoom), (int)(KEYBOARD_HEIGHT*zoom)};
     SDL_RenderCopy(sdlRenderer, keyboardTexture, NULL, &textRect);
+
+    SDL_Rect pcbRect = {0, (int)((displayTop-pcbHeight) * zoom)-4, (int)(screenWidth*zoom), (int)(displayTop * zoom)-4 };
+    SDL_RenderCopy(sdlRenderer, pcbTexture, NULL, &pcbRect);
 
     for( int i=0; i<DISPLAY_CHARS; i++) {
         display[i].onDraw(sdlRenderer, 4 + i*(Digit::DIGIT_WIDTH+1), displayTop);

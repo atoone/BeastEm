@@ -11,6 +11,26 @@ static inline void ltrim(std::string &s) {
     }));
 }
 
+std::vector<Listing::Source> Listing::getFiles() {
+    return sources;
+}
+
+void Listing::removeFile(int fileNum) {
+    files.erase(files.begin() + fileNum);
+    sources.erase(sources.begin() + fileNum);
+
+    for( auto it = lineMap.begin(); it != lineMap.end();) {
+        if (it->second.fileNum == fileNum)
+            it = lineMap.erase(it);
+        else {
+            if( it->second.fileNum > fileNum ) {
+                it->second.fileNum = it->second.fileNum-1;
+            }
+            ++it;
+        }
+    }
+}
+
 void Listing::addFile(const char *filename, int page) {
     std::ifstream myfile(filename);
     if(!myfile) {
@@ -21,6 +41,10 @@ void Listing::addFile(const char *filename, int page) {
     std::vector<std::string> lines;
 
     int fileNum = files.size();
+
+    Source source = {filename, fileNum, page};
+
+    sources.push_back(source);
 
     uint16_t address = 0;
     bool foundAddress = false;
@@ -75,7 +99,7 @@ Listing::Location Listing::getLocation(uint32_t address) {
 }
 
 std::string Listing::getLine(Location location) {
-    if( location.valid ) {
+    if( location.valid && location.fileNum < files.size() && location.lineNum < files[location.fileNum].size()) {
         return files[location.fileNum][location.lineNum];
     }
     return "";

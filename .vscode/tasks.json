@@ -20,7 +20,12 @@
                 "-lSDL2",
                 "-lSDL2_ttf",
                 "-lSDL2_net",
-                "-llibSDL2_gfx-1-0-0"
+                "-llibSDL2_gfx-1-0-0", 
+                "-lSDL2_image",
+                "-lnfd",
+                "-lole32",
+                "-luuid",
+                "-lshell32"
             ],
             "options": {
                 "cwd": "${fileDirname}"

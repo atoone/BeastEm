@@ -14,11 +14,12 @@
 #include "src/display.hpp"
 #include "src/rtc.hpp"
 #include "src/listing.hpp"
+#include "nfd.h"
 
 /* Using Floooh Chips Z80 cycle stepped emulation from :
  *  https://github.com/floooh/chips/blob/master/chips/z80.h
  */
-const int WIDTH = 800, HEIGHT = 600;
+const int WIDTH = 800, HEIGHT = 610;
 
 const int ONE_KILOHERTZ = 1000; // 1 KHz
 const int DEFAULT_SPEED = 8000;
@@ -233,13 +234,7 @@ int main( int argc, char *argv[] ) {
         index++;
     }
 
-    if( binaries.size() == 0 && listing.fileCount() == 0 ) {
-        std::cout << "No file or listing arguments, loading demo firmware" << std::endl;
-        listing.addFile("firmware.lst", 0);
-        listing.addFile("monitor.lst", 35);
-        binaries.push_back(BIN_FILE{"flash_v1.5.bin", 0});
-    }
-
+    NFD_Init();
     SDL_Init( SDL_INIT_EVERYTHING );
 
     SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator (Beta) v1.0", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
@@ -249,12 +244,20 @@ int main( int argc, char *argv[] ) {
         return 1;
     }
 
+ 
     if (SDLNet_Init() == -1) {
         std::cout << "SDLNet_Init error: " << SDLNet_GetError() << std::endl;
     }
 
     Beast beast = Beast(window, WIDTH, HEIGHT, zoom, listing);
-    
+ 
+    if( binaries.size() == 0 && listing.fileCount() == 0 ) {
+        std::cout << "No file or listing arguments, loading demo firmware" << std::endl;
+        listing.addFile("firmware.lst", 0);
+        listing.addFile("monitor.lst", 35);
+        binaries.push_back(BIN_FILE{"flash_v1.5.bin", 0});
+    }
+       
     for(auto bf: binaries) {
         readBinary(bf.address, bf.filename, beast);
     }
