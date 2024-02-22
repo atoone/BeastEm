@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <iostream>
 #include <string>
 #include <map>
@@ -27,3 +28,4 @@ class Listing {
         const char* addressRegex = "\\s([0-9a-f]+)";
 
 };
+
