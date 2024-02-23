@@ -404,8 +404,14 @@ void Beast::mainLoop() {
                     int digit = -1;
 
                     switch( windowEvent.key.keysym.sym ) {
-                        case SDLK_ESCAPE: editMode = false; break;
-                        case SDLK_RETURN: editComplete(); break;
+                        case SDLK_ESCAPE: editMode = false; isMemoryEdit = false; break;
+                        case SDLK_RETURN:
+                            editComplete();
+                            if( isMemoryEdit ) {
+                                editMode = false; 
+                                isMemoryEdit = false;
+                            }
+                            break;
                         case SDLK_BACKSPACE: 
                             if( editIndex < editDigits-1 ) {
                                 editIndex++;
@@ -414,6 +420,10 @@ void Beast::mainLoop() {
                             break;
                         case SDLK_0 ... SDLK_9: digit = windowEvent.key.keysym.sym - SDLK_0; break;
                         case SDLK_a ... SDLK_f: digit = windowEvent.key.keysym.sym - SDLK_a + 10; break;
+                        case SDLK_UP       : updateMemoryEdit(-16); break;
+                        case SDLK_DOWN     : updateMemoryEdit(16); break;
+                        case SDLK_LEFT     : updateMemoryEdit(-1); break;
+                        case SDLK_RIGHT    : updateMemoryEdit(1); break;
                     }
                     if( digit >= 0 ) {
                         editValue = (editValue & ~(0x000F << (editIndex*4))) | (digit << (editIndex*4));
@@ -481,8 +491,17 @@ void Beast::debugMenu(SDL_Event windowEvent) {
             else
                 itemSelect(1);
             break;
-        case SDLK_RETURN: itemEdit(); break;
-
+        case SDLK_RETURN: 
+            if( SEL_MEM0 == selection ) startMemoryEdit(0);
+            else if( SEL_MEM1 == selection ) startMemoryEdit(1);
+            else if( SEL_MEM2 == selection ) startMemoryEdit(2);
+            else itemEdit(); 
+            break;
+        case SDLK_SPACE : 
+            if( SEL_MEM0 <= selection && selection <= SEL_VIEWADDR0 ) startMemoryEdit(0);
+            if( SEL_MEM1 <= selection && selection <= SEL_VIEWADDR1 ) startMemoryEdit(1);
+            if( SEL_MEM2 <= selection && selection <= SEL_VIEWADDR2 ) startMemoryEdit(2);
+            break;
         case SDLK_b    : 
             if( breakpoint != NO_BREAKPOINT ) {
                 lastBreakpoint = breakpoint;
@@ -874,7 +893,44 @@ void Beast::startEdit(uint16_t value, int x, int y, int offset, int digits) {
     editIndex = digits-1;
 }
 
+void Beast::startMemoryEdit(int view) {
+    if( isMemoryEdit ) {
+        isMemoryEdit = false;
+        editMode = false;
+        return;
+    }
+    memoryEditAddress = addressFor(view);
+    memoryEditPage = memView[view] == MV_MEM ? memViewPage[view] : -1;
+    memoryEditView = view;
+    isMemoryEdit = true;
+
+    updateMemoryEdit(0);
+}
+
+void Beast::updateMemoryEdit(int delta) {
+    if( !isMemoryEdit ) return;
+    
+    memoryEditAddress += delta;
+    if( memoryEditPage > 0 && memoryEditPage < 0x40 ) {
+        if( (memoryEditAddress & 0xFF00) == 0xFF00 ) {
+            memoryEditPage--;
+            memoryEditAddress += 0x4000;
+        }
+        if( (memoryEditAddress & 0x4000) == 0x4000) {
+            memoryEditPage++;
+            memoryEditAddress -= 0x4000;
+        }
+    }
+
+    uint8_t data = memoryEditPage < 0 ? readMem(memoryEditAddress): readPage(memoryEditPage, memoryEditAddress);
+    int offset = 9 + 3*(memoryEditAddress & 0x0F);
+
+    startEdit(data, 140, ROW8 + 4*MEM_ROW_HEIGHT*memoryEditView, offset, 2);
+}
+
 bool Beast::itemEdit() {
+    if( isMemoryEdit ) return false;
+
     switch( selection ) {
         case SEL_PC: startEdit( cpu.pc-1, COL1, ROW1,  8, 4); break;
         case SEL_A : startEdit( cpu.a, COL1, ROW2, 8, 2); break;
@@ -888,26 +944,26 @@ bool Beast::itemEdit() {
 
         case SEL_PAGING: pagingEnabled = !pagingEnabled; break;
         case SEL_PAGE0 : startEdit( memoryPage[0], COL3, ROW2, 10, 2); break;
-        case SEL_PAGE1 : startEdit( memoryPage[1], COL3, ROW3, 10, 2);  break;
+        case SEL_PAGE1 : startEdit( memoryPage[1], COL3, ROW3, 10, 2); break;
         case SEL_PAGE2 : startEdit( memoryPage[2], COL3, ROW4, 10, 2); break;
         case SEL_PAGE3 : startEdit( memoryPage[3], COL3, ROW5, 10, 2); break;
 
         case SEL_VIEWADDR0 : 
-            if( memView[0] == MV_Z80) startEdit( memAddress[0], COL1, ROW9, 3, 4); 
+            if( memView[0] == MV_Z80) startEdit( memAddress[0], COL1, ROW8, 3, 4); 
             if( memView[0] == MV_MEM) startEdit( memPageAddress[0], COL1, ROW9, 3, 4); 
             break;
         case SEL_VIEWADDR1 : 
-            if( memView[1] == MV_Z80) startEdit( memAddress[1], COL1, ROW13, 3, 4); 
+            if( memView[1] == MV_Z80) startEdit( memAddress[1], COL1, ROW12, 3, 4); 
             if( memView[1] == MV_MEM) startEdit( memPageAddress[1], COL1, ROW13, 3, 4); 
             break;
         case SEL_VIEWADDR2 : 
-            if( memView[2] == MV_Z80) startEdit( memAddress[2], COL1, ROW17, 3, 4); 
+            if( memView[2] == MV_Z80) startEdit( memAddress[2], COL1, ROW16, 3, 4); 
             if( memView[2] == MV_MEM) startEdit( memPageAddress[2], COL1, ROW17, 3, 4);
             break;
 
-        case SEL_VIEWPAGE0 : startEdit( memViewPage[0], 104, ROW8, 1, 2); break;
-        case SEL_VIEWPAGE1 : startEdit( memViewPage[1], 104, ROW12, 1, 2); break;
-        case SEL_VIEWPAGE2 : startEdit( memViewPage[2], 104, ROW16, 1, 2); break;
+        case SEL_VIEWPAGE0 : startEdit( memViewPage[0], COL1, ROW8, 1, 2); break;
+        case SEL_VIEWPAGE1 : startEdit( memViewPage[1], COL1, ROW12, 1, 2); break;
+        case SEL_VIEWPAGE2 : startEdit( memViewPage[2], COL1, ROW16, 1, 2); break;
 
         case SEL_A2: startEdit( cpu.af2 & 0xFF, COL4, ROW2, 9, 2); break;
         case SEL_HL2: startEdit( cpu.hl2, COL4, ROW3, 9, 4); break;
@@ -921,7 +977,12 @@ bool Beast::itemEdit() {
 }
 
 void Beast::editComplete() {
-    switch( selection ) {
+    if( isMemoryEdit ) {
+        writeMem(memoryEditPage, memoryEditAddress, editValue );
+        updateMemoryEdit(1);
+        return;
+    }
+    else switch( selection ) {
         case SEL_PC: pins = z80_prefetch(&cpu, editValue); run(false, 0);  break;
         case SEL_A: cpu.a = editValue; break;
         case SEL_HL: cpu.hl = editValue; break;
@@ -962,6 +1023,7 @@ void Beast::editComplete() {
         case SEL_BREAKPOINT: breakpoint = editValue; break;
     }
     editMode = false;
+    isMemoryEdit = false;
 }
 
 void Beast::onFile() {
@@ -1062,41 +1124,9 @@ void Beast::onDebug() {
     print(640, ROW3, textColor, "I   = 0x%02X", cpu.i);
     print(640, ROW4, textColor, "R   = 0x%02X", cpu.r);
 
-    print(COL1, ROW8, textColor, id--?0:4, bright, "%s", nameFor(memView[0]).c_str());
-    displayMem(140, ROW7, textColor, addressFor(0), memView[0] == MV_MEM ? memViewPage[0] : -1);
-    if( memView[0] == MV_MEM ) {
-        print(104, ROW8, textColor, id--?0:2, bright, "%02X", memViewPage[0]);
-    }
-    else id--;
-
-    if( memView[0] == MV_MEM || memView[0] == MV_Z80 ) {
-        print(COL1, ROW9, textColor, id--?0:6, bright, "0x%04X",addressFor(0));
-    }
-    else id--;
-
-    print(COL1, ROW12, textColor, id--?0:4, bright, "%s", nameFor(memView[1]).c_str());
-    displayMem(140, ROW11, textColor, addressFor(1), memView[1] == MV_MEM ? memViewPage[1] : -1);
-    if( memView[1] == MV_MEM ) {
-        print(104, ROW12, textColor, id--?0:2, bright, "%02X", memViewPage[1]);
-    }
-    else id--;
-
-    if( memView[1] == MV_MEM || memView[1] == MV_Z80 ) {
-        print(COL1, ROW13, textColor, id--?0:6, bright, "0x%04X",addressFor(1));
-    }
-    else id--;
-
-    print(COL1, ROW16, textColor, id--?0:4, bright, "%s", nameFor(memView[2]).c_str());
-    displayMem(140, ROW15, textColor, addressFor(2), memView[2] == MV_MEM ? memViewPage[2] : -1);
-    if( memView[2] == MV_MEM ) {
-        print(104, ROW16, textColor, id--?0:2, bright, "%02X", memViewPage[2]);
-    }
-    else id--;
-
-    if( memView[2] == MV_MEM || memView[2] == MV_Z80 ) {
-        print(COL1, ROW17, textColor, id--?0:6, bright, "0x%04X",addressFor(2));
-    }
-    else id--;
+    id = drawMemoryLayout(0, ROW7, id, textColor, bright);
+    id = drawMemoryLayout(1, ROW11, id, textColor, bright);
+    id = drawMemoryLayout(2, ROW15, id, textColor, bright);
 
     std::bitset<8> ioSelectA(pio.port[0].io_select);
     std::bitset<8> portDataA(Z80PIO_GET_PA(pins));
@@ -1161,6 +1191,35 @@ void Beast::onDebug() {
     SDL_RenderPresent(sdlRenderer);
 }
 
+int Beast::drawMemoryLayout(int view, int topRow, int id, SDL_Color textColor, SDL_Color bright) {
+    print(COL1, topRow, textColor, id--?0:4, bright, "%s", nameFor(memView[view]).c_str());
+    
+    uint16_t address = addressFor(view);
+    int page = memView[view] == MV_MEM ? memViewPage[view] : -1;
+    
+    if( isMemoryEdit && (view==memoryEditView) ) {
+        page = memoryEditPage;
+        address = memoryEditAddress;
+    }
+
+    displayMem(140, topRow, textColor, address, page);
+
+    if( memView[view] == MV_MEM ) {
+        print(COL1, topRow+MEM_ROW_HEIGHT, textColor, id--?0:2, bright, "%02X", page);
+    }
+    else id--;
+
+    if( memView[view] == MV_MEM ) {
+        print(COL1, topRow + MEM_ROW_HEIGHT*2, textColor, id--?0:6, bright, "0x%04X", address);
+    }
+    else if( memView[view] == MV_Z80 ) {
+        print(COL1, topRow + MEM_ROW_HEIGHT, textColor, id--?0:6, bright, "0x%04X", address);
+    }
+    else id--;
+
+    return id;
+}
+
 std::string Beast::nameFor(MemView view) {
     switch(view) {
         case MV_PC : return "PC";
@@ -1210,6 +1269,10 @@ Beast::MemView Beast::nextView(MemView view, int dir) {
 }
 
 void Beast::itemSelect(int direction) {
+    if( isMemoryEdit ) {
+        return;
+    }
+
     switch(selection) {
         case SEL_MEM0 : memView[0] = nextView(memView[0], direction); break;
         case SEL_MEM1 : memView[1] = nextView(memView[1], direction); break;
@@ -1289,8 +1352,23 @@ void Beast::displayMem(int x, int y, SDL_Color textColor, uint16_t markAddress, 
                 return;
             }
         }
-        print(x, y+2+(14*row), textColor, buffer);
+        print(x, y+(MEM_ROW_HEIGHT*row), textColor, buffer);
         address += 16;
+    }
+}
+
+void Beast::writeMem(int page, uint16_t address, uint8_t data) {
+    if( page < 0 ) {
+        page = memoryPage[(address >> 14) & 0x03];
+    }
+
+    uint32_t mappedAddr = (address & 0x3FFF) | ((page & 0x1F) << 14);
+
+    if( (page & 0xE0) == 0x20 ) {
+        ram[mappedAddr] = data;
+    }
+    else {
+        rom[mappedAddr] = data;
     }
 }
 
@@ -1347,8 +1425,8 @@ template<typename... Args> std::pair<int, int> Beast::drawPrompt(const char *fmt
         TTF_SizeUTF8(monoFont, padding, &charWidth, &height);
         TTF_SizeUTF8(monoFont, buffer, &width, &height);
 
-        int promptX = (screenWidth-width)/2;
-        int promptY = (screenHeight+height)/2;
+        int promptX = (screenWidth*zoom-width)/2;
+        int promptY = (screenHeight*zoom+height)/2;
         boxRGBA(sdlRenderer, promptX-2*charWidth, promptY-3*height, promptX+width+2*charWidth, promptY+2*height, background.r, background.g, background.b, 0xFF);
 
         SDL_Rect textRect;
@@ -1358,8 +1436,8 @@ template<typename... Args> std::pair<int, int> Beast::drawPrompt(const char *fmt
         SDL_Surface *textSurface = TTF_RenderText_Blended(monoFont, buffer, color);
         SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
 
-        textRect.x = promptX*zoom; 
-        textRect.y = (promptY-height)*zoom;
+        textRect.x = promptX; 
+        textRect.y = (promptY-height);
         textRect.w = textSurface->w;
         textRect.h = textSurface->h;
 

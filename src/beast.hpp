@@ -125,7 +125,7 @@ class Beast {
         bool    pagingEnabled = false;
         uint8_t readMem(uint16_t address);
         uint8_t readPage(int page, uint16_t address);
-
+        void    writeMem(int page, uint16_t address, uint8_t data);
         MemView  memView[3] = {MV_PC, MV_SP, MV_HL};
         uint16_t memAddress[3] = {0};
         uint16_t memPageAddress[3] = {0};
@@ -136,6 +136,10 @@ class Beast {
         int        editIndex;
         int        editDigits;
         int        editX, editY, editOffset;
+        bool       isMemoryEdit;
+        uint16_t   memoryEditAddress;
+        int        memoryEditPage;
+        int        memoryEditView;
 
         const int COL1 = 50;
         const int COL2 = 190;
@@ -143,6 +147,7 @@ class Beast {
         const int COL4 = 470;
 
         const int ROW_HEIGHT = 16;
+        const int MEM_ROW_HEIGHT = 14;
 
         const int ROW1 = 56;
         const int ROW2 = ROW1+16;
@@ -151,16 +156,16 @@ class Beast {
         const int ROW5 = ROW4+16;
 
         const int ROW7 = ROW5+32;
-        const int ROW8 = ROW7+16;
-        const int ROW9 = ROW8+16;
+        const int ROW8 = ROW7+MEM_ROW_HEIGHT;
+        const int ROW9 = ROW8+MEM_ROW_HEIGHT;
 
-        const int ROW11 = ROW8+40;
-        const int ROW12 = ROW11+16;
-        const int ROW13 = ROW12+16;
+        const int ROW11 = ROW9+2*MEM_ROW_HEIGHT;
+        const int ROW12 = ROW11+MEM_ROW_HEIGHT;
+        const int ROW13 = ROW12+MEM_ROW_HEIGHT;
 
-        const int ROW15 = ROW12+40;
-        const int ROW16 = ROW15+16;
-        const int ROW17 = ROW16+16;
+        const int ROW15 = ROW13+2*MEM_ROW_HEIGHT;
+        const int ROW16 = ROW15+MEM_ROW_HEIGHT;
+        const int ROW17 = ROW16+MEM_ROW_HEIGHT;
 
         const int ROW19 = ROW16+44;
         const int ROW20 = ROW19+16;
@@ -191,12 +196,15 @@ class Beast {
         void drawKeys();
         void drawKey(int col, int row, int offsetX, int offsetY, bool pressed);
         void displayMem(int x, int y, SDL_Color textColor, uint16_t markAddress, int page);
+        int  drawMemoryLayout(int index, int topRow, int id, SDL_Color textColor, SDL_Color bright);
         std::string nameFor(MemView view);
         uint16_t addressFor(int view);
         MemView nextView(MemView view, int dir);
         void updateSelection(int direction, int maxSelection);
         void itemSelect(int direction);
         void startEdit(uint16_t value, int x, int y, int offset, int digits);
+        void startMemoryEdit(int view);
+        void updateMemoryEdit(int delta);
         bool itemEdit();
         void editComplete();
         void displayEdit();
