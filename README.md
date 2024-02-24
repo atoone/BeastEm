@@ -111,9 +111,16 @@ Windows users can install g++ with MySys64, following [this guide](https://code.
 
 ## Linux
 
-Linux users will need to install the SDL2 development libraries, specifically `libsdl2-dev`, `libsdl2-gfx-dev`, `libsdl2-net-dev` and `libsdl2-ttf-dev`. Build the executable with:
+Linux users will need to install the SDL2 development libraries, specifically `libsdl2-dev`, `libsdl2-gfx-dev`, `libsdl2-net-dev` and `libsdl2-ttf-dev` (some platforms, notably Fedora, call these `-devel` instead of `-dev`). 
+
+You will also need GTK+ 3.0 development libraries. Depending on your distribution, making thse visible via pkg-config (which is needed by the cmake build) _might_ be fun (spoiler: if you've been using Linuxbrew, just `brew install gtk+3` rather than fighting with your distro's package manager).
+
+You will also need a relatively recent version of `cmake`. 
+
+Build the executable with:
 
 ```shell
+cmake .
 make clean all
 ```
 
@@ -129,15 +136,16 @@ Once the executable is built, copy it and the files in the `assets` folder to th
 
 ## macOS
 
-Install the required SDL libraries, for example using [homebrew](https://brew.sh/):
+Install the required SDL libraries, along with cmake if necessary, for example using [homebrew](https://brew.sh/):
 
 ```shell
-brew install sdl2 sdl_2gfx sdl2_image sdl2_net sdl2_ttf
+brew install cmake sdl2 sdl_2gfx sdl2_image sdl2_net sdl2_ttf
 ```
 
 And build with:
 
 ```shell
+cmake .
 make clean all
 ```
 
