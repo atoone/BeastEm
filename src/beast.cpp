@@ -909,7 +909,7 @@ void Beast::startMemoryEdit(int view) {
 
 void Beast::updateMemoryEdit(int delta) {
     if( !isMemoryEdit ) return;
-    
+
     memoryEditAddress += delta;
     if( memoryEditPage > 0 && memoryEditPage < 0x40 ) {
         if( (memoryEditAddress & 0xFF00) == 0xFF00 ) {
@@ -1069,6 +1069,7 @@ void Beast::onDebug() {
     boxRGBA(sdlRenderer, 32*zoom, 32*zoom, (screenWidth-24)*zoom, (screenHeight-24)*zoom, 0xF0, 0xF0, 0xE0, 0xE8);
     
     SDL_Color textColor = {0, 0x30, 0x30};
+    SDL_Color disassColor={0x60, 0, 0x60};
     SDL_Color highColor = {0xA0, 0x30, 0x30};
     SDL_Color bright =    {0xD0, 0xFF, 0xD0};
     SDL_Color menuColor = {0x30, 0x30, 0xA0};
@@ -1154,22 +1155,7 @@ void Beast::onDebug() {
     }
 
     int page = pagingEnabled ? memoryPage[((cpu.pc-1) >> 14) & 0x03] : 0;
-    currentLoc = listing.getLocation(page << 16 | (cpu.pc-1));
-
-    if( currentLoc.valid ) {
-        int startLine = currentLoc.lineNum - 4;
-        if( startLine < 0 ) startLine = 0;
-        Listing::Location displayLoc = currentLoc;
-
-        for( int i=0; i<12; i++ ) {
-            displayLoc.lineNum = i+startLine;
-            std::string line = listing.getLine(displayLoc);
-            print(COL1, ROW22+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.c_str()));
-        }
-    }
-    else {
-        drawListing( cpu.pc-1, textColor, highColor );
-    }
+    drawListing( page, cpu.pc-1, textColor, highColor, disassColor );
 
     print( COL1, END_ROW, menuColor, "[L]ist address");
     print( COL2, END_ROW, menuColor, "[C]urrent address");
@@ -1280,35 +1266,106 @@ void Beast::itemSelect(int direction) {
     }
 }
 
-void Beast::drawListing(uint16_t address, SDL_Color textColor, SDL_Color highColor) {
-    int length;
-    auto f = [this](uint16_t address) { return this->readMem(address); };
+void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor) {
+    Listing::Location currentLoc = listing.getLocation(page << 16 | (cpu.pc-1));
 
     int matchedLine = -1;
 
-    for( size_t i=0; i<decodedAddresses.size(); i++) {
-        if( decodedAddresses[i] == address ) {
-            matchedLine = i;
-            break;
+    if( currentLoc.valid ) {
+        currentLoc.lineNum = currentLoc.lineNum < 4 ? 0 : currentLoc.lineNum - 4;
+
+        std::pair<Listing::Line, bool> line = listing.getLine(currentLoc);
+        if( line.second ) {
+            address = line.first.address;
         }
     }
-    if( matchedLine > 7 ) {
-        address = decodedAddresses[matchedLine-7];
-    }
-    else if( matchedLine >= 0 ) {
-        address = decodedAddresses[0];
+    else {
+        for( size_t i=0; i<decodedAddresses.size(); i++) {
+            if( decodedAddresses[i] == address ) {
+                matchedLine = i;
+                break;
+            }
+        }
+        if( matchedLine > 7 ) {
+            address = decodedAddresses[matchedLine-7];
+        }
+        else if( matchedLine >= 0 ) {
+            address = decodedAddresses[0];
+        }
     }
 
+    int length;
+    auto f = [this](uint16_t address) { return this->readMem(address); };
+    
     for( size_t i=0; i<12; i++ ) {
+        std::pair<Listing::Line, bool> line;
+
+        if( currentLoc.valid ) { 
+            line = listing.getLine(currentLoc);
+
+            while( line.second && line.first.address < address ) {
+                currentLoc.lineNum++;
+                line = listing.getLine(currentLoc);
+            } 
+
+            bool valid = line.second;
+
+            if( line.second && line.first.address == address ) {
+                for( int i=0; i<line.first.byteCount; i++ ) {
+                    if( readMem(address+i) != line.first.bytes[i] ) {
+                        valid = false;
+                        break;
+                    }
+                }
+                currentLoc.lineNum++;
+            }
+
+            if( valid && line.first.address == address ) {
+                print(COL1, ROW22+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.first.text.c_str()));
+                address += line.first.byteCount;
+                continue;
+            }
+            if( line.second && line.first.address == address && line.first.isData ) {
+                std::string byteString;
+                for( int j=4; j-->0; ) {
+                    if( j < line.first.byteCount ) {
+                        char buffer[4];
+                        int c = snprintf( buffer, 4, "%02X ", readMem(address+j));
+                        if( c>0 && c<4 )
+                            byteString.insert( 0, buffer, c );
+                    }
+                    else {
+                        byteString.insert(0, "   ");
+                    }
+                }
+                print(COL1, ROW22+(14*i), (address == cpu.pc-1) ? highColor: disassColor, "----   %04X %s", address, const_cast<char*>(byteString.c_str()));
+                address += line.first.byteCount;
+                continue;
+            }
+        }
+
         if( decodedAddresses.size() > i ) {
             decodedAddresses[i] = address;
         }
         else {
             decodedAddresses.push_back(address);
         }
-        std::string line = instr->decode(address, f, &length);
+        std::string decoded = instr->decode(address, f, &length);
+        decoded.insert(0, "                ");
 
-        print(COL1, ROW22+(14*i), (address == cpu.pc-1) ? highColor: textColor, "%04X             %s", address, const_cast<char*>(line.c_str()));
+        for( int j=4; j-->0; ) {
+            if( j < length) {
+                char buffer[4];
+                int c = snprintf( buffer, 4, "%02X ", readMem(address+j));
+                if( c>0 && c<4 )
+                    decoded.insert( 0, buffer, c );
+            }
+            else {
+                decoded.insert(0, "   ");
+            }
+        }
+
+        print(COL1, ROW22+(14*i), (address == cpu.pc-1) ? highColor: disassColor, "----   %04X %s", address, const_cast<char*>(decoded.c_str()));
         address += length;
     }
 }

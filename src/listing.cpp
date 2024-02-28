@@ -4,6 +4,7 @@
 #include <sstream>
 #include <fstream>
 #include <regex>
+#include <cctype>
 
 static inline void ltrim(std::string &s) {
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
@@ -15,7 +16,7 @@ std::vector<Listing::Source> Listing::getFiles() {
     return sources;
 }
 
-void Listing::removeFile(int fileNum) {
+void Listing::removeFile(unsigned int fileNum) {
     files.erase(files.begin() + fileNum);
     sources.erase(sources.begin() + fileNum);
 
@@ -37,10 +38,10 @@ void Listing::addFile(const char *filename, int page) {
         std::cout << "Listing file does not exist: " << filename << std::endl;
         exit(1);
     }
-    std::string line;
-    std::vector<std::string> lines;
+    std::string text;
+    std::vector<Line> lines;
 
-    int fileNum = files.size();
+    unsigned int fileNum = files.size();
 
     Source source = {filename, fileNum, page};
 
@@ -48,19 +49,25 @@ void Listing::addFile(const char *filename, int page) {
 
     uint16_t address = 0;
     bool foundAddress = false;
-    int lineNum = 0;
-    int addressLine = 0;
+    unsigned int lineNum = 0;
+    unsigned int addressLine = 0;
 
-    while (std::getline(myfile, line)) {
+    while (std::getline(myfile, text)) {
         lineNum++;
 
-        lines.push_back(line);
+        Line line = {};
+        line.text = text;
 
-        ltrim(line);
+        if( text.length() == 0 ) {
+            std::cout << "Ending on line " << lineNum << std::endl;
+            break;
+        }
+
+        ltrim(text);
         std::regex matcher = std::regex(addressRegex, std::regex::icase);
         std::smatch match;
-        if(std::regex_search(line, match, matcher)) {
-            uint16_t nextAddress = std::stoi(match.str(), nullptr, 16);
+        if(std::regex_search(text, match, matcher)) {
+            uint16_t nextAddress = std::stoi(match.str(2), nullptr, 16);
 
             if( foundAddress && (nextAddress != address) ) {
                 Location loc = {fileNum, addressLine, true};
@@ -70,10 +77,35 @@ void Listing::addFile(const char *filename, int page) {
             foundAddress = true;
             address = nextAddress;
             addressLine = lineNum;
+
+            line.address = address;
+            line.head = text.substr(0, match.position(2));
+
+            int byteCount = 0;
+            unsigned int bytePos = match.position(2)+match.length(2);
+
+            while(byteCount < 4 && ((bytePos+2) < text.length()) && (text[bytePos] == ' ') && isxdigit(tolower(text[bytePos+1])) && isxdigit(tolower(text[bytePos+2]))) {
+                line.bytes[byteCount++] = (fromHex(text[bytePos+1]) << 4) | fromHex(text[bytePos+2]);
+                bytePos+=3;
+            }
+            line.byteCount = byteCount;
+
+            if( byteCount > 0 ) {
+                line.isData = true;
+
+                while(bytePos < text.length() ) {
+                    if( !isspace(text[bytePos++]) ) {
+                        line.isData = false;
+                        break;
+                    }
+                }
+            }
         }
         else {
-            std::cout << "No match on line " << lineNum << std::endl;
+            std::cout << "No match on line " << lineNum << ": " << text << std::endl;
         }
+
+        lines.push_back(line);
     }
     myfile.close();
     
@@ -83,6 +115,16 @@ void Listing::addFile(const char *filename, int page) {
     }
     std::cout << "Parsed listing, file "<< filename <<" for page " << page << " has " << lineNum << " lines." << std::endl;
     files.push_back(lines);
+}
+
+int Listing::fromHex(char c) {
+    if (c>='0' && c<='9')
+        return c-'0';
+    if (c>='a' && c<='f')
+        return 10+(c-'a');
+    if (c>='A' && c<='F')
+        return 10+(c-'A');
+    return -1; // unexpected char
 }
 
 int Listing::fileCount() {
@@ -98,9 +140,9 @@ Listing::Location Listing::getLocation(uint32_t address) {
     return Location() = {0,0,false};
 }
 
-std::string Listing::getLine(Location location) {
+std::pair<Listing::Line, bool> Listing::getLine(Location location) {
     if( location.valid && location.fileNum < files.size() && location.lineNum < files[location.fileNum].size()) {
-        return files[location.fileNum][location.lineNum];
+        return std::pair<Listing::Line, bool>( files[location.fileNum][location.lineNum], true );
     }
-    return "";
+    return std::pair<Listing::Line, bool>(Listing::Line {}, false);
 }

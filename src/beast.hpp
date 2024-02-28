@@ -174,7 +174,6 @@ class Beast {
         const int END_ROW = ROW22+(13*14);
 
         Listing &listing;
-        Listing::Location currentLoc = {0,0, false};
         std::vector<uint16_t> decodedAddresses;         // Addresses decoded on screen
 
         static const int FRAME_RATE = 50;
@@ -215,7 +214,7 @@ class Beast {
         void onFile();
         void onDebug();
 
-        void drawListing(uint16_t address, SDL_Color textColor, SDL_Color highColor);
+        void drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor);
         template<typename... Args> void print(int x, int y, SDL_Color color, const char *fmt, Args... args);
         template<typename... Args> void print(int x, int y, SDL_Color color, int highlight, SDL_Color background, const char *fmt, Args... args);
         void printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer);
