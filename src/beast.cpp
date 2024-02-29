@@ -477,7 +477,7 @@ void Beast::debugMenu(SDL_Event windowEvent) {
         case SDLK_DOWN     : updateSelection(1, maxSelection); break;
         case SDLK_LEFT  :
             if( itemEdit() ) {
-                editValue = (editValue-1) & (0x0FFFF >> ((4-editDigits)*4));
+                editValue = (editValue-1) & (0x0FFFFF >> ((5-editDigits)*4));
                 editComplete();
             }
             else
@@ -485,16 +485,16 @@ void Beast::debugMenu(SDL_Event windowEvent) {
             break;
         case SDLK_RIGHT  :
             if( itemEdit() ) {
-                editValue = (editValue+1) & (0x0FFFF >> ((4-editDigits)*4));
+                editValue = (editValue+1) & (0x0FFFFF >> ((5-editDigits)*4));
                 editComplete();
             }
             else
                 itemSelect(1);
             break;
         case SDLK_RETURN: 
-            if( SEL_MEM0 == selection ) startMemoryEdit(0);
-            else if( SEL_MEM1 == selection ) startMemoryEdit(1);
-            else if( SEL_MEM2 == selection ) startMemoryEdit(2);
+            if( SEL_MEM0 == selection || SEL_VIDEOVIEW0 == selection ) startMemoryEdit(0);
+            else if( SEL_MEM1 == selection || SEL_VIDEOVIEW1 == selection ) startMemoryEdit(1);
+            else if( SEL_MEM2 == selection || SEL_VIDEOVIEW2 == selection ) startMemoryEdit(2);
             else itemEdit(); 
             break;
         case SDLK_SPACE : 
@@ -557,14 +557,17 @@ void Beast::updateSelection(int direction, int maxSelection) {
         if( selection < 0 ) selection = maxSelection-1;
         if( selection >= maxSelection ) selection = 0;
 
-        if( selection == SEL_VIEWPAGE0 && memView[0] != MV_MEM ) skip = true;
-        if( selection == SEL_VIEWADDR0 && memView[0] != MV_MEM && memView[0] != MV_Z80 ) skip = true;
+        if( selection == SEL_VIEWPAGE0 &&  memView[0] != MV_MEM ) skip = true;
+        if( selection == SEL_VIDEOVIEW0 && memView[0] != MV_VIDEO ) skip = true;
+        if( selection == SEL_VIEWADDR0 && memView[0] != MV_MEM && memView[0] != MV_Z80 && memView[0] != MV_VIDEO ) skip = true;
 
-        if( selection == SEL_VIEWPAGE1 && memView[1] != MV_MEM ) skip = true;
-        if( selection == SEL_VIEWADDR1 && memView[1] != MV_MEM && memView[1] != MV_Z80) skip = true;
+        if( selection == SEL_VIEWPAGE1 &&  memView[1] != MV_MEM ) skip = true;
+        if( selection == SEL_VIDEOVIEW1 && memView[1] != MV_VIDEO ) skip = true;
+        if( selection == SEL_VIEWADDR1 && memView[1] != MV_MEM && memView[1] != MV_Z80 && memView[1] != MV_VIDEO) skip = true;
 
-        if( selection == SEL_VIEWPAGE2 && memView[2] != MV_MEM ) skip = true;
-        if( selection == SEL_VIEWADDR2 && memView[2] != MV_MEM && memView[2] != MV_Z80) skip = true;
+        if( selection == SEL_VIEWPAGE2 &&  memView[2] != MV_MEM ) skip = true;
+        if( selection == SEL_VIDEOVIEW2 && memView[2] != MV_VIDEO ) skip = true;
+        if( selection == SEL_VIEWADDR2 && memView[2] != MV_MEM && memView[2] != MV_Z80 && memView[2] != MV_VIDEO) skip = true;
 
         if( skip ) selection += direction;
     } while( skip );
@@ -882,7 +885,7 @@ uint8_t Beast::readKeyboard(uint16_t port) {
     return result;
 }
 
-void Beast::startEdit(uint16_t value, int x, int y, int offset, int digits) {
+void Beast::startEdit(uint32_t value, int x, int y, int offset, int digits) {
     editMode = true;
     editValue = value;
     editOldValue = value;
@@ -901,6 +904,7 @@ void Beast::startMemoryEdit(int view) {
     }
     memoryEditAddress = addressFor(view);
     memoryEditPage = memView[view] == MV_MEM ? memViewPage[view] : -1;
+    memoryEditAddressMask = getAddressMask(view);
     memoryEditView = view;
     isMemoryEdit = true;
 
@@ -914,18 +918,24 @@ void Beast::updateMemoryEdit(int delta) {
     if( memoryEditPage > 0 && memoryEditPage < 0x40 ) {
         if( (memoryEditAddress & 0xFF00) == 0xFF00 ) {
             memoryEditPage--;
-            memoryEditAddress += 0x4000;
         }
         if( (memoryEditAddress & 0x4000) == 0x4000) {
             memoryEditPage++;
-            memoryEditAddress -= 0x4000;
         }
     }
+    memoryEditAddress &= memoryEditAddressMask;
 
-    uint8_t data = memoryEditPage < 0 ? readMem(memoryEditAddress): readPage(memoryEditPage, memoryEditAddress);
-    int offset = 9 + 3*(memoryEditAddress & 0x0F);
+    uint8_t data = 0;
 
-    startEdit(data, 140, ROW8 + 4*MEM_ROW_HEIGHT*memoryEditView, offset, 2);
+    if( memView[memoryEditView] == MV_VIDEO ) {
+        data = readVideoMemory(memVideoView[memoryEditView], memoryEditAddress);
+    } 
+    else {
+        data = memoryEditPage < 0 ? readMem(memoryEditAddress): readPage(memoryEditPage, memoryEditAddress);
+    }
+    int offset = 10 + 3*(memoryEditAddress & 0x0F);
+
+    startEdit(data, COL_MEM, ROW8 + 4*MEM_ROW_HEIGHT*memoryEditView, offset, 2);
 }
 
 bool Beast::itemEdit() {
@@ -951,17 +961,20 @@ bool Beast::itemEdit() {
         case SEL_VIEWADDR0 : 
             if( memView[0] == MV_Z80) startEdit( memAddress[0], COL1, ROW8, 3, 4); 
             if( memView[0] == MV_MEM) startEdit( memPageAddress[0], COL1, ROW9, 3, 4); 
+            if( memView[0] == MV_VIDEO) startEdit( getVideoAddress(0, memVideoView[0]), COL1, ROW9, 3, 5); 
             break;
         case SEL_VIEWADDR1 : 
             if( memView[1] == MV_Z80) startEdit( memAddress[1], COL1, ROW12, 3, 4); 
             if( memView[1] == MV_MEM) startEdit( memPageAddress[1], COL1, ROW13, 3, 4); 
+            if( memView[1] == MV_VIDEO) startEdit( getVideoAddress(1, memVideoView[1]), COL1, ROW13, 3, 5); 
             break;
         case SEL_VIEWADDR2 : 
             if( memView[2] == MV_Z80) startEdit( memAddress[2], COL1, ROW16, 3, 4); 
             if( memView[2] == MV_MEM) startEdit( memPageAddress[2], COL1, ROW17, 3, 4);
+            if( memView[2] == MV_VIDEO) startEdit( getVideoAddress(2, memVideoView[2]), COL1, ROW17, 3, 5); 
             break;
 
-        case SEL_VIEWPAGE0 : startEdit( memViewPage[0], COL1, ROW8, 1, 2); break;
+        case SEL_VIEWPAGE0 : startEdit( memViewPage[0], COL1, ROW8, 1, 2);  break;
         case SEL_VIEWPAGE1 : startEdit( memViewPage[1], COL1, ROW12, 1, 2); break;
         case SEL_VIEWPAGE2 : startEdit( memViewPage[2], COL1, ROW16, 1, 2); break;
 
@@ -978,7 +991,12 @@ bool Beast::itemEdit() {
 
 void Beast::editComplete() {
     if( isMemoryEdit ) {
-        writeMem(memoryEditPage, memoryEditAddress, editValue );
+        if( memView[memoryEditView] != MV_VIDEO ) {
+            writeMem(memoryEditPage, memoryEditAddress, editValue );
+        }
+        else {
+            writeVideoMemory(memVideoView[memoryEditView], memoryEditAddress, editValue );
+        }
         updateMemoryEdit(1);
         return;
     }
@@ -1001,19 +1019,22 @@ void Beast::editComplete() {
         case SEL_VIEWADDR0: 
             if( memView[0] == MV_Z80 ) memAddress[0] = editValue;
             if( memView[0] == MV_MEM ) memPageAddress[0] = editValue & 0x3FFF;
+            if( memView[0] == MV_VIDEO ) setVideoAddress(0, memVideoView[0], getAddressMask(0) & editValue);
             break;
         case SEL_VIEWADDR1: 
             if( memView[1] == MV_Z80 ) memAddress[1] = editValue;
             if( memView[1] == MV_MEM ) memPageAddress[1] = editValue & 0x3FFF;
+            if( memView[1] == MV_VIDEO ) setVideoAddress(1, memVideoView[1], getAddressMask(1) & editValue);
             break;
         case SEL_VIEWADDR2: 
             if( memView[2] == MV_Z80 ) memAddress[2] = editValue;
             if( memView[2] == MV_MEM ) memPageAddress[2] = editValue & 0x3FFF;
+            if( memView[2] == MV_VIDEO ) setVideoAddress(2, memVideoView[2], getAddressMask(2) & editValue);
             break;
 
-        case SEL_VIEWPAGE0 : memViewPage[0] = editValue; break;
-        case SEL_VIEWPAGE1 : memViewPage[1] = editValue; break;
-        case SEL_VIEWPAGE2 : memViewPage[2] = editValue; break;
+        case SEL_VIEWPAGE0 : memViewPage[0] = editValue <= 0x40 ? editValue : 0x40; break;
+        case SEL_VIEWPAGE1 : memViewPage[1] = editValue <= 0x40 ? editValue : 0x40; break;
+        case SEL_VIEWPAGE2 : memViewPage[2] = editValue <= 0x40 ? editValue : 0x40; break;
 
         case SEL_A2: cpu.af2 = ((cpu.af2 & 0xFF00) | (editValue & 0x0FF)); break;
         case SEL_HL2: cpu.hl2 = editValue; break;
@@ -1178,9 +1199,9 @@ void Beast::onDebug() {
 }
 
 int Beast::drawMemoryLayout(int view, int topRow, int id, SDL_Color textColor, SDL_Color bright) {
-    print(COL1, topRow, textColor, id--?0:4, bright, "%s", nameFor(memView[view]).c_str());
+    print(COL1, topRow, textColor, id--?0:5, bright, "%s", nameFor(memView[view]).c_str());
     
-    uint16_t address = addressFor(view);
+    uint32_t address = memView[view] != MV_VIDEO ? addressFor(view): getVideoAddress(view, memVideoView[view]);
     int page = memView[view] == MV_MEM ? memViewPage[view] : -1;
     
     if( isMemoryEdit && (view==memoryEditView) ) {
@@ -1188,18 +1209,38 @@ int Beast::drawMemoryLayout(int view, int topRow, int id, SDL_Color textColor, S
         address = memoryEditAddress;
     }
 
-    displayMem(140, topRow, textColor, address, page);
+    if( memView[view] != MV_VIDEO ) {
+        displayMem(COL_MEM, topRow, textColor, address, page);
+    }  
 
     if( memView[view] == MV_MEM ) {
         print(COL1, topRow+MEM_ROW_HEIGHT, textColor, id--?0:2, bright, "%02X", page);
+        id--;
     }
-    else id--;
+    else if( memView[view] == MV_VIDEO ) {
+        displayVideoMem(COL_MEM,topRow, textColor, memVideoView[view], address);
+        id--;
+
+        switch( memVideoView[view] ) {
+            case VV_RAM     : print(COL1, topRow+MEM_ROW_HEIGHT, textColor, id--?0:3, bright, "RAM");    break;
+            case VV_REG     : print(COL1, topRow+MEM_ROW_HEIGHT, textColor, id--?0:4, bright, "REGS");   break;
+            case VV_PAL1    : print(COL1, topRow+MEM_ROW_HEIGHT, textColor, id--?0:5, bright, "PAL 1");    break;
+            case VV_PAL2    : print(COL1, topRow+MEM_ROW_HEIGHT, textColor, id--?0:5, bright, "PAL 2");    break;
+            case VV_SPR     : print(COL1, topRow+MEM_ROW_HEIGHT, textColor, id--?0:6, bright, "SPRITE"); break;
+            default:
+                print(COL1, topRow+MEM_ROW_HEIGHT, textColor, id--?0:4, bright, "????");
+        }
+    }
+    else id-=2;
 
     if( memView[view] == MV_MEM ) {
         print(COL1, topRow + MEM_ROW_HEIGHT*2, textColor, id--?0:6, bright, "0x%04X", address);
     }
     else if( memView[view] == MV_Z80 ) {
         print(COL1, topRow + MEM_ROW_HEIGHT, textColor, id--?0:6, bright, "0x%04X", address);
+    }
+    else if( memView[view] == MV_VIDEO ) {
+        print(COL1, topRow + MEM_ROW_HEIGHT*2, textColor, id--?0:7, bright, "0x%05X", address);
     }
     else id--;
 
@@ -1217,12 +1258,13 @@ std::string Beast::nameFor(MemView view) {
         case MV_IY : return "IY";
         case MV_Z80: return "Z80";
         case MV_MEM: return "PAGE";
+        case MV_VIDEO: return "VIDEO";
         default:
             return "???";
     }
 }
 
-uint16_t Beast::addressFor(int view) {
+uint32_t Beast::addressFor(int view) {
 switch(memView[view]) {
         case MV_PC : return cpu.pc-1;
         case MV_SP : return cpu.sp;
@@ -1233,14 +1275,33 @@ switch(memView[view]) {
         case MV_IY : return cpu.iy;
         case MV_Z80: return memAddress[view];
         case MV_MEM: return memPageAddress[view];
+        case MV_VIDEO:
+            return getVideoAddress(view, memVideoView[view]);
         default:
             return 0;
     }
 }
 
+uint32_t Beast::getAddressMask(int view) {
+    if( memView[view] == MV_MEM ) {
+        return 0x3FFF;
+    }
+    else if( memView[view] == MV_VIDEO ) {
+        switch(memVideoView[view]) {
+            case VV_RAM : return VideoBeast::VIDEO_RAM_LENGTH-1;
+            case VV_REG : return VideoBeast::REGISTERS_LENGTH-1;
+            case VV_PAL1: 
+            case VV_PAL2: return VideoBeast::PALETTE_LENGTH*2-1;
+            case VV_SPR : return VideoBeast::SPRITE_LENGTH*VideoBeast::SPRITE_BYTES-1;
+        }
+    }
+    
+    return 0x0FFFF;
+}
+
 Beast::MemView Beast::nextView(MemView view, int dir) {
     switch(view) {
-        case MV_PC : return dir == 1 ? MV_SP : MV_MEM;
+        case MV_PC : return dir == 1 ? MV_SP : (videoBeast ? MV_VIDEO : MV_MEM);
         case MV_SP : return dir == 1 ? MV_HL : MV_PC;
         case MV_HL : return dir == 1 ? MV_BC : MV_SP;
         case MV_BC : return dir == 1 ? MV_DE : MV_HL;
@@ -1248,10 +1309,24 @@ Beast::MemView Beast::nextView(MemView view, int dir) {
         case MV_IX : return dir == 1 ? MV_IY : MV_DE;
         case MV_IY : return dir == 1 ? MV_Z80 : MV_IX;
         case MV_Z80 : return dir == 1 ? MV_MEM : MV_IY;
-        case MV_MEM : return dir == 1 ? MV_PC : MV_Z80;
+        case MV_MEM : return dir == 1 ? (videoBeast ? MV_VIDEO: MV_PC) : MV_Z80;
+        case MV_VIDEO: return dir == 1 ? MV_PC : MV_MEM;
         default:
             return MV_PC;
     }
+}
+
+Beast::VideoView Beast::nextVideoView(VideoView view, int dir) {
+    switch( view ) {
+        case VV_RAM : return dir == 1 ? VV_REG : VV_SPR;
+        case VV_REG : return dir == 1 ? VV_PAL1 : VV_RAM;
+        case VV_PAL1 : return dir == 1 ? VV_PAL2 : VV_REG;
+        case VV_PAL2 : return dir == 1 ? VV_SPR : VV_PAL1;
+        case VV_SPR : return dir == 1 ? VV_RAM : VV_PAL2;
+        default:
+            return VV_RAM;        
+    }
+
 }
 
 void Beast::itemSelect(int direction) {
@@ -1263,6 +1338,9 @@ void Beast::itemSelect(int direction) {
         case SEL_MEM0 : memView[0] = nextView(memView[0], direction); break;
         case SEL_MEM1 : memView[1] = nextView(memView[1], direction); break;
         case SEL_MEM2 : memView[2] = nextView(memView[2], direction); break; 
+        case SEL_VIDEOVIEW0 : memVideoView[0] = nextVideoView(memVideoView[0], direction); break;
+        case SEL_VIDEOVIEW1 : memVideoView[1] = nextVideoView(memVideoView[1], direction); break;
+        case SEL_VIDEOVIEW2 : memVideoView[2] = nextVideoView(memVideoView[2], direction); break;
     }
 }
 
@@ -1369,7 +1447,101 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
         address += length;
     }
 }
+uint8_t Beast::readVideoMemory(VideoView view, uint32_t address) {
+    switch( view ) {
+        case VV_RAM: return videoBeast->readRam(address);
+        case VV_REG: return videoBeast->readRegister(address); 
+        case VV_PAL1: return videoBeast->readPalette(1, address);  
+        case VV_PAL2: return videoBeast->readPalette(2, address);
+        case VV_SPR: return videoBeast->readSprite(address);
+    }
 
+    return 0;
+}
+
+void Beast::writeVideoMemory(VideoView view, uint32_t address, uint8_t value ) {
+    switch( view ) {
+        case VV_RAM: videoBeast->writeRam(address, value);          break;
+        case VV_REG: videoBeast->writeRegister(address, value);     break; 
+        case VV_PAL1: videoBeast->writePalette(1, address, value);  break; 
+        case VV_PAL2: videoBeast->writePalette(2, address, value);  break; 
+        case VV_SPR: videoBeast->writeSprite(address, value);       break;
+    }
+}
+
+void Beast::displayVideoMem(int x, int y, SDL_Color textColor, VideoView view, uint32_t markAddress) {
+    
+    uint32_t address = (markAddress & 0xFFFF0)-16;
+    
+    const int BUFFER_SIZE = 200;
+    char buffer[BUFFER_SIZE]; 
+
+    for( int row=0; row<3; row++ ) {
+        int c=0;
+        switch( view ) {
+            case VV_RAM : c = snprintf( buffer, BUFFER_SIZE,   "0x%05X ", address & 0x0FFFFF);  break;
+            case VV_REG : c = snprintf( buffer, BUFFER_SIZE, "   0x%02X ", address & 0X0FF);  break;
+            case VV_PAL1: c = snprintf( buffer, BUFFER_SIZE,  "  0x%03X ", address & 0x1FF);  break;
+            case VV_PAL2: c = snprintf( buffer, BUFFER_SIZE,  "  0x%03X ", address & 0x1FF);  break;
+            case VV_SPR : c = snprintf( buffer, BUFFER_SIZE,  "  0x%03X ", address & 0x7FF);  break;
+        }
+        if( c < 0 || c >= BUFFER_SIZE ) {
+            break;
+        }
+
+        for( uint16_t i=0; i<16; i++ ) {
+            uint8_t data = readVideoMemory(view, address+i);
+
+            int cs = snprintf( buffer+c, BUFFER_SIZE-c, (address+i == markAddress) ? ">%02X" : " %02X", data);
+            if( cs < 0 || cs+c >= BUFFER_SIZE ) {
+                return;
+            }
+            c+=cs;
+        }
+
+        int cn =snprintf(buffer+c, BUFFER_SIZE-c, "   ");
+        if( cn < 0 || cn+c >= BUFFER_SIZE ) {
+            return;
+        }
+        c+=cn;
+
+        if( view != VV_PAL1 && view != VV_PAL2 ) {
+            for( int i=0; i<16; i++ ) {
+                uint8_t data = readVideoMemory(view, address+i);
+
+                if( data < 32 || data > 127 ) {
+                    data = '.';
+                }
+
+                buffer[c++] = data;
+                buffer[c] = 0;
+                if( c+1 >= BUFFER_SIZE) {
+                    return;
+                }
+            }
+        }
+
+        print(x, y+(MEM_ROW_HEIGHT*row), textColor, buffer);
+
+        if( view == VV_PAL1 || view == VV_PAL2 ) {
+            for( int i=0; i<8; i++ ) {
+                uint16_t packedRGB = readVideoMemory(view, address+i*2) + (readVideoMemory(view, address+i*2+1) << 8);
+                uint8_t r, g, b;
+
+                videoBeast->unpackRGB(packedRGB, &r, &g, &b);
+
+                boxRGBA(sdlRenderer, (x+480+(i*MEM_ROW_HEIGHT))*zoom, (y+(MEM_ROW_HEIGHT*row)+4)*zoom, (x+478+((i+1)*MEM_ROW_HEIGHT))*zoom, (y+(MEM_ROW_HEIGHT*(row+1))+2)*zoom, r, g, b, 0xFF);
+                if( packedRGB & 0x8000 ) {
+                    uint8_t col = ((1+r+g+b)/3) > 0x80 ? 0 : 0xFF;
+
+                    lineRGBA(sdlRenderer, (x+480+(i*MEM_ROW_HEIGHT))*zoom, (y+(MEM_ROW_HEIGHT*row)+4)*zoom, (x+478+((i+1)*MEM_ROW_HEIGHT))*zoom, (y+(MEM_ROW_HEIGHT*(row+1))+2)*zoom, col, col, col, 0xFF);
+                    lineRGBA(sdlRenderer, (x+480+(i*MEM_ROW_HEIGHT))*zoom, (y+(MEM_ROW_HEIGHT*(row+1))+2)*zoom, (x+478+((i+1)*MEM_ROW_HEIGHT))*zoom, (y+(MEM_ROW_HEIGHT*row)+4)*zoom, col, col, col, 0xFF);
+                }
+            }
+        }
+        address += 16;
+    }
+}
 void Beast::displayMem(int x, int y, SDL_Color textColor, uint16_t markAddress, int page) {
     uint16_t address = (markAddress & 0xFFF0)-16;
 
@@ -1378,7 +1550,7 @@ void Beast::displayMem(int x, int y, SDL_Color textColor, uint16_t markAddress, 
     const int BUFFER_SIZE = 200;
     char buffer[BUFFER_SIZE]; 
     for( int row=0; row<3; row++ ) {
-        int c = snprintf( buffer, BUFFER_SIZE, "0x%04X ", address & addressMask);
+        int c = snprintf( buffer, BUFFER_SIZE, " 0x%04X ", address & addressMask);
         if( c < 0 || c >= BUFFER_SIZE ) {
             break;
         }
@@ -1424,27 +1596,56 @@ void Beast::writeMem(int page, uint16_t address, uint8_t data) {
     if( (page & 0xE0) == 0x20 ) {
         ram[mappedAddr] = data;
     }
+    else if( (page & 0xE0) == 0x40 ) {
+        if( videoBeast ) {
+            videoBeast->write(address, data, clock_time_ps);
+        }
+    }
     else {
         rom[mappedAddr] = data;
     }
 }
 
 uint8_t Beast::readMem(uint16_t address) {
-    uint32_t mappedAddr = address & 0x3FFF;
-    bool isRam = false;
-    
-    if( pagingEnabled ) {
-        int page = memoryPage[(address >> 14) & 0x03];
-        isRam = (page & 0xE0) == 0x20;
-        mappedAddr |= (page & 0x1F) << 14;
-    }
-    return isRam ? ram[mappedAddr] : rom[mappedAddr];
+    int page = pagingEnabled ? memoryPage[(address >> 14) & 0x03] : 0;
+    return readPage(page, address);
 }
 
 uint8_t Beast::readPage(int page, uint16_t address) {
-    bool isRam = page > 0x1F;
+    bool isRam = (page & 0xE0) == 0x20;
+    if( !isRam && ((page & 0xE0) == 0x40)) {
+        // Videobeast
+        if( videoBeast ) {
+            return videoBeast->read(address, clock_time_ps);
+        }
+        else {
+            return 0;
+        }
+    }
     uint32_t mappedAddr = (address & 0x3FFF) | (page & 0x1F) << 14;
     return isRam ? ram[mappedAddr] : rom[mappedAddr];
+}
+
+uint32_t Beast::getVideoAddress(int index, VideoView view) {
+    switch( view ) {
+        case VV_RAM : return memVideoAddress[index][0];
+        case VV_REG : return memVideoAddress[index][1];
+        case VV_PAL1: return memVideoAddress[index][2];
+        case VV_PAL2: return memVideoAddress[index][3];
+        case VV_SPR : return memVideoAddress[index][4];
+    }
+
+    return 0;
+}
+
+void Beast::setVideoAddress(int index, VideoView view, uint32_t value) {
+    switch( view ) {
+        case VV_RAM : memVideoAddress[index][0] = value;  break;
+        case VV_REG : memVideoAddress[index][1] = value;  break;
+        case VV_PAL1: memVideoAddress[index][2] = value;  break;
+        case VV_PAL2: memVideoAddress[index][3] = value;  break;
+        case VV_SPR : memVideoAddress[index][4] = value;  break;
+    }
 }
 
 template<typename... Args> void Beast::print(int x, int y, SDL_Color color, const char *fmt, Args... args) {
@@ -1517,7 +1718,7 @@ void Beast::displayEdit() {
     SDL_Color background = {0xFF, 0xFF, 0xFF};
 
     TTF_SizeUTF8(monoFont, buffer, &width, &height);
-    boxRGBA(sdlRenderer, editX*zoom+(width*(editOffset-1)), (editY+1)*zoom, editX*zoom+(width*(editOffset+editDigits-1)), (editY-2)*zoom+height, background.r, background.g, background.b, 0xFF);
+    boxRGBA(sdlRenderer, editX*zoom+(width*(editOffset-1))-1, (editY+1)*zoom, editX*zoom+(width*(editOffset+editDigits-1)), (editY-2)*zoom+height, background.r, background.g, background.b, 0xFF);
 
     SDL_Rect textRect;
 

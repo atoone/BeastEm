@@ -51,6 +51,10 @@ uint32_t VideoBeast::getColour(uint16_t packedRGB) {
     return SDL_MapRGB(surface->format, r, g, b);
 }
 
+void VideoBeast::unpackRGB(uint16_t packedRGB, uint8_t *r, uint8_t *g, uint8_t *b) {
+    SDL_GetRGB(packedRGB, pixel_format, r, g, b);
+}
+
 uint64_t VideoBeast::drawBppBitmap(int layerBase) {
     int scrollY = ((registers[layerBase + REG_OFF_LAYER_XY] & 0xF0) << 4) + registers[layerBase + REG_OFF_LAYER_Y_L];
     int scrollX = ((registers[layerBase + REG_OFF_LAYER_XY] & 0x0F) << 8) + registers[layerBase + REG_OFF_LAYER_X_L];
@@ -235,7 +239,8 @@ void VideoBeast::loadRegisters(const char *filename) {
     myfile.close();
 }
 
-void VideoBeast::handleEvent(SDL_Event windowEvent) {
+void VideoBeast::handleEvent(SDL_Event windowEvent)
+{
     if( SDL_KEYDOWN == windowEvent.type && windowEvent.window.windowID == windowID ) {
         switch( windowEvent.key.keysym.sym ) {
             case SDLK_d : 
@@ -598,6 +603,62 @@ uint8_t VideoBeast::read(uint16_t addr, uint64_t clock_time_ps) {
     }
 
     return 0;
+}
+
+uint8_t VideoBeast::readRam(uint32_t address) {
+    return mem[ address & (VIDEO_RAM_LENGTH-1) ];
+}
+
+uint8_t VideoBeast::readRegister(uint32_t address) {
+    return registers[address & (REGISTERS_LENGTH-1)];
+}
+
+uint8_t VideoBeast::readPalette(int palette, uint32_t address) {
+    uint16_t value = 0;
+
+    if( palette == 1 ) {
+        value = paletteReg1[(address >> 1) & (PALETTE_LENGTH-1)];
+    }
+    else {
+        value = paletteReg2[(address >> 1) & (PALETTE_LENGTH-1)];
+    }
+
+    return (address & 1) ? value >> 8 : value;
+}
+
+uint8_t VideoBeast::readSprite(uint32_t address) {
+    return 0; // TODO: Return sprite data
+}
+
+void VideoBeast::writeRam(uint32_t address, uint8_t value)  {
+    mem[ address & (VIDEO_RAM_LENGTH-1) ] = value;
+}
+
+void VideoBeast::writeRegister(uint8_t address, uint8_t value) {
+    registers[address] = value;
+}
+
+void VideoBeast::writePalette(int palette, uint16_t address, uint8_t value) {
+    uint16_t mask = 0x0FF00;
+    uint16_t update= value & 0x0FF;
+
+    uint16_t index = (address >> 1) & (PALETTE_LENGTH-1);
+
+    if( address & 1) {
+        mask = 0x0FF;
+        update <<=8;
+    }
+
+    if( palette == 1 ) {
+        paletteReg1[index] = (paletteReg1[index] & mask) | update;
+    }
+    else {
+        paletteReg2[index] = (paletteReg2[index] & mask) | update;
+    }
+}
+
+void VideoBeast::writeSprite(uint16_t address, uint8_t value) {
+    // TODO: Update sprite data
 }
 
 uint32_t VideoBeast::getSinclairAddress(uint16_t addr) {

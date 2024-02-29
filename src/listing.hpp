@@ -25,7 +25,7 @@ class Listing {
             uint32_t    address;
             uint8_t     bytes[4];
             int         byteCount;
-            bool        isData;
+            bool        isData = false;
         };
 
         void addFile(const char* filename, int page);
