@@ -10,6 +10,7 @@
 #include "digit.hpp"
 #include "i2c.hpp"
 #include "display.hpp"
+#include "gui.hpp"
 #include "rtc.hpp"
 #include "uart16c550.h"
 #include "listing.hpp"
@@ -78,11 +79,18 @@ class Beast {
         SDL_Renderer  *sdlRenderer;
         SDL_Texture   *keyboardTexture;
         SDL_Texture   *pcbTexture;
-        uint32_t windowId;
+        uint32_t      windowId;
+
+        uint8_t       rom[(1<<19)]; // 512K rom
+        uint8_t       ram[(1<<19)]; // 512K ram
+
+        uint8_t       memoryPage[4];
+        Listing       &listing;
+        GUI           gui;
 
         const char* PCB_IMAGE="layout_2d.png";
 
-        TTF_Font *font, *smallFont, *midFont, *monoFont;
+        TTF_Font *font, *smallFont, *midFont;
         int screenWidth, screenHeight;
         float zoom = 1.0f;
 
@@ -111,9 +119,6 @@ class Beast {
         uint64_t breakpoint = NO_BREAKPOINT;
         uint64_t lastBreakpoint = 0;
 
-        uint8_t rom[(1<<19)]; // 512K rom
-        uint8_t ram[(1<<19)]; // 512K ram
-
         bool     romOperation = false;
         uint8_t  romSequence = 0;
         uint8_t  romOperationMask = 0x80;
@@ -123,7 +128,7 @@ class Beast {
         const uint64_t ROM_CHIP_ERASE_PS = 100000 * 1000000ULL;
         const uint64_t ROM_SECTOR_ERASE_PS = 25000 * 1000000ULL;
 
-        uint8_t    memoryPage[4];
+
         bool       pagingEnabled = false;
         uint8_t    readMem(uint16_t address);
         uint8_t    readPage(int page, uint16_t address);
@@ -137,10 +142,6 @@ class Beast {
         VideoView  memVideoView[3] = {VV_RAM, VV_RAM, VV_RAM};
 
         bool       editMode = false;
-        uint32_t   editValue, editOldValue;
-        int        editIndex;
-        int        editDigits;
-        int        editX, editY, editOffset;
         bool       isMemoryEdit = false;
 
         uint32_t   memoryEditAddress;
@@ -148,41 +149,6 @@ class Beast {
         int        memoryEditPage;
         int        memoryEditView;
 
-        const int COL1 = 50;
-        const int COL2 = 190;
-        const int COL3 = 330;
-        const int COL4 = 470;
-
-        const int COL_MEM = 130;
-
-        const int ROW_HEIGHT = 16;
-        const int MEM_ROW_HEIGHT = 14;
-
-        const int ROW1 = 56;
-        const int ROW2 = ROW1+16;
-        const int ROW3 = ROW2+16;
-        const int ROW4 = ROW3+16;
-        const int ROW5 = ROW4+16;
-
-        const int ROW7 = ROW5+32;
-        const int ROW8 = ROW7+MEM_ROW_HEIGHT;
-        const int ROW9 = ROW8+MEM_ROW_HEIGHT;
-
-        const int ROW11 = ROW9+2*MEM_ROW_HEIGHT;
-        const int ROW12 = ROW11+MEM_ROW_HEIGHT;
-        const int ROW13 = ROW12+MEM_ROW_HEIGHT;
-
-        const int ROW15 = ROW13+2*MEM_ROW_HEIGHT;
-        const int ROW16 = ROW15+MEM_ROW_HEIGHT;
-        const int ROW17 = ROW16+MEM_ROW_HEIGHT;
-
-        const int ROW19 = ROW16+44;
-        const int ROW20 = ROW19+16;
-
-        const int ROW22 = ROW20+28;
-        const int END_ROW = ROW22+(13*14);
-
-        Listing &listing;
         std::vector<uint16_t> decodedAddresses;         // Addresses decoded on screen
 
         static const int FRAME_RATE = 50;
@@ -196,8 +162,9 @@ class Beast {
         const char* audioFilename = "audio.raw";
         FILE*       audioFile = nullptr;
 
-        float createRenderer(SDL_Window *window, int screenWidth, int screenHeight, float zoom);
-        SDL_Texture *loadTexture(SDL_Renderer *renderer, const char* filename);
+        SDL_Renderer* createRenderer(SDL_Window *window);
+        float         checkZoomFactor(int screenWidth, int screenHeight, float zoom);
+        SDL_Texture*  loadTexture(SDL_Renderer *renderer, const char* filename);
 
         void redrawScreen();
         void drawBeast();
@@ -225,8 +192,6 @@ class Beast {
         void     writeVideoMemory(VideoView view, uint32_t memoryEditAddress, uint8_t value );
         bool itemEdit();
         void editComplete();
-        void displayEdit();
-        template<typename... Args> std::pair<int, int> drawPrompt(const char *fmt, Args... args);
 
         void fileMenu(SDL_Event windowEvent);
         void debugMenu(SDL_Event windowEvent);
@@ -234,9 +199,6 @@ class Beast {
         void onDebug();
 
         void drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor);
-        template<typename... Args> void print(int x, int y, SDL_Color color, const char *fmt, Args... args);
-        template<typename... Args> void print(int x, int y, SDL_Color color, int highlight, SDL_Color background, const char *fmt, Args... args);
-        void printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer);
         
         const static int DISPLAY_CHARS = 24;
         const static int DISPLAY_WIDTH = DISPLAY_CHARS * Digit::DIGIT_WIDTH;
@@ -253,11 +215,9 @@ class Beast {
         const int KEYBOARD_HEIGHT= KEY_HEIGHT*KEY_ROWS;
 
         const char* BEAST_FONT="Roboto-Medium.ttf";
-        const char* MONO_FONT = "RobotoMono-VariableFont_wght.ttf";
         const int FONT_SIZE = 28;
         const int SMALL_FONT_SIZE = 14;
         const int MID_FONT_SIZE = 14;
-        const int MONO_SIZE = 14;
 
         const int MAX_KEYS = 48;
         const char* KEY_CAPS[48] = {"Up", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Del",
