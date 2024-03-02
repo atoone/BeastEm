@@ -14,7 +14,8 @@ class Listing {
         };
 
         struct Source {
-            const char* filename;
+            std::string shortname;
+            std::string filename;
             unsigned int fileNum;
             int page;
         };
@@ -28,7 +29,7 @@ class Listing {
             bool        isData = false;
         };
 
-        void addFile(const char* filename, int page);
+        void addFile(std::string filename, int page);
         void removeFile(unsigned int fileNum);
         int fileCount();
         

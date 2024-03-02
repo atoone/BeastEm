@@ -151,8 +151,8 @@ int main( int argc, char *argv[] ) {
             if(isHexNum(first)) {
                 if( index+1 < argc ) {
                     int page = std::stoi(first, nullptr, 16);
-                    char *filename = argv[++index];
-                    listing.addFile(filename, page);
+                    std::string *filename = new std::string( argv[++index] );
+                    listing.addFile(*filename, page);
                 }
                 else {
                     std::cout << "Read listing: missing arguments. Expected page and filename but just had page '" << first << "'" << std::endl;
@@ -257,7 +257,7 @@ int main( int argc, char *argv[] ) {
         listing.addFile("monitor.lst", 35);
         binaries.push_back(BIN_FILE{"flash_v1.5.bin", 0});
     }
-       
+
     for(auto bf: binaries) {
         readBinary(bf.address, bf.filename, beast);
     }

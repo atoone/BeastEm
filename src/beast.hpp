@@ -41,6 +41,9 @@ class Beast {
 
     enum VideoView{VV_RAM, VV_REG, VV_PAL1, VV_PAL2, VV_SPR};
 
+    static const int PROMPT_FILE    = 1;
+    static const int PROMPT_LISTING = 2;
+
     struct BeastKey {
         SDL_KeyCode key;
         int row;
@@ -95,7 +98,7 @@ class Beast {
         float zoom = 1.0f;
 
         Mode    mode = DEBUG;
-        int     selection;
+        int     selection = 0;
         int     confirmRemove = -1;
 
         z80_t    cpu;
@@ -141,9 +144,6 @@ class Beast {
         uint32_t   memVideoAddress[3][5] = {0};
         VideoView  memVideoView[3] = {VV_RAM, VV_RAM, VV_RAM};
 
-        bool       editMode = false;
-        bool       isMemoryEdit = false;
-
         uint32_t   memoryEditAddress;
         uint32_t   memoryEditAddressMask;
         int        memoryEditPage;
@@ -161,6 +161,8 @@ class Beast {
         int         volume;
         const char* audioFilename = "audio.raw";
         FILE*       audioFile = nullptr;
+
+        std::string *listingPath;
 
         SDL_Renderer* createRenderer(SDL_Window *window);
         float         checkZoomFactor(int screenWidth, int screenHeight, float zoom);
@@ -182,9 +184,8 @@ class Beast {
 
         void updateSelection(int direction, int maxSelection);
         void itemSelect(int direction);
-        void startEdit(uint32_t value, int x, int y, int offset, int digits);
         void startMemoryEdit(int view);
-        void updateMemoryEdit(int delta);
+        void updateMemoryEdit(int delta, bool startEdit);
         uint32_t getAddressMask(int view);
         uint32_t getVideoAddress(int index, VideoView view);
         void     setVideoAddress(int index, VideoView view, uint32_t value);
@@ -195,8 +196,11 @@ class Beast {
 
         void fileMenu(SDL_Event windowEvent);
         void debugMenu(SDL_Event windowEvent);
+        void filePrompt(int index);
         void onFile();
         void onDebug();
+        void promptComplete();
+        void updatePrompt();
 
         void drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor);
         

@@ -6,6 +6,9 @@
 #include "SDL2_gfxPrimitives.h"
 
 class GUI {
+
+    enum PromptType {PT_NONE, PT_CONFIRM, PT_VALUE};
+
     public:
         static const int COL1 = 50;
         static const int COL2 = 190;
@@ -48,14 +51,27 @@ class GUI {
             {};
         ~GUI() {};
 
-        void      setZoom(float zoom);
-        void      startEdit(uint32_t value, int x, int y, int offset, int digits);
-        void      displayEdit();
+        void      init(float zoom);
+
+        void      startEdit(uint32_t value, int x, int y, int offset, int digits, bool isContinue = false);
+        bool      isEditing();
+        bool      isContinuousEdit();
+        bool      isEditOK();
+        void      endEdit(bool editOK);
+        void      drawEdit();
+        bool      handleKey(SDL_Keycode key);
         uint32_t  getEditValue();
-        int       getDigits();
-        bool      editDigit(uint8_t digit);
         void      editDelta(int delta);
-        void      editBackspace();
+
+        bool      isPrompt();                        // True if we're currently in a prompt
+        bool      endPrompt(bool forceClose);        // True if the user has completed a prompt
+        void      drawPrompt();                      // Draws the current prompt if one exits
+        void      promptYesNo();
+        void      promptValue(uint32_t value, int offset, int digits);
+        
+        int       getPromptId();
+        bool      isPromptOK();
+        bool      promptChanged();
 
         template<typename... Args> void print(int x, int y, SDL_Color color, const char *fmt, Args... args) {
             char buffer[200]; 
@@ -75,15 +91,17 @@ class GUI {
             }
         }
 
-        template<typename... Args> std::pair<int, int> drawPrompt(const char *fmt, Args... args) {
-            char buffer[200]; 
-
-            int c = snprintf(buffer, sizeof(buffer), fmt, args...);
-            if( c > 0 && c<(int)sizeof(buffer)) {
-                return prompt(buffer);
+        template<typename... Args> void startPrompt(int id, const char *fmt, Args... args) {
+            promptId = id;
+            int c = snprintf(promptBuffer, sizeof(promptBuffer), fmt, args...);
+            if( c > 0 && c<(int)sizeof(promptBuffer)) {
+                prompt();
             }
+        }
 
-            return std::make_pair(0, 0);
+         template<typename... Args> void updatePrompt(const char *fmt, Args... args) {
+            int c = snprintf(promptBuffer, sizeof(promptBuffer), fmt, args...);
+            oldPromptValue = editValue;
         }
 
     private:
@@ -94,6 +112,7 @@ class GUI {
         SDL_Renderer  *sdlRenderer;
 
         int screenWidth, screenHeight;
+        int charWidth, charHeight;
         float zoom = 1.0;
 
         TTF_Font *monoFont;
@@ -102,9 +121,22 @@ class GUI {
 
         int        editX, editY, editOffset;
         int        editDigits;
-        int        editIndex;
+        int        editIndex = -1;
+        bool       editContinue;
+        bool       editOK;
 
-        
-        std::pair<int, int> prompt(char* buffer);
-        void printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer);
+        int        promptId;
+        PromptType promptType;
+        int        promptX, promptY;
+        int        promptWidth, promptHeight;
+        char       promptBuffer[200] = {};
+        bool       promptStarted = false;
+        bool       promptCompleted = false;
+        bool       promptOK;
+        uint32_t   oldPromptValue;
+
+        void      editBackspace();
+        void      editDigit(uint8_t digit);
+        void      prompt();
+        void      printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer);
 };

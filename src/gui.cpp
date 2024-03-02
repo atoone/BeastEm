@@ -3,17 +3,20 @@
 #include <cstring>
 #include <stdio.h>
 
-void GUI::setZoom(float zoom) {
+void GUI::init(float zoom) {
     this->zoom = zoom;
     monoFont = TTF_OpenFont(MONO_FONT, MONO_SIZE*zoom);
-    
+
     if( !monoFont) {
         std::cout << "Couldn't load font "<< MONO_FONT << std::endl;
         exit(1);
     }
+
+    char padding[2] = {'0', 0};
+    TTF_SizeUTF8(monoFont, padding, &charWidth, &charHeight);
 }
 
-void GUI::startEdit(uint32_t value, int x, int y, int offset, int digits) {
+void GUI::startEdit(uint32_t value, int x, int y, int offset, int digits, bool isContinue) {
     editValue = value;
     editOldValue = value;
 
@@ -22,9 +25,32 @@ void GUI::startEdit(uint32_t value, int x, int y, int offset, int digits) {
     editOffset = offset;
     editDigits = digits;  
     editIndex = digits-1;
+
+    editContinue = isContinue;
+    editOK = false;
 }
 
-void GUI::displayEdit() {
+bool GUI::isEditing() {
+    return editIndex >= 0;
+}
+
+bool GUI::isContinuousEdit() {
+    return editContinue;
+}
+
+bool GUI::isEditOK() {
+    return editOK;
+}
+
+void GUI::endEdit(bool isOK) {
+    editOK = isOK;
+    editContinue = false;
+    editIndex = -1;
+}
+
+void GUI::drawEdit() {
+    if( editIndex < 0 ) return;
+
     char buffer[2] = {'0', 0};
     int width;
     int height;
@@ -59,17 +85,54 @@ void GUI::displayEdit() {
     }
 }
 
+bool GUI::handleKey(SDL_Keycode key) {
+    if( editIndex >= 0 ) {
+        switch(key) {
+            case SDLK_ESCAPE: endEdit(false); break;
+            case SDLK_RETURN: endEdit(true);  break;
+            case SDLK_BACKSPACE: editBackspace();  break;
+            case SDLK_0 ... SDLK_9: editDigit( key - SDLK_0 ); break;
+            case SDLK_a ... SDLK_f: editDigit( key - SDLK_a + 10 ); break;
+            default:
+                return false;
+        }
+    }
+    if( promptStarted ) {
+        if( promptType == PT_CONFIRM ) {
+            if( key == SDLK_RETURN || key == SDLK_y ) {
+                promptOK = true;
+                promptCompleted = true;
+            }
+            if( key == SDLK_ESCAPE || key == SDLK_n ) {
+                promptOK = false;
+                promptCompleted = true;
+            }
+        }
+        if( promptType == PT_VALUE ) {
+            if( editIndex < 0 ) {
+                promptOK = editOK;
+                promptCompleted = !editContinue;
+            } 
+            if( !promptCompleted ) {
+                if( key == SDLK_RETURN ) {
+                    promptOK = true;
+                    promptCompleted = true;
+                }
+            }
+        }
+    }
+    return true;
+}
+
 uint32_t GUI::getEditValue() {
     return editValue;
 }
 
-int GUI::getDigits() {
-    return editDigits;
-}
-
-bool GUI::editDigit(uint8_t digit) {
-    editValue = (editValue & ~(0x000F << (editIndex*4))) | (digit << (editIndex*4));
-    return --editIndex < 0;
+void GUI::editDigit(uint8_t digit) {
+    if( editIndex >= 0 ) {
+        editValue = (editValue & ~(0x000F << (editIndex*4))) | (digit << (editIndex*4));
+        editOK = --editIndex < 0;
+    }
 }
 
 void GUI::editDelta(int delta) {
@@ -83,29 +146,35 @@ void GUI::editBackspace() {
     }                  
 }
 
-std::pair<int, int> GUI::prompt(char* buffer) {
-    char padding[2] = {'0', 0};
-    SDL_Color background = {0xF0, 0xF0, 0xFF};
-    int width;
-    int height;
-    int charWidth;
-    
-    TTF_SizeUTF8(monoFont, padding, &charWidth, &height);
-    TTF_SizeUTF8(monoFont, buffer, &width, &height);
+bool GUI::isPrompt() {
+    return promptStarted;
+}
 
-    int promptX = (screenWidth*zoom-width)/2;
-    int promptY = (screenHeight*zoom+height)/2;
-    boxRGBA(sdlRenderer, promptX-2*charWidth, promptY-3*height, promptX+width+2*charWidth, promptY+2*height, background.r, background.g, background.b, 0xFF);
+bool GUI::endPrompt(bool forceClose) {
+    if( forceClose || (promptStarted && promptCompleted) ) {
+        promptStarted = false;
+        promptCompleted = false;
+
+        return true;
+    }
+    return false;
+}
+
+void GUI::drawPrompt() {
+    if(!promptStarted || promptCompleted) return;
+    SDL_Color background = {0xF0, 0xF0, 0xFF};
+
+    boxRGBA(sdlRenderer, promptX-2*charWidth, promptY-promptHeight/2-charHeight, promptX+promptWidth+2*charWidth, promptY+promptHeight/2+charHeight, background.r, background.g, background.b, 0xFF);
 
     SDL_Rect textRect;
 
     SDL_Color color = {0x00, 0x00, 0x00};
 
-    SDL_Surface *textSurface = TTF_RenderText_Blended(monoFont, buffer, color);
+    SDL_Surface *textSurface = TTF_RenderText_Blended(monoFont, promptBuffer, color);
     SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
 
     textRect.x = promptX; 
-    textRect.y = (promptY-height);
+    textRect.y = (promptY-promptHeight/2);
     textRect.w = textSurface->w;
     textRect.h = textSurface->h;
 
@@ -113,8 +182,40 @@ std::pair<int, int> GUI::prompt(char* buffer) {
 
     SDL_DestroyTexture(textTexture);
     SDL_FreeSurface(textSurface);
+}
 
-    return std::make_pair(promptX, promptY);
+void GUI::promptYesNo() {
+    promptType = PT_CONFIRM;
+}
+
+void GUI::promptValue(uint32_t value, int offset, int digits) {
+    startEdit(value, promptX, promptY-charHeight/2, offset, digits, true);
+    oldPromptValue = value;
+    promptType = PT_VALUE;
+}
+
+int GUI::getPromptId() {
+    return promptId;
+}
+
+bool GUI::isPromptOK() {
+    return promptOK;
+}
+
+bool GUI::promptChanged() {
+    return promptType == PT_VALUE && (oldPromptValue != editValue);
+}
+
+void GUI::prompt() {
+    TTF_SizeUTF8(monoFont, promptBuffer, &promptWidth, &promptHeight);
+
+    promptX = (screenWidth*zoom-promptWidth)/2;
+    promptY = (screenHeight*zoom)/2;
+
+    promptType = PT_NONE;
+    promptStarted = true;
+    promptCompleted = false;
+    return;
 }
 
 

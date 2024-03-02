@@ -12,6 +12,13 @@ static inline void ltrim(std::string &s) {
     }));
 }
 
+const char filePathSeparator =
+#ifdef _WIN32
+                            '\\';
+#else
+                            '/';
+#endif
+
 std::vector<Listing::Source> Listing::getFiles() {
     return sources;
 }
@@ -32,7 +39,7 @@ void Listing::removeFile(unsigned int fileNum) {
     }
 }
 
-void Listing::addFile(const char *filename, int page) {
+void Listing::addFile(std::string filename, int page) {
     std::ifstream myfile(filename);
     if(!myfile) {
         std::cout << "Listing file does not exist: " << filename << std::endl;
@@ -43,7 +50,13 @@ void Listing::addFile(const char *filename, int page) {
 
     unsigned int fileNum = files.size();
 
-    Source source = {filename, fileNum, page};
+    std::size_t pos = filename.find_last_of(filePathSeparator);
+    std::string shortname = filename;
+
+    if( pos != std::string::npos && ((pos+2) < filename.length()) ) {
+        shortname = filename.substr(pos+1);
+    }
+    Source source = {shortname, filename, fileNum, page};
 
     sources.push_back(source);
 
