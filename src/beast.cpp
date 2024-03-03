@@ -52,9 +52,7 @@ Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, 
     }
 
     gui.startPrompt(0, "Loading...");
-    gui.drawPrompt();
-    SDL_RenderPresent(sdlRenderer);
-
+    gui.drawPrompt(true);
     gui.endPrompt(true);
 
     keyboardTexture = SDL_CreateTexture(sdlRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, KEYBOARD_WIDTH*zoom, KEYBOARD_HEIGHT*zoom);
@@ -378,7 +376,7 @@ void Beast::mainLoop() {
                 onFile();
             }
 
-            gui.drawPrompt();
+            gui.drawPrompt(false);
             gui.drawEdit();
 
             SDL_RenderPresent(sdlRenderer);
@@ -453,7 +451,6 @@ void Beast::fileMenu(SDL_Event windowEvent) {
     switch( windowEvent.key.keysym.sym ) {
         case SDLK_UP  : updateSelection(-1, maxSelection); break;
         case SDLK_DOWN: updateSelection(1, maxSelection); break;
-        case SDLK_q    : mode = QUIT;    break;
         case SDLK_b    : mode = DEBUG;   selection = 0; break;
         case SDLK_RETURN: filePrompt(selection); break;
         case SDLK_1 ... SDLK_9: {
@@ -475,13 +472,13 @@ void Beast::fileMenu(SDL_Event windowEvent) {
 }
 
 void Beast::filePrompt(int index) {
-    gui.startPrompt(PROMPT_FILE, "Remove %s Y/N?", listing.getFiles()[index].shortname.c_str());
-    gui.promptYesNo();
-    confirmRemove = index;
+    gui.startPrompt(PROMPT_FILE, "Select action for %s", listing.getFiles()[index].shortname.c_str());
+    gui.promptChoice({"Refresh", "Delete"});
+    fileActionIndex = index;
 }
 
 void Beast::debugMenu(SDL_Event windowEvent) {
-    int maxSelection = (breakpoint == NO_BREAKPOINT) ? static_cast<int>(SEL_BREAKPOINT) : static_cast<int>(SEL_END_MARKER);
+    int maxSelection = (breakpoint == NOT_SET) ? static_cast<int>(SEL_BREAKPOINT) : static_cast<int>(SEL_END_MARKER);
 
     switch( windowEvent.key.keysym.sym ) {
         case SDLK_UP       : updateSelection(-1, maxSelection); break;
@@ -514,14 +511,14 @@ void Beast::debugMenu(SDL_Event windowEvent) {
             if( SEL_MEM2 <= selection && selection <= SEL_VIEWADDR2 ) startMemoryEdit(2);
             break;
         case SDLK_b    : 
-            if( breakpoint != NO_BREAKPOINT ) {
+            if( breakpoint != NOT_SET ) {
                 lastBreakpoint = breakpoint;
-                breakpoint = NO_BREAKPOINT;
+                breakpoint = NOT_SET;
                 selection = SEL_PC;
             }
             else {
                 selection = SEL_BREAKPOINT;
-                gui.startEdit( lastBreakpoint, 440, GUI::END_ROW, 18, 4);
+                gui.startEdit( lastBreakpoint, 440, GUI::END_ROW, 16, 4);
                 breakpoint = lastBreakpoint;
             }
             break;
@@ -531,6 +528,8 @@ void Beast::debugMenu(SDL_Event windowEvent) {
         case SDLK_u    : mode = OUT;    break;
         case SDLK_o    : mode = OVER;   break;
         case SDLK_f    : mode = FILES;   selection = 0; break;
+        case SDLK_l    : if( listAddress == NOT_SET ) listAddress = (cpu.pc-1) & 0x0FFFF; else listAddress = NOT_SET; break;
+
         case SDLK_d    : uart_connect(&uart, false); break;
         case SDLK_t    : 
             if( instr->isConditional(readMem(cpu.pc-1), readMem(cpu.pc))) {
@@ -554,8 +553,23 @@ void Beast::debugMenu(SDL_Event windowEvent) {
 
 void Beast::promptComplete() {
     switch( gui.getPromptId() ) {
-        case PROMPT_FILE    : listing.removeFile(confirmRemove); selection = std::max(0, confirmRemove-1); break;
-        case PROMPT_LISTING : listing.addFile( *listingPath, gui.getEditValue()); break;
+        case PROMPT_FILE    : {
+            Listing::Source source = listing.getFiles()[fileActionIndex];
+            listing.removeFile(fileActionIndex); selection = std::max(0, fileActionIndex-1); 
+            if( gui.getEditValue()==0 ) {
+                gui.startPrompt(0, "Refreshing ...");
+                gui.drawPrompt(true);
+                listing.addFile( source.filename, source.page ); 
+                gui.endPrompt(true);
+            }
+            break;
+        }
+        case PROMPT_LISTING : 
+            gui.startPrompt(0, "Loading ...");
+            gui.drawPrompt(true);
+            listing.addFile( *listingPath, gui.getEditValue()); 
+            gui.endPrompt(true);
+            break;
     }
 }
 
@@ -586,6 +600,8 @@ void Beast::updateSelection(int direction, int maxSelection) {
         if( selection == SEL_VIEWPAGE2 &&  memView[2] != MV_MEM ) skip = true;
         if( selection == SEL_VIDEOVIEW2 && memView[2] != MV_VIDEO ) skip = true;
         if( selection == SEL_VIEWADDR2 && memView[2] != MV_MEM && memView[2] != MV_Z80 && memView[2] != MV_VIDEO) skip = true;
+
+        if( selection == SEL_LISTING && listAddress == NOT_SET ) skip = true;
 
         if( skip ) selection += direction;
     } while( skip );
@@ -988,7 +1004,8 @@ bool Beast::itemEdit() {
         case SEL_BC2: gui.startEdit( cpu.bc2, GUI::COL4, GUI::ROW4, 9, 4);  break;
         case SEL_DE2: gui.startEdit( cpu.de2, GUI::COL4, GUI::ROW5, 9, 4); break;
 
-        case SEL_BREAKPOINT:  gui.startEdit( breakpoint, 440, GUI::END_ROW, 18, 4); break;
+        case SEL_LISTING: gui.startEdit( listAddress, GUI::COL1, GUI::END_ROW, 10, 4); break;
+        case SEL_BREAKPOINT:  gui.startEdit( breakpoint, 440, GUI::END_ROW, 16, 4); break;
     }
 
     return gui.isEditing();
@@ -1048,6 +1065,7 @@ void Beast::editComplete() {
         case SEL_BC2: cpu.bc2 = editValue; break;
         case SEL_DE2: cpu.de2 = editValue; break;
 
+        case SEL_LISTING: listAddress = editValue; break;
         case SEL_BREAKPOINT: breakpoint = editValue; break;
     }
     gui.endEdit(false);
@@ -1057,13 +1075,13 @@ void Beast::onFile() {
     boxRGBA(sdlRenderer, 32*zoom, 32*zoom, (screenWidth-24)*zoom, (screenHeight-24)*zoom, 0xF0, 0xF0, 0xE0, 0xE8);
     
     SDL_Color textColor = {0, 0x30, 0x30};
-    SDL_Color highColor = {0xA0, 0x30, 0x30};
     SDL_Color bright =    {0xD0, 0xFF, 0xD0};
     SDL_Color menuColor = {0x30, 0x30, 0xA0};
 
 
     gui.print(GUI::COL1, 34, menuColor, "[A]dd Source");
-    gui.print(GUI::COL2, 34, menuColor, "[L]oad Binary");
+    gui.print(GUI::COL2, 34, menuColor, "[L]oad to CPU");
+    gui.print(GUI::COL3, 34, menuColor, "Load to [P]age");
 
     std::vector<Listing::Source> sources = listing.getFiles();
 
@@ -1171,18 +1189,27 @@ void Beast::onDebug() {
         gui.print(620, GUI::ROW20, textColor, "Disconnected");
     }
 
-    int page = pagingEnabled ? memoryPage[((cpu.pc-1) >> 14) & 0x03] : 0;
-    drawListing( page, cpu.pc-1, textColor, highColor, disassColor );
+    uint16_t address = listAddress == NOT_SET ? cpu.pc-1 : listAddress;
 
-    gui.print( GUI::COL1, GUI::END_ROW, menuColor, "[L]ist address");
-    gui.print( GUI::COL2, GUI::END_ROW, menuColor, "[C]urrent address");
-    gui.print( 360, GUI::END_ROW, menuColor, "[F]iles");
+    int page = pagingEnabled ? memoryPage[((address) >> 14) & 0x03] : 0;
+    drawListing( page, address, textColor, highColor, disassColor );
 
-    if( breakpoint != NO_BREAKPOINT ) {
-        gui.print(440, GUI::END_ROW, menuColor, id--?0:-4, bright, "[B]reakpoint = 0x%04X", breakpoint);
+    if( listAddress == NOT_SET ) {
+        gui.print( GUI::COL1, GUI::END_ROW, menuColor, "[L]ist address");
+        id--;
     }
     else {
+        gui.print( GUI::COL1, GUI::END_ROW, menuColor, id--?0:-4, bright, "[L]ist 0x%04X", listAddress);
+    }
+
+    gui.print( 360, GUI::END_ROW, menuColor, "[F]iles");
+
+    if( breakpoint == NOT_SET ) {
         gui.print(440, GUI::END_ROW, menuColor, "[B]reakpoint");
+    }
+    else {
+        gui.print(440, GUI::END_ROW, menuColor, id--?0:-4, bright, "[B]reakpoint 0x%04X", breakpoint);
+       
     }
     
     gui.print(640, GUI::END_ROW, menuColor, "[Q]uit");
@@ -1335,7 +1362,7 @@ void Beast::itemSelect(int direction) {
 }
 
 void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor) {
-    Listing::Location currentLoc = listing.getLocation(page << 16 | (cpu.pc-1));
+    Listing::Location currentLoc = listing.getLocation(page << 16 | address);
 
     int matchedLine = -1;
 

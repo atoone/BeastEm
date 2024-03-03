@@ -34,6 +34,7 @@ class Beast {
         SEL_PAGING, SEL_PAGE0, SEL_PAGE1, SEL_PAGE2, SEL_PAGE3, 
         SEL_A2, SEL_HL2, SEL_BC2, SEL_DE2, 
         SEL_MEM0, SEL_VIEWPAGE0, SEL_VIDEOVIEW0, SEL_VIEWADDR0, SEL_MEM1, SEL_VIEWPAGE1, SEL_VIDEOVIEW1, SEL_VIEWADDR1, SEL_MEM2, SEL_VIEWPAGE2, SEL_VIDEOVIEW2, SEL_VIEWADDR2, 
+        SEL_LISTING,
         SEL_BREAKPOINT,
         SEL_END_MARKER };
 
@@ -76,7 +77,7 @@ class Beast {
         static const int AUDIO_FREQ = 22050;
         static const int AUDIO_BUFFER_SIZE = 4096;
 
-        static const uint64_t NO_BREAKPOINT = 0xFFFFFFFFULL;
+        static const uint64_t NOT_SET = 0xFFFFFFFFULL;
     private:
         SDL_Window    *window;
         SDL_Renderer  *sdlRenderer;
@@ -89,6 +90,7 @@ class Beast {
 
         uint8_t       memoryPage[4];
         Listing       &listing;
+        uint64_t      listAddress = NOT_SET;
         GUI           gui;
 
         const char* PCB_IMAGE="layout_2d.png";
@@ -99,7 +101,7 @@ class Beast {
 
         Mode    mode = DEBUG;
         int     selection = 0;
-        int     confirmRemove = -1;
+        int     fileActionIndex = -1;
 
         z80_t    cpu;
         z80pio_t pio;
@@ -119,7 +121,7 @@ class Beast {
         uint64_t clock_cycle_ps;
         uint64_t clock_time_ps  = 0;
         uint64_t targetSpeedHz;
-        uint64_t breakpoint = NO_BREAKPOINT;
+        uint64_t breakpoint = NOT_SET;
         uint64_t lastBreakpoint = 0;
 
         bool     romOperation = false;

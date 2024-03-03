@@ -1,5 +1,8 @@
 #pragma once
 #include <utility>
+#include <vector>
+#include <string>
+
 
 #include "SDL.h"
 #include "SDL_ttf.h"
@@ -7,7 +10,7 @@
 
 class GUI {
 
-    enum PromptType {PT_NONE, PT_CONFIRM, PT_VALUE};
+    enum PromptType {PT_NONE, PT_CONFIRM, PT_VALUE, PT_CHOICE};
 
     public:
         static const int COL1 = 50;
@@ -65,9 +68,10 @@ class GUI {
 
         bool      isPrompt();                        // True if we're currently in a prompt
         bool      endPrompt(bool forceClose);        // True if the user has completed a prompt
-        void      drawPrompt();                      // Draws the current prompt if one exits
+        void      drawPrompt(bool immediate);        // Draws the current prompt if one exits
         void      promptYesNo();
         void      promptValue(uint32_t value, int offset, int digits);
+        void      promptChoice(std::vector<std::string> choices);
         
         int       getPromptId();
         bool      isPromptOK();
@@ -100,7 +104,7 @@ class GUI {
         }
 
          template<typename... Args> void updatePrompt(const char *fmt, Args... args) {
-            int c = snprintf(promptBuffer, sizeof(promptBuffer), fmt, args...);
+            snprintf(promptBuffer, sizeof(promptBuffer), fmt, args...);
             oldPromptValue = editValue;
         }
 
@@ -122,8 +126,8 @@ class GUI {
         int        editX, editY, editOffset;
         int        editDigits;
         int        editIndex = -1;
-        bool       editContinue;
-        bool       editOK;
+        bool       editContinue = false;
+        bool       editOK = false;
 
         int        promptId;
         PromptType promptType;
@@ -133,6 +137,9 @@ class GUI {
         bool       promptStarted = false;
         bool       promptCompleted = false;
         bool       promptOK;
+        
+        std::vector<std::string> promptChoices;
+
         uint32_t   oldPromptValue;
 
         void      editBackspace();

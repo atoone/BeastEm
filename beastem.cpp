@@ -107,7 +107,7 @@ int main( int argc, char *argv[] ) {
     int volume = 4;
     float zoom = 1.0;
     
-    uint64_t breakpoint = Beast::NO_BREAKPOINT;
+    uint64_t breakpoint = Beast::NOT_SET;
     Listing listing;
     VideoBeast *videoBeast = nullptr;
 
