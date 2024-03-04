@@ -10,8 +10,8 @@
 #include "SDL_image.h"
 #include "nfd.h"
 
-Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing) 
-    : rom {}, ram {}, memoryPage {0}, listing(listing), gui(createRenderer(window), screenWidth, screenHeight) {
+Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing, std::vector<BinaryFile> files) 
+    : rom {}, ram {}, memoryPage {0}, listing(listing), binaryFiles(files), gui(createRenderer(window), screenWidth, screenHeight) {
 
     windowId = SDL_GetWindowID(window);
 
@@ -133,7 +133,7 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
         display2->addDigit(getDigit(i+12));
     }
 
-    uart_init(&uart, UINT64_C(1843200), clock_time_ps);
+    uart_init(&uart, UART_CLOCK_HZ, clock_time_ps);
     
     if( videoBeast ) {
         int leftBorder = videoBeast->init(clock_time_ps, screenWidth*zoom);
@@ -141,6 +141,14 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
 
         if( leftBorder > 0 ) SDL_SetWindowPosition(window, leftBorder, SDL_WINDOWPOS_CENTERED);
         SDL_RaiseWindow(window);
+    }
+
+    for(auto &bf: binaryFiles) {
+        bf.load(rom, ram, pagingEnabled, memoryPage);
+    }
+
+    for(auto &source: listing.getFiles()) {
+        listing.loadFile(source);
     }
 
     if( sampleRate > 0 ) {
@@ -171,6 +179,15 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
     }
     else {
         audioSampleRatePs = 0;
+    }
+}
+
+void Beast::reset() {
+    z80_reset(&cpu);
+    uart_reset(&uart, UART_CLOCK_HZ);
+    pagingEnabled = false;
+    for( int i=0; i<4; i++ ) {
+        memoryPage[i] = 0;
     }
 }
 
@@ -445,38 +462,6 @@ void Beast::mainLoop() {
     }
 }
 
-void Beast::fileMenu(SDL_Event windowEvent) {
-    int maxSelection = listing.fileCount();
-
-    switch( windowEvent.key.keysym.sym ) {
-        case SDLK_UP  : updateSelection(-1, maxSelection); break;
-        case SDLK_DOWN: updateSelection(1, maxSelection); break;
-        case SDLK_b    : mode = DEBUG;   selection = 0; break;
-        case SDLK_RETURN: filePrompt(selection); break;
-        case SDLK_1 ... SDLK_9: {
-            int index = windowEvent.key.keysym.sym - SDLK_1;
-            if( index < listing.fileCount() ) filePrompt(index); 
-            break;
-        } 
-        case SDLK_a    :
-            nfdchar_t  *path;
-            nfdresult_t result = NFD_OpenDialog(&path, NULL, 0, NULL);
-            if (result == NFD_OKAY) {
-                listingPath = new std::string(path);
-                NFD_FreePath(path);
-                gui.startPrompt(PROMPT_LISTING, "Load listing to page 0x00");
-                gui.promptValue(0, 24, 2);
-            }
-            break;
-    }
-}
-
-void Beast::filePrompt(int index) {
-    gui.startPrompt(PROMPT_FILE, "Select action for %s", listing.getFiles()[index].shortname.c_str());
-    gui.promptChoice({"Refresh", "Delete"});
-    fileActionIndex = index;
-}
-
 void Beast::debugMenu(SDL_Event windowEvent) {
     int maxSelection = (breakpoint == NOT_SET) ? static_cast<int>(SEL_BREAKPOINT) : static_cast<int>(SEL_END_MARKER);
 
@@ -524,6 +509,7 @@ void Beast::debugMenu(SDL_Event windowEvent) {
             break;
         case SDLK_q    : mode = QUIT;   break;
         case SDLK_r    : mode = RUN;    break;
+        case SDLK_e    : reset();                // Fall through into step
         case SDLK_s    : mode = STEP;   break;
         case SDLK_u    : mode = OUT;    break;
         case SDLK_o    : mode = OVER;   break;
@@ -531,6 +517,7 @@ void Beast::debugMenu(SDL_Event windowEvent) {
         case SDLK_l    : if( listAddress == NOT_SET ) listAddress = (cpu.pc-1) & 0x0FFFF; else listAddress = NOT_SET; break;
 
         case SDLK_d    : uart_connect(&uart, false); break;
+
         case SDLK_t    : 
             if( instr->isConditional(readMem(cpu.pc-1), readMem(cpu.pc))) {
                 mode = TAKE;
@@ -551,31 +538,158 @@ void Beast::debugMenu(SDL_Event windowEvent) {
     }
 }
 
+void Beast::fileMenu(SDL_Event windowEvent) {
+    unsigned int maxSelection = listing.fileCount() + binaryFiles.size();
+
+    switch( windowEvent.key.keysym.sym ) {
+        case SDLK_UP  : updateSelection(-1, maxSelection); break;
+        case SDLK_DOWN: updateSelection(1, maxSelection); break;
+        case SDLK_b    : mode = DEBUG;   selection = 0; break;
+        case SDLK_RETURN: filePrompt(selection); break;
+        case SDLK_1 ... SDLK_9: {
+            unsigned int index = windowEvent.key.keysym.sym - SDLK_1;
+            if( index < listing.fileCount() + binaryFiles.size() ) filePrompt(index); 
+            break;
+        } 
+        case SDLK_s    : sourceFilePrompt(); break;
+        case SDLK_l    : binaryFilePrompt(PROMPT_BINARY_CPU); break;
+        case SDLK_p    : binaryFilePrompt(PROMPT_BINARY_PAGE); break;
+        case SDLK_a    : binaryFilePrompt(PROMPT_BINARY_ADDRESS); break; 
+    }
+}
+
+void Beast::filePrompt(unsigned int index) {
+    if( index < listing.fileCount() ) {
+        gui.startPrompt(PROMPT_SOURCE_FILE, "Select action for %s", listing.getFiles()[index].shortname.c_str());
+        gui.promptChoice({"Refresh", "Delete"});
+        fileActionIndex = index;
+    }
+    else if(index-listing.fileCount() < binaryFiles.size()) {
+        gui.startPrompt(PROMPT_BINARY_FILE, "Select action for %s", binaryFiles[index-listing.fileCount()].getShortname().c_str());
+        gui.promptChoice({"Reload", "Forget"});
+        fileActionIndex = index-listing.fileCount();
+    }
+}
+
+void Beast::sourceFilePrompt() {
+    nfdchar_t  *path;
+    nfdresult_t result = NFD_OpenDialog(&path, NULL, 0, NULL);
+    
+    SDL_RaiseWindow(window);
+
+    if (result == NFD_OKAY) {
+        listingPath = new std::string(path);
+        NFD_FreePath(path);
+        gui.startPrompt(PROMPT_LISTING, "Load listing to page 0x00");
+        gui.promptValue(0, 24, 2);
+    }   
+}
+
+void Beast::binaryFilePrompt(int promptId) {
+    nfdchar_t  *path;
+    nfdresult_t result = NFD_OpenDialog(&path, NULL, 0, NULL);
+    
+    SDL_RaiseWindow(window);
+
+    if (result == NFD_OKAY) {
+        listingPath = new std::string(path);
+        NFD_FreePath(path);
+
+        switch( promptId ) {
+            case PROMPT_BINARY_ADDRESS :
+                gui.startPrompt(PROMPT_BINARY_ADDRESS, "Load file to physical address 0x00000");
+                gui.promptValue(0, 32, 5);
+                break;
+            case PROMPT_BINARY_PAGE :
+                gui.startPrompt(PROMPT_BINARY_PAGE, "Load file to page 0x00");
+                gui.promptValue(0, 21, 2);
+                break;
+            case PROMPT_BINARY_CPU :
+                gui.startPrompt(PROMPT_BINARY_CPU, "Load file to CPU address 0x0000");
+                gui.promptValue(0, 28, 4);
+                break;
+        }
+    }
+}
+
 void Beast::promptComplete() {
     switch( gui.getPromptId() ) {
-        case PROMPT_FILE    : {
-            Listing::Source source = listing.getFiles()[fileActionIndex];
-            listing.removeFile(fileActionIndex); selection = std::max(0, fileActionIndex-1); 
+        case PROMPT_SOURCE_FILE    : {
+            Listing::Source& source = listing.getFiles()[fileActionIndex];
+            
             if( gui.getEditValue()==0 ) {
                 gui.startPrompt(0, "Refreshing ...");
                 gui.drawPrompt(true);
-                listing.addFile( source.filename, source.page ); 
+                listing.loadFile(source); 
                 gui.endPrompt(true);
+            }
+            else {
+                listing.removeFile(fileActionIndex); selection = std::max(0, fileActionIndex-1); 
             }
             break;
         }
-        case PROMPT_LISTING : 
+        case PROMPT_BINARY_FILE : {
+            if( gui.getEditValue()==0 ) {
+                gui.startPrompt(0, "Reloading ...");
+                gui.drawPrompt(true);
+                binaryFiles[fileActionIndex].load(rom, ram, pagingEnabled, memoryPage);
+                gui.endPrompt(true);
+            }
+            else {
+                binaryFiles.erase(binaryFiles.begin() + fileActionIndex);
+            }
+            break;
+        }
+        case PROMPT_LISTING : {
             gui.startPrompt(0, "Loading ...");
             gui.drawPrompt(true);
             listing.addFile( *listingPath, gui.getEditValue()); 
             gui.endPrompt(true);
             break;
+        }
+        case PROMPT_BINARY_ADDRESS: {
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue());
+            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage) );
+            binaryFiles.push_back(binary);
+            break;
+        }
+        case PROMPT_BINARY_CPU: {
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), -1, true);
+            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage) );
+            binaryFiles.push_back(binary);
+            break;
+        }
+        case PROMPT_BINARY_PAGE:
+            loadBinaryPage = gui.getEditValue();
+            gui.startPrompt(PROMPT_BINARY_PAGE2, "Address in page 0x%02X: 0x0000", loadBinaryPage);
+            gui.promptValue(0, 28, 4);
+            break;  
+        case PROMPT_BINARY_PAGE2: {
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), loadBinaryPage);
+            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage) );
+            binaryFiles.push_back(binary);
+            break;
+        }
     }
+}
+
+void Beast::reportLoad(size_t bytes) {
+    if( bytes > 0 ) {
+        gui.startPrompt(0, "Loaded %d bytes OK", bytes);
+    }
+    else {
+        gui.startPrompt(0, "Could not load file");
+    }
+    gui.promptYesNo();
 }
 
 void Beast::updatePrompt() {
     switch( gui.getPromptId() ) {
-        case PROMPT_LISTING : gui.updatePrompt("Load listing to page 0x%02X", gui.getEditValue()); break;
+        case PROMPT_LISTING        : gui.updatePrompt("Load listing to page 0x%02X", gui.getEditValue()); break;
+        case PROMPT_BINARY_ADDRESS : gui.updatePrompt("Load file to physical address 0x%05X", gui.getEditValue()); break;
+        case PROMPT_BINARY_PAGE    : gui.updatePrompt("Load file to page 0x%02X", gui.getEditValue()); break;
+        case PROMPT_BINARY_PAGE2   : gui.updatePrompt("Address in page 0x%02X: 0x%04X", loadBinaryPage, gui.getEditValue()); break;
+        case PROMPT_BINARY_CPU     : gui.updatePrompt("Load file to CPU address 0x%04X", gui.getEditValue()); break;
     }
 }
 
@@ -1079,23 +1193,47 @@ void Beast::onFile() {
     SDL_Color menuColor = {0x30, 0x30, 0xA0};
 
 
-    gui.print(GUI::COL1, 34, menuColor, "[A]dd Source");
+    gui.print(GUI::COL1, 34, menuColor, "Add [S]ource");
     gui.print(GUI::COL2, 34, menuColor, "[L]oad to CPU");
     gui.print(GUI::COL3, 34, menuColor, "Load to [P]age");
+    gui.print(GUI::COL4, 34, menuColor, "Load to [A]ddress");
 
-    std::vector<Listing::Source> sources = listing.getFiles();
-
-    gui.print( GUI::COL3, GUI::ROW2, textColor, "Source Files" );
-    int row = GUI::ROW4;
+    int row = GUI::ROW2;    
     int index = 1;
-
     int id = selection;
 
-    std::for_each(sources.begin(), sources.end(), [&](const Listing::Source source) { 
-        gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Page 0x%02X   %s", index++, source.page, source.filename.c_str());
-        row += GUI::ROW_HEIGHT;
+    if( listing.fileCount() > 0 ) {
+        gui.print( GUI::COL3, row, textColor, "Source Files" );
+
+        row += 2*GUI::ROW_HEIGHT;
+
+        for(auto &source: listing.getFiles()) { 
+            gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Page 0x%02X   %s", index++, source.page, source.filename.c_str());
+            row += GUI::ROW_HEIGHT;
         }
-    );
+
+        row += GUI::ROW_HEIGHT;
+    }
+
+    if( binaryFiles.size() > 0 ) {
+        gui.print( GUI::COL3, row, textColor, "Binary Files" ); 
+        
+        row += 2*GUI::ROW_HEIGHT;
+
+        for(auto &file: binaryFiles) {
+
+            if( file.isCPUAddress() ) {
+                gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Z80           0x%04X  %.60s", index++, file.getAddress() & 0x0FFFF, file.getFilename().c_str());
+            }
+            else if( file.getPage() >= 0 ) {
+                gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Logical 0x%02X:0x%04X  %.60s", index++, file.getPage(), file.getAddress() & 0x03FFF, file.getFilename().c_str());
+            }
+            else {
+                gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Physical     0x%05X  %.60s", index++, file.getAddress() & 0x0FFFFF, file.getFilename().c_str());
+            }
+            row += GUI::ROW_HEIGHT;
+        }
+    }
 
     gui.print(640, GUI::END_ROW, menuColor, "[B]ack");
 }
@@ -1202,7 +1340,8 @@ void Beast::onDebug() {
         gui.print( GUI::COL1, GUI::END_ROW, menuColor, id--?0:-4, bright, "[L]ist 0x%04X", listAddress);
     }
 
-    gui.print( 360, GUI::END_ROW, menuColor, "[F]iles");
+    gui.print( GUI::COL2, GUI::END_ROW, menuColor, "R[E]set");
+    gui.print( GUI::COL3, GUI::END_ROW, menuColor, "[F]iles");
 
     if( breakpoint == NOT_SET ) {
         gui.print(440, GUI::END_ROW, menuColor, "[B]reakpoint");

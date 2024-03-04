@@ -19,14 +19,18 @@ const char filePathSeparator =
                             '/';
 #endif
 
-std::vector<Listing::Source> Listing::getFiles() {
+std::vector<Listing::Source>& Listing::getFiles() {
     return sources;
 }
 
 void Listing::removeFile(unsigned int fileNum) {
-    files.erase(files.begin() + fileNum);
     sources.erase(sources.begin() + fileNum);
 
+    for( auto source: sources ) {
+        if( source.fileNum > fileNum ) {
+            source.fileNum = source.fileNum-1;
+        }
+    }
     for( auto it = lineMap.begin(); it != lineMap.end();) {
         if (it->second.fileNum == fileNum)
             it = lineMap.erase(it);
@@ -45,10 +49,9 @@ void Listing::addFile(std::string filename, int page) {
         std::cout << "Listing file does not exist: " << filename << std::endl;
         exit(1);
     }
-    std::string text;
-    std::vector<Line> lines;
+    myfile.close();
 
-    unsigned int fileNum = files.size();
+    unsigned int fileNum = sources.size();
 
     std::size_t pos = filename.find_last_of(filePathSeparator);
     std::string shortname = filename;
@@ -56,14 +59,23 @@ void Listing::addFile(std::string filename, int page) {
     if( pos != std::string::npos && ((pos+2) < filename.length()) ) {
         shortname = filename.substr(pos+1);
     }
-    Source source = {shortname, filename, fileNum, page};
+    Source source = {shortname, filename, fileNum, page, {}};
 
     sources.push_back(source);
+}
+
+void Listing::loadFile(Source &source) {
+
+    source.lines.clear();
 
     uint16_t address = 0;
     bool foundAddress = false;
     unsigned int lineNum = 0;
     unsigned int addressLine = 0;
+
+    std::string text;
+
+    std::ifstream myfile(source.filename);
 
     while (std::getline(myfile, text)) {
         lineNum++;
@@ -83,8 +95,8 @@ void Listing::addFile(std::string filename, int page) {
             uint16_t nextAddress = std::stoi(match.str(2), nullptr, 16);
 
             if( foundAddress && (nextAddress != address) ) {
-                Location loc = {fileNum, addressLine, true};
-                lineMap.emplace((page << 16) | address, loc);
+                Location loc = {source.fileNum, addressLine, true};
+                lineMap.emplace((source.page << 16) | address, loc);
             }
             
             foundAddress = true;
@@ -118,16 +130,15 @@ void Listing::addFile(std::string filename, int page) {
             std::cout << "No match on line " << lineNum << ": " << text << std::endl;
         }
 
-        lines.push_back(line);
+        source.lines.push_back(line);
     }
     myfile.close();
     
     if( foundAddress ) {
-        Location loc = {fileNum, addressLine, true};
+        Location loc = {source.fileNum, addressLine, true};
         lineMap.emplace(address, loc);
     }
-    std::cout << "Parsed listing, file "<< filename <<" for page " << page << " has " << lineNum << " lines." << std::endl;
-    files.push_back(lines);
+    std::cout << "Parsed listing, file "<< source.filename <<" for page " << source.page << " has " << lineNum << " lines." << std::endl;
 }
 
 int Listing::fromHex(char c) {
@@ -140,8 +151,8 @@ int Listing::fromHex(char c) {
     return -1; // unexpected char
 }
 
-int Listing::fileCount() {
-    return files.size();
+size_t Listing::fileCount() {
+    return sources.size();
 }
 
 Listing::Location Listing::getLocation(uint32_t address) {
@@ -154,8 +165,8 @@ Listing::Location Listing::getLocation(uint32_t address) {
 }
 
 std::pair<Listing::Line, bool> Listing::getLine(Location location) {
-    if( location.valid && location.fileNum < files.size() && location.lineNum < files[location.fileNum].size()) {
-        return std::pair<Listing::Line, bool>( files[location.fileNum][location.lineNum], true );
+    if( location.valid && location.fileNum < sources.size() && location.lineNum < sources[location.fileNum].lines.size()) {
+        return std::pair<Listing::Line, bool>( sources[location.fileNum].lines[location.lineNum], true );
     }
     return std::pair<Listing::Line, bool>(Listing::Line {}, false);
 }

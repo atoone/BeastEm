@@ -117,6 +117,7 @@ bool GUI::handleKey(SDL_Keycode key) {
                 if( key == SDLK_RETURN ) {
                     promptOK = true;
                     promptCompleted = true;
+                    editContinue = false;
                 }
             }
         }

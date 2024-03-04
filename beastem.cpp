@@ -9,6 +9,7 @@
 #include "src/z80pio.h"
 #include "src/uart16c550.h"
 #include "src/beast.hpp"
+#include "src/binaryFile.hpp"
 #include "src/videobeast.hpp"
 #include "src/i2c.hpp"
 #include "src/display.hpp"
@@ -23,42 +24,6 @@ const int WIDTH = 800, HEIGHT = 610;
 
 const int ONE_KILOHERTZ = 1000; // 1 KHz
 const int DEFAULT_SPEED = 8000;
-
-const int ROM_SIZE = (1<<19);
-const int RAM_SIZE = (1<<19);
-
-void readBinary(int offset, const char *filename, Beast &beast) {
-    std::ostringstream ss;
-    ss << std::hex << offset;
-    std::string destStr = ss.str();
-
-    bool isRom = offset < ROM_SIZE;
-    int space = isRom ? (ROM_SIZE-offset) : (RAM_SIZE+ROM_SIZE-offset);
-
-    std::ifstream ifs(filename, std::ios::binary|std::ios::ate);
-    std::ifstream::pos_type pos = ifs.tellg();
-
-    int length = pos;
-    if( length > space) {
-        std::cout << "Binary file is too big for " << (isRom? "ROM": "RAM") << " starting at 0x" << destStr << ". Actual size: " << (length/1024) << "K" << std::endl;
-        exit(1);
-    }
-    if( length == 0 ) {
-        std::cout << "Binary file does not exist: " << filename << std::endl;
-        exit(1);
-    }
-
-    ifs.seekg(0, std::ios::beg);
-    if( isRom ) {
-        ifs.read((char *)beast.getRom()+offset, length);
-    }
-    else {
-        ifs.read((char *)beast.getRam()+(offset-RAM_SIZE), length);
-    }
-    ifs.close();
-
-    std::cout << "Read file '" << filename << "' (" << (length/1024) << "K) to " << (isRom? "ROM": "RAM") << " starting at 0x" << destStr << std::endl;
-}
 
 bool isHexNum(char* value) {
     std::regex matcher = std::regex("[0-9a-f]+", std::regex::icase);
@@ -92,12 +57,8 @@ void printHelp() {
     std::cout << "   -k <CPU speed>                 : Integer KHz (default 8000)" << std::endl;
     std::cout << "   -b <breakpoint>                : Stop at address (hex)" << std::endl;
     std::cout << "   -z <zoom-level>                : Zoom the user interface by the given value" << std::endl;
+    std::cout << "   -d <filename> | -d2 <filename> : Start VideoBeast with the given file in video ram" << std::endl;              
 }
-
-struct BIN_FILE {
-    const char *filename;
-    int  address;
-};
 
 int main( int argc, char *argv[] ) {
 
@@ -111,7 +72,7 @@ int main( int argc, char *argv[] ) {
     Listing listing;
     VideoBeast *videoBeast = nullptr;
 
-    std::vector<BIN_FILE> binaries;
+    std::vector<BinaryFile> binaries;
 
     int index = 1;
     while( index < argc ) {
@@ -125,9 +86,8 @@ int main( int argc, char *argv[] ) {
             char *first = argv[++index];
             if(isHexNum(first)) {
                 if( index+1 < argc ) {
-                    int offset = std::stoi(first, nullptr, 16);
-                    char *filename = argv[++index];
-                    binaries.push_back(BIN_FILE{filename, offset});
+                    unsigned int offset = std::stoi(first, nullptr, 16);
+                    binaries.push_back(BinaryFile(argv[++index], offset));
                 }
                 else {
                     std::cout << "Read binary file: missing arguments. Expected address offset and filename but just had offset '" << first << "'" << std::endl;
@@ -136,7 +96,7 @@ int main( int argc, char *argv[] ) {
                 }
             }
             else {
-                binaries.push_back(BIN_FILE{first, 0});
+                binaries.push_back(BinaryFile(first, 0));
             }
                 
         }
@@ -244,24 +204,19 @@ int main( int argc, char *argv[] ) {
         return 1;
     }
 
- 
     if (SDLNet_Init() == -1) {
         std::cout << "SDLNet_Init error: " << SDLNet_GetError() << std::endl;
     }
 
-    Beast beast = Beast(window, WIDTH, HEIGHT, zoom, listing);
- 
     if( binaries.size() == 0 && listing.fileCount() == 0 ) {
         std::cout << "No file or listing arguments, loading demo firmware" << std::endl;
         listing.addFile("firmware.lst", 0);
         listing.addFile("monitor.lst", 35);
-        binaries.push_back(BIN_FILE{"flash_v1.5.bin", 0});
+        binaries.push_back(BinaryFile("flash_v1.5.bin", 0));
     }
 
-    for(auto bf: binaries) {
-        readBinary(bf.address, bf.filename, beast);
-    }
-
+    Beast beast = Beast(window, WIDTH, HEIGHT, zoom, listing, binaries);
+ 
     beast.init(targetSpeed*ONE_KILOHERTZ, breakpoint, audioDevice, volume, sampleRate, videoBeast);
 
     beast.mainLoop();

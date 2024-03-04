@@ -13,13 +13,6 @@ class Listing {
             bool valid;
         };
 
-        struct Source {
-            std::string shortname;
-            std::string filename;
-            unsigned int fileNum;
-            int page;
-        };
-
         struct Line {
             std::string text;
             std::string head;
@@ -29,19 +22,27 @@ class Listing {
             bool        isData = false;
         };
 
-        void addFile(std::string filename, int page);
-        void removeFile(unsigned int fileNum);
-        int fileCount();
+        struct Source {
+            std::string shortname;
+            std::string filename;
+            unsigned int fileNum;
+            int page;
+            std::vector<Line> lines;
+        };
+
+        void    addFile(std::string filename, int page);
+        void    loadFile(Source &source);
+
+        void    removeFile(unsigned int fileNum);
+        size_t  fileCount();
         
-        std::vector<Source> getFiles();
+        std::vector<Source>& getFiles();
 
         Location getLocation(uint32_t address);
         std::pair<Line, bool>    getLine(Location location);
 
     private:
-        std::vector<std::vector<Line>> files;
         std::vector<Source> sources;
-
         std::map<int, Location> lineMap;
 
         const char* addressRegex = "^[0-9]+(\\++\\s*|\\s+)([0-9a-f]{4})";

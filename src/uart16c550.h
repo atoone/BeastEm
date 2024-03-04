@@ -81,6 +81,8 @@ typedef struct {
 
 void uart_init(uart_t* uart, uint64_t clock_hz, uint64_t time_ps);
 
+void uart_reset(uart_t* uart, uint64_t clock_hz);
+
 uint64_t uart_tick(uart_t* uart, uint64_t time_ps);
 
 void uart_write(uart_t* uart, uint8_t addr, uint8_t data, uint64_t time_ps);
@@ -117,6 +119,39 @@ void uart_init(uart_t* uart, uint64_t clock_hz, uint64_t time_ps) {
     std::cout << "UART init. Clock rate " << clock_hz << std::endl;
 
     CHIPS_ASSERT(uart);
+    memset(uart, 0, sizeof(uart_t));
+
+    uart->last_tick_ps = time_ps;
+    uart->port = 8456;
+
+    IPaddress ip;
+
+    if (SDLNet_ResolveHost(&ip, NULL, uart->port) == -1) {
+      std::cout << "SDLNet_ResolveHost error: " << SDLNet_GetError() << std::endl;
+      return;
+    }
+
+    uart->server = SDLNet_TCP_Open(&ip);
+    if (!uart->server) {
+      std::cout << "SDLNet_TCP_Open error: " << SDLNet_GetError() << std::endl;
+      return;
+    }
+
+    uart_reset(uart, clock_hz);
+
+    std::cout << "Divisor "<< uart->divisor << " Baud rate : " << (uart->clock_hz / (uart->divisor) / 16) << std::endl;
+}
+
+void uart_reset(uart_t* uart, uint64_t clock_hz) {
+
+    uint64_t time_ps = uart->last_tick_ps;
+    int port         = uart->port;
+
+    TCPsocket  client= uart->client;
+    TCPsocket  server= uart->server;
+
+    SDLNet_SocketSet socketSet = uart->socketSet;
+
     // initial state as described in TI Datasheet TL16C550D
     memset(uart, 0, sizeof(uart_t));
 
@@ -132,25 +167,13 @@ void uart_init(uart_t* uart, uint64_t clock_hz, uint64_t time_ps) {
 
     uart->is_receiving = false;
 
-    uart->last_tick_ps = time_ps;
-
     uart->pins |= UART_SO;  // CTS and DSR are clear
-    std::cout << "Divisor "<< uart->divisor << " Baud rate : " << (uart->clock_hz / (uart->divisor) / 16) << std::endl;
 
-    uart->port = 8456;
-
-    IPaddress ip;
-
-    if (SDLNet_ResolveHost(&ip, NULL, uart->port) == -1) {
-      std::cout << "SDLNet_ResolveHost error: " << SDLNet_GetError() << std::endl;
-      return;
-    }
-
-    uart->server = SDLNet_TCP_Open(&ip);
-    if (!uart->server) {
-      std::cout << "SDLNet_TCP_Open error: " << SDLNet_GetError() << std::endl;
-      return;
-    }
+    uart->last_tick_ps = time_ps;
+    uart->port         = port;
+    uart->client       = client;
+    uart->server       = server;
+    uart->socketSet    = socketSet;
 }
 
 void uart_connect(uart_t* uart, bool connect) {

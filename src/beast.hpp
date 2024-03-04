@@ -14,6 +14,7 @@
 #include "rtc.hpp"
 #include "uart16c550.h"
 #include "listing.hpp"
+#include "binaryFile.hpp"
 #include "instructions.hpp"
 #include "videobeast.hpp"
 
@@ -42,8 +43,13 @@ class Beast {
 
     enum VideoView{VV_RAM, VV_REG, VV_PAL1, VV_PAL2, VV_SPR};
 
-    static const int PROMPT_FILE    = 1;
-    static const int PROMPT_LISTING = 2;
+    static const int PROMPT_SOURCE_FILE    = 1;
+    static const int PROMPT_BINARY_FILE    = 2;
+    static const int PROMPT_LISTING        = 3;
+    static const int PROMPT_BINARY_CPU     = 4;
+    static const int PROMPT_BINARY_PAGE    = 5;
+    static const int PROMPT_BINARY_ADDRESS = 6;
+    static const int PROMPT_BINARY_PAGE2   = 7;
 
     struct BeastKey {
         SDL_KeyCode key;
@@ -54,10 +60,11 @@ class Beast {
 
 
     public:
-        Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing);
+        Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing, std::vector<BinaryFile> files);
         ~Beast();
 
         void init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate, VideoBeast *videoBeast);
+        void reset();
         void mainLoop();
         uint64_t run(bool run, uint64_t tickCount);
 
@@ -77,7 +84,10 @@ class Beast {
         static const int AUDIO_FREQ = 22050;
         static const int AUDIO_BUFFER_SIZE = 4096;
 
+        static const uint64_t UART_CLOCK_HZ = UINT64_C(1843200);
+
         static const uint64_t NOT_SET = 0xFFFFFFFFULL;
+
     private:
         SDL_Window    *window;
         SDL_Renderer  *sdlRenderer;
@@ -88,10 +98,10 @@ class Beast {
         uint8_t       rom[(1<<19)]; // 512K rom
         uint8_t       ram[(1<<19)]; // 512K ram
 
-        uint8_t       memoryPage[4];
-        Listing       &listing;
-        uint64_t      listAddress = NOT_SET;
-        GUI           gui;
+        uint8_t                 memoryPage[4];
+        Listing                &listing;
+        std::vector<BinaryFile> binaryFiles;
+        GUI                     gui;
 
         const char* PCB_IMAGE="layout_2d.png";
 
@@ -151,6 +161,7 @@ class Beast {
         int        memoryEditPage;
         int        memoryEditView;
 
+        uint64_t              listAddress = NOT_SET;
         std::vector<uint16_t> decodedAddresses;         // Addresses decoded on screen
 
         static const int FRAME_RATE = 50;
@@ -198,10 +209,16 @@ class Beast {
 
         void fileMenu(SDL_Event windowEvent);
         void debugMenu(SDL_Event windowEvent);
-        void filePrompt(int index);
+        void filePrompt(unsigned int index);
+        void sourceFilePrompt();
+        void binaryFilePrompt(int promptId);
+
+        uint8_t loadBinaryPage;
+
         void onFile();
         void onDebug();
         void promptComplete();
+        void reportLoad(size_t bytes);
         void updatePrompt();
 
         void drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor);
