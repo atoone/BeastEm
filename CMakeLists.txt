@@ -53,6 +53,8 @@ add_executable(beastem
     src/digit.cpp
     src/i2c.cpp
     src/listing.cpp
+    src/binaryFile.cpp
+    src/gui.cpp
     src/videobeast.cpp
     src/debug.cpp
     src/display.cpp
