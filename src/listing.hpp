@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <iostream>
 #include <string>
 #include <map>
@@ -50,3 +51,4 @@ class Listing {
         int fromHex(char c);
 
 };
+
