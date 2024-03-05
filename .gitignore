@@ -1,4 +1,15 @@
 release
 **/*.o
 beastem
+Makefile
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+deps/nativefiledialog-extended-1.1.1/CMakeFiles/
+deps/nativefiledialog-extended-1.1.1/Makefile
+deps/nativefiledialog-extended-1.1.1/cmake_install.cmake
+deps/nativefiledialog-extended-1.1.1/src/CMakeFiles/
+deps/nativefiledialog-extended-1.1.1/src/Makefile
+deps/nativefiledialog-extended-1.1.1/src/cmake_install.cmake
+deps/nativefiledialog-extended-1.1.1/src/libnfd.a
 
