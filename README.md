@@ -1,6 +1,6 @@
 # Feersum MicroBeast Emulator
 
-Emulator for the MicroBeast Z80 computer kit. Features include:
+Emulator for the [MicroBeast Z80 computer kit](https://feertech.com/microbeast/). Features include:
 
 * 512K RAM, 512K ROM (4x16K paging)
 * Z80 PIO with software I2C bus
@@ -30,10 +30,10 @@ Windows users can run `beast.bat` in the `release/win64` directory.
 
 Linux users can run BeastEm with the executable name ``beastem`` on the command line.
 
-If no parameters are supplied, BeastEm will start the emulator up with an (incomplete) monitor ROM that exercises some of the features of MicroBeast. This is equivalent to running with the command line:
+If no parameters are supplied, BeastEm will start the emulator up with a memory editor, YModem download utility and CP/M 2.2 environment with a few programs to try out. This is equivalent to running with the command line:
 
 ```
-beastem -f flash_v1.5.bin -l 0 firmware.lst -l 23 bios.lst
+beastem -f flash_v1.5.bin -l 0 firmware.lst -l 23 monitor.lst
 ```
 
 ## Command line options
@@ -64,7 +64,7 @@ Note that no checks are made that the memory contents match the provided listing
 
 The Emulator starts in the debug view, showing the state of the CPU, PIO and a disassembly or listing of the current execution address. When the emulator is running, the debug view is hidden and keyboard input goes directly to MicroBeast. At any time, hitting `ESCAPE` will return to the debug view.
 
-![BeastEm Debug View](docs/beastem_0_6.png)
+![BeastEm Debug View](docs/beastem_1_1.png)
 
 In the debug view, most commands take a single keypress. The currently implemented commands are:
 
@@ -75,18 +75,22 @@ In the debug view, most commands take a single keypress. The currently implement
 | `O` | Run until the following instruction is reached (eg. **O**ver a `CALL` or `DJNZ` instruction) |
 | `U` | Run until the current subroutine is returned from.                                           |
 | `T` | Run until the current conditional branch is **T**aken                                        |
+| `L` | Toggle listing following PC, or at specific address                                          |
+| `E` | Soft reset CPU                                                                               |
+| `F` | File management: Load source and binary files                                                |
 | `B` | Toggle breakpoint, edit value when breakpoint enabled                                        |
 | `D` | When a terminal is connected over a network port, **D**isconnect it and await a new connection |
-| `Q` | Quit                                                                                         |
 | `A` | Toggles appending audio output to the chosen audio file                                      |
-| `PG-Up`, `PG-Down` | Select debug values for editing                                               |
-| `Left`, `Right`    | When a memory view is selected, choose the register pair or address to view   |
+| `Q` | Quit                                                                                         |
+| `Up`, `Down`    | Select debug values for editing                                                  |
+| `Left`, `Right` | Update selected item (increment/decrement registers, select memory view etc.)    |
 
 When a value is selected, hitting `Enter` will allow a new value to be set, or toggle a binary `On|Off` value.
 
 Besides showing the address pointed to by register pairs, the memory views also allow memory to be directly
-inspected. The `Z80` option views the CPU's memory map (0-64K), whereas the `PAGE` option allows any page
-in the 1Mb paged memory (512K ROM, 512K RAM) to be examined.
+inspected and edited. `Z80` views the CPU's logical memory map (0-64K), whereas the `PAGE` option allows any page
+in the 1Mb physical memory (512K ROM, 512K RAM) to be examined. When VideoBeast is enabled, `Video RAM`
+allows video memory, registers and palettes to be viewed and edited.
 
 ## Serial over Network
 
@@ -171,19 +175,13 @@ The emulator is a **work in progress**, and assumes relatively well behaved code
 
 BeastEm is one part of a much bigger project to build a unique new computer, so other parts of that larger project may take precedence.
 
-Some features are not yet implemented:
+VideoBeast is currently prototype hardware, with some features (noteably sprites and SD-Card access) not yet available. BeastEm emulates the current APIs reasonably accurately. More information is on the VideoBeast [introduction Page](VIDEOBEAST.md)
+
+Some features of MicroBeast are not yet implemented:
 
 * RTC Alarms, battery monitoring
 * PIO inputs
-* Flash ROM erase and write
 
-The Debugger is also on early release, currently missing:
-
-* Memory editing
-* Read / write binary files during emulation
-* Navigating through listings/disassembly.
-
-The included monitor ROM is also early code, demonstrating some simple concepts on MicroBeast. It is included only for test purposes.
 
 # Help
 
