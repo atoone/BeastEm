@@ -9,6 +9,8 @@ OBJECTS=beastem.o 			\
 		src/beast.o 		\
 		src/digit.o 		\
 		src/display.o 		\
+		src/binaryFile.o    \
+		src/gui.o           \
 		src/rtc.o		\
 		src/debug.o 		\
 		src/listing.o 		\
