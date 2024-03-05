@@ -49,7 +49,8 @@ class Beast {
     static const int PROMPT_BINARY_CPU     = 4;
     static const int PROMPT_BINARY_PAGE    = 5;
     static const int PROMPT_BINARY_ADDRESS = 6;
-    static const int PROMPT_BINARY_PAGE2   = 7;
+    static const int PROMPT_BINARY_PAGE2   = 7; 
+    static const int PROMPT_BINARY_VIDEO   = 8;
 
     struct BeastKey {
         SDL_KeyCode key;
@@ -97,6 +98,7 @@ class Beast {
 
         uint8_t       rom[(1<<19)]; // 512K rom
         uint8_t       ram[(1<<19)]; // 512K ram
+        uint8_t*      videoRam = {0};
 
         uint8_t                 memoryPage[4];
         Listing                &listing;

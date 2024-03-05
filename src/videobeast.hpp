@@ -77,7 +77,7 @@ class VideoBeast {
     };
 
     public:
-        VideoBeast(char* initialMemFile, float zoom);
+        VideoBeast(float zoom);
         ~VideoBeast();
 
         int     init(uint64_t clock_time_ps, int guiWidth);
@@ -91,6 +91,8 @@ class VideoBeast {
         uint8_t  readRegister(uint32_t address);
         uint8_t  readPalette(int palette, uint32_t address);
         uint8_t  readSprite(uint32_t address);
+
+        uint8_t* memoryPtr();
 
         void     writeRam(uint32_t address, uint8_t value);
         void     writeRegister(uint8_t address, uint8_t value);
@@ -131,6 +133,7 @@ class VideoBeast {
         uint64_t next_line_time_ps;
         uint64_t next_multiply_available_ps;
 
+        uint64_t frameCount = 0;
         uint16_t currentLine = 0;
         uint16_t displayLine = 0;
         uint8_t  currentLayer = IDLE;
@@ -163,9 +166,6 @@ class VideoBeast {
         uint32_t line_buffer[MAX_LINE_WIDTH];
 
         uint32_t background;
-
-        // Read a file into graphics ram
-        void readMem(char* filename);
 
         void tickNextFrame();
 

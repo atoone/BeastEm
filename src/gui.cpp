@@ -112,6 +112,9 @@ bool GUI::handleKey(SDL_Keycode key) {
             if( editIndex < 0 ) {
                 promptOK = editOK;
                 promptCompleted = !editContinue;
+                if( !promptCompleted && key == SDLK_BACKSPACE ) {
+                    editIndex = editDigits-1;
+                }
             } 
             if( !promptCompleted ) {
                 if( key == SDLK_RETURN ) {

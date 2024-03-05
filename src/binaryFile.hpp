@@ -2,27 +2,29 @@
 #include <string>
 
 class BinaryFile {
-
-
     static const int ROM_SIZE = (1<<19);
     static const int RAM_SIZE = (1<<19);
+    static const int VIDEO_RAM_SIZE = (1<<20);
     
     public:
-        BinaryFile(std::string filename, uint32_t address, int page=-1, bool cpuAddress=false);
+        enum BINARY_DEST {PHYSICAL, PAGE_OFFSET, LOGICAL, VIDEO_RAM};
 
-        bool        isCPUAddress();
+
+        BinaryFile(std::string filename, uint32_t address, BINARY_DEST destination=BINARY_DEST::PHYSICAL, uint8_t page=0);
+
         std::string getFilename();
         std::string getShortname();
         uint32_t    getAddress();
-        int         getPage();
+        uint8_t     getPage();
+        BINARY_DEST getDestination();
 
-        size_t load(uint8_t *rom, uint8_t *ram, bool pagingEnabled, uint8_t pageMap[4]);
+        size_t load(uint8_t *rom, uint8_t *ram, bool pagingEnabled, uint8_t pageMap[4], uint8_t *videoRam);
     private:
         std::string filename;
         std::string shortname;
         uint32_t    address;
-        int         page;
-        bool        cpuAddress;
+        uint8_t     page;
+        BINARY_DEST destination;
 
 
 };

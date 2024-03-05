@@ -136,6 +136,7 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
     uart_init(&uart, UART_CLOCK_HZ, clock_time_ps);
     
     if( videoBeast ) {
+        videoRam = videoBeast->memoryPtr();
         int leftBorder = videoBeast->init(clock_time_ps, screenWidth*zoom);
         nextVideoBeastTickPs = 0;
 
@@ -144,7 +145,7 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
     }
 
     for(auto &bf: binaryFiles) {
-        bf.load(rom, ram, pagingEnabled, memoryPage);
+        bf.load(rom, ram, pagingEnabled, memoryPage, videoRam);
     }
 
     for(auto &source: listing.getFiles()) {
@@ -555,6 +556,7 @@ void Beast::fileMenu(SDL_Event windowEvent) {
         case SDLK_l    : binaryFilePrompt(PROMPT_BINARY_CPU); break;
         case SDLK_p    : binaryFilePrompt(PROMPT_BINARY_PAGE); break;
         case SDLK_a    : binaryFilePrompt(PROMPT_BINARY_ADDRESS); break; 
+        case SDLK_v    : binaryFilePrompt(PROMPT_BINARY_VIDEO); break; 
     }
 }
 
@@ -608,6 +610,10 @@ void Beast::binaryFilePrompt(int promptId) {
                 gui.startPrompt(PROMPT_BINARY_CPU, "Load file to CPU address 0x0000");
                 gui.promptValue(0, 28, 4);
                 break;
+            case PROMPT_BINARY_VIDEO :
+                gui.startPrompt(PROMPT_BINARY_VIDEO, "Load file to video address 0x00000");
+                gui.promptValue(0, 29, 5);
+                break;
         }
     }
 }
@@ -632,7 +638,7 @@ void Beast::promptComplete() {
             if( gui.getEditValue()==0 ) {
                 gui.startPrompt(0, "Reloading ...");
                 gui.drawPrompt(true);
-                binaryFiles[fileActionIndex].load(rom, ram, pagingEnabled, memoryPage);
+                binaryFiles[fileActionIndex].load(rom, ram, pagingEnabled, memoryPage, videoRam);
                 gui.endPrompt(true);
             }
             else {
@@ -649,24 +655,24 @@ void Beast::promptComplete() {
         }
         case PROMPT_BINARY_ADDRESS: {
             BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue());
-            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage) );
+            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
             binaryFiles.push_back(binary);
             break;
         }
         case PROMPT_BINARY_CPU: {
-            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), -1, true);
-            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage) );
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), BinaryFile::LOGICAL);
+            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
             binaryFiles.push_back(binary);
             break;
         }
         case PROMPT_BINARY_PAGE:
             loadBinaryPage = gui.getEditValue();
             gui.startPrompt(PROMPT_BINARY_PAGE2, "Address in page 0x%02X: 0x0000", loadBinaryPage);
-            gui.promptValue(0, 28, 4);
+            gui.promptValue(0, 25, 4);
             break;  
         case PROMPT_BINARY_PAGE2: {
-            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), loadBinaryPage);
-            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage) );
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), BinaryFile::PAGE_OFFSET, loadBinaryPage);
+            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
             binaryFiles.push_back(binary);
             break;
         }
@@ -690,6 +696,7 @@ void Beast::updatePrompt() {
         case PROMPT_BINARY_PAGE    : gui.updatePrompt("Load file to page 0x%02X", gui.getEditValue()); break;
         case PROMPT_BINARY_PAGE2   : gui.updatePrompt("Address in page 0x%02X: 0x%04X", loadBinaryPage, gui.getEditValue()); break;
         case PROMPT_BINARY_CPU     : gui.updatePrompt("Load file to CPU address 0x%04X", gui.getEditValue()); break;
+        case PROMPT_BINARY_VIDEO   : gui.updatePrompt("Load file to video address 0x%05X", gui.getEditValue()); break;
     }
 }
 
@@ -1194,10 +1201,14 @@ void Beast::onFile() {
 
 
     gui.print(GUI::COL1, 34, menuColor, "Add [S]ource");
-    gui.print(GUI::COL2, 34, menuColor, "[L]oad to CPU");
-    gui.print(GUI::COL3, 34, menuColor, "Load to [P]age");
-    gui.print(GUI::COL4, 34, menuColor, "Load to [A]ddress");
 
+    gui.print(GUI::COL2, 34, menuColor, "Load [A]ddress");
+    gui.print(GUI::COL3, 34, menuColor, "Load [P]age");
+    gui.print(GUI::COL4, 34, menuColor, "[L]oad CPU");
+
+    if( videoBeast ) {
+        gui.print(GUI::COL5, 34, menuColor, "Load [V]ideo");
+    }
     int row = GUI::ROW2;    
     int index = 1;
     int id = selection;
@@ -1222,20 +1233,25 @@ void Beast::onFile() {
 
         for(auto &file: binaryFiles) {
 
-            if( file.isCPUAddress() ) {
-                gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Z80           0x%04X  %.60s", index++, file.getAddress() & 0x0FFFF, file.getFilename().c_str());
-            }
-            else if( file.getPage() >= 0 ) {
-                gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Logical 0x%02X:0x%04X  %.60s", index++, file.getPage(), file.getAddress() & 0x03FFF, file.getFilename().c_str());
-            }
-            else {
-                gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Physical     0x%05X  %.60s", index++, file.getAddress() & 0x0FFFFF, file.getFilename().c_str());
+            switch( file.getDestination() ) {
+                case BinaryFile::LOGICAL:
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Logical       0x%04X  %.60s", index++, file.getAddress() & 0x0FFFF, file.getFilename().c_str());
+                    break;
+                case BinaryFile::PAGE_OFFSET :
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Physical 0x%02X:0x%04X  %.60s", index++, file.getPage(), file.getAddress() & 0x03FFF, file.getFilename().c_str());
+                    break;
+                case BinaryFile::PHYSICAL :
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Physical     0x%05X  %.60s", index++, file.getAddress() & 0x0FFFFF, file.getFilename().c_str());
+                    break;
+                case BinaryFile::VIDEO_RAM :
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Video RAM    0x%05X  %.60s", index++, file.getAddress() & 0x0FFFFF, file.getFilename().c_str());
+                    break;
             }
             row += GUI::ROW_HEIGHT;
         }
     }
 
-    gui.print(640, GUI::END_ROW, menuColor, "[B]ack");
+    gui.print(GUI::COL5, GUI::END_ROW, menuColor, "[B]ack");
 }
 
 void Beast::onDebug() {
@@ -1251,7 +1267,7 @@ void Beast::onDebug() {
     gui.print(GUI::COL2, 34, menuColor, "[S]tep");
     gui.print(GUI::COL3, 34, menuColor, "Step [O]ver");
     gui.print(GUI::COL4, 34, menuColor, "Step o[U]t");
-    gui.print(640, 34, menuColor, "Until [T]aken");
+    gui.print(GUI::COL5, 34, menuColor, "Until [T]aken");
 
     int id = selection;
 
@@ -1293,10 +1309,10 @@ void Beast::onDebug() {
     gui.print(GUI::COL4, GUI::ROW4, textColor, id--?0:3, bright, "BC' = 0x%04X", cpu.bc2);
     gui.print(GUI::COL4, GUI::ROW5, textColor, id--?0:3, bright, "DE' = 0x%04X", cpu.de2);
 
-    gui.print(640, GUI::ROW1, textColor, "%s", (cpu.iff1 == cpu.iff2) ? (cpu.iff1 ? "EI" : "DI") : (cpu.iff1 ? "??" : "NMI"));
-    gui.print(640, GUI::ROW2, textColor, "IM%01X", cpu.im);
-    gui.print(640, GUI::ROW3, textColor, "I   = 0x%02X", cpu.i);
-    gui.print(640, GUI::ROW4, textColor, "R   = 0x%02X", cpu.r);
+    gui.print(GUI::COL5, GUI::ROW1, textColor, "%s", (cpu.iff1 == cpu.iff2) ? (cpu.iff1 ? "EI" : "DI") : (cpu.iff1 ? "??" : "NMI"));
+    gui.print(GUI::COL5, GUI::ROW2, textColor, "IM%01X", cpu.im);
+    gui.print(GUI::COL5, GUI::ROW3, textColor, "I   = 0x%02X", cpu.i);
+    gui.print(GUI::COL5, GUI::ROW4, textColor, "R   = 0x%02X", cpu.r);
 
     id = drawMemoryLayout(0, GUI::ROW7, id, textColor, bright);
     id = drawMemoryLayout(1, GUI::ROW11, id, textColor, bright);
@@ -1351,7 +1367,7 @@ void Beast::onDebug() {
        
     }
     
-    gui.print(640, GUI::END_ROW, menuColor, "[Q]uit");
+    gui.print(GUI::COL5, GUI::END_ROW, menuColor, "[Q]uit");
 }
 
 int Beast::drawMemoryLayout(int view, int topRow, int id, SDL_Color textColor, SDL_Color bright) {

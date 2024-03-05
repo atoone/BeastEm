@@ -17,6 +17,7 @@ class GUI {
         static const int COL2 = 190;
         static const int COL3 = 330;
         static const int COL4 = 470;
+        static const int COL5 = 610;
 
         static const int COL_MEM = 130;
 

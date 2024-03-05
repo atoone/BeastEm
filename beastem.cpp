@@ -132,7 +132,8 @@ int main( int argc, char *argv[] ) {
             }
             float zoom = strcmp(argv[index], "-d") == 0 ? 1.0 : 2.0;
 
-            videoBeast = new VideoBeast(argv[++index], zoom);
+            videoBeast = new VideoBeast(zoom);
+            binaries.push_back(BinaryFile(argv[++index], 0, BinaryFile::VIDEO_RAM));
         }
         else if( strcmp(argv[index], "-v") == 0 ) {
             if( index+1 >= argc || !isNum(argv[++index]) ) {
@@ -197,7 +198,7 @@ int main( int argc, char *argv[] ) {
     NFD_Init();
     SDL_Init( SDL_INIT_EVERYTHING );
 
-    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator (Beta) v1.0", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
+    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator v1.1 rc1", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
 
     if( NULL == window ) {
         std::cout << "Could not create window: " << SDL_GetError() << std::endl;
@@ -208,8 +209,8 @@ int main( int argc, char *argv[] ) {
         std::cout << "SDLNet_Init error: " << SDLNet_GetError() << std::endl;
     }
 
-    if( binaries.size() == 0 && listing.fileCount() == 0 ) {
-        std::cout << "No file or listing arguments, loading demo firmware" << std::endl;
+    if( (binaries.size() == 0 || (binaries.size() == 1 && binaries[0].getDestination() == BinaryFile::VIDEO_RAM)) && listing.fileCount() == 0 ) {
+        std::cout << "No file or listing arguments, loading firmware" << std::endl;
         listing.addFile("firmware.lst", 0);
         listing.addFile("monitor.lst", 35);
         binaries.push_back(BinaryFile("flash_v1.5.bin", 0));

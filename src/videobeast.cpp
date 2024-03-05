@@ -3,8 +3,7 @@
 #include <fstream>
 #include <algorithm> 
 
-VideoBeast::VideoBeast(char *initialMemFile, float zoom) {
-    readMem(initialMemFile);
+VideoBeast::VideoBeast(float zoom) {
     requestedZoom = zoom;
 }
 
@@ -110,8 +109,11 @@ uint64_t VideoBeast::drawTextLayer(int layerBase) {
 
     int mapAddress = (registers[layerBase + REG_OFF_TEXT_MAP] << 14)  + ((row & 0x1F8) << 5); // leftmost column of current row
     int fontAddress = (registers[layerBase + REG_OFF_TEXT_FONT] << 11);
+    int bitmapAddress = (registers[layerBase + REG_OFF_TEXT_BITMAP] << 14);
 
     int paletteIndex = (registers[layerBase + REG_OFF_TEXT_PALETTE] & 0x0F) << 4;
+
+    bool sinclairAttributes = (registers[layerBase + REG_OFF_TEXT_PALETTE] & 0x10) != 0;
 
     int discard = (scrollX & 0x07);
 
@@ -121,13 +123,25 @@ uint64_t VideoBeast::drawTextLayer(int layerBase) {
         int glyph = mem[address];
         int attributes = mem[address+1];
 
+        if( sinclairAttributes ) {
+            if( (attributes & 0x80) && (frameCount & 0x10) ) {
+                attributes = ((attributes & 0x40) >> 3) | (attributes & 0x07) |
+                             ((attributes & 0x40) << 1) | ((attributes & 0x38) << 1);
+            }
+            else {
+                attributes = ((attributes & 0x40) >> 3) | ((attributes & 0x38) >> 3) |
+                             ((attributes & 0x40) << 1) | ((attributes & 0x07) << 4);
+            }
+        }
         uint32_t foreground = palette1[paletteIndex + (attributes >> 4)];
         bool transparentFG  = (paletteReg1[paletteIndex + (attributes >> 4)] & 0x8000) != 0;
 
         uint32_t background = palette1[paletteIndex + (attributes & 0x0F)];
         bool transparentBG  = (paletteReg1[paletteIndex + (attributes & 0x0F)] & 0x8000) != 0;
 
-        uint8_t pixels = mem[fontAddress + (8*glyph) + (row& 0x7)]; // TODO: 1bpp graphics..
+        uint8_t pixels = ((glyph == 0xFF) && (bitmapAddress != 0)) ?
+            mem[bitmapAddress + ((row & 0x1FF) << 7) + ((scrollX & 0x3F8) >>3)] :
+            mem[fontAddress + (8*glyph) + (row& 0x7)]; 
 
         pixels <<= discard;
         for( int count = 8-discard; count--> 0 && x < end; ) {
@@ -257,6 +271,7 @@ void VideoBeast::tickNextFrame() {
     drawNextLine = true;
     displayLine = 0;
     currentLine = 0;
+    frameCount++;
     SDL_UpdateWindowSurface(window);
     isDoubled = (registers[REG_MODE] & 0x08) != 0;
 
@@ -428,7 +443,15 @@ uint64_t VideoBeast::tick(uint64_t clock_time_ps) {
 void VideoBeast::write(uint16_t addr, uint8_t data, uint64_t clock_time_ps) {
     if( (addr & 0x3FFE) == 0x3FFE ) {
         // Top two registers, always visible
-        registers[addr & 0xFF] = data;
+        if( addr & 0x01 ) {
+            if(registers[REG_LOCKED] == SET_UNLOCKED) {
+                registers[addr & 0xFF] = data;
+            }
+        }
+        else {
+            registers[addr & 0xFF] = data;
+        }
+        
     }
     else if( (addr & 0x3F00) == 0x3F00 && registers[REG_LOCKED] == SET_UNLOCKED ) {
         // Register access
@@ -513,7 +536,7 @@ void VideoBeast::write(uint16_t addr, uint8_t data, uint64_t clock_time_ps) {
                 mem[getSinclairAddress(addr)] = data;
                 break;
             default:
-                std::cout << "Videobeast unknown page map mode " << (registers[REG_MODE] >> 5) << std::endl;
+                mem[ (registers[REG_PAGE_0] << 12) + (addr & 0x3FFF) ] = data;
 
         } 
     }
@@ -597,7 +620,7 @@ uint8_t VideoBeast::read(uint16_t addr, uint64_t clock_time_ps) {
             case 4:
                 return mem[getSinclairAddress(addr)];
             default:
-                std::cout << "Videobeast unknown page map mode " << (registers[REG_MODE] >> 5) << std::endl;
+                return mem[ (registers[REG_PAGE_0] << 12) + (addr & 0x3FFF) ];
 
         } 
     }
@@ -628,6 +651,10 @@ uint8_t VideoBeast::readPalette(int palette, uint32_t address) {
 
 uint8_t VideoBeast::readSprite(uint32_t address) {
     return 0; // TODO: Return sprite data
+}
+
+uint8_t* VideoBeast::memoryPtr() {
+    return mem;
 }
 
 void VideoBeast::writeRam(uint32_t address, uint8_t value)  {
@@ -666,9 +693,9 @@ uint32_t VideoBeast::getSinclairAddress(uint16_t addr) {
     if( addr < 0x1800 ) {
         // Spectrum bitmap
         return ((registers[REG_PAGE_1] & 0x3F) << 14) + 
-               ((registers[REG_PAGE_2] & 0x04) << 11) +
-               ((addr & 0x1800)) +                         // Y7:6   -> Bits 14-13
-               ((addr & 0xE0  ) << 4) +                    // Y5:3   -> Bits 12-10
+               ((registers[REG_PAGE_2] & 0x04) << 12) +
+               ((addr & 0x1800) << 2) +                    // Y7:6   -> Bits 14-13
+               ((addr & 0xE0  ) << 5) +                    // Y5:3   -> Bits 12-10
                ((addr & 0x700 ) >> 1) +                    // Y2:0   -> Bits 9-7
                ((registers[REG_PAGE_2] & 0x03) << 5) +     //        -> Bits 6-5
                ((addr & 0x1F  ));                          // X4:0   -> Bits 0-4          
@@ -676,36 +703,16 @@ uint32_t VideoBeast::getSinclairAddress(uint16_t addr) {
     else if( addr < 0x1B00 ) {
         // Spectrum attributes
         return ((registers[REG_PAGE_0] & 0x3F) << 14) + 
-               ((registers[REG_PAGE_2] & 0x04) << 10) +
-               ((addr & 0x3E0 ) << 2 ) +                   // Y4:0   -> Bits 11-7
-               ((registers[REG_PAGE_2] & 0x03) << 5) +     //        -> Bits 6-5
-               ((addr & 0x1F  ));                          // X4:0   -> Bits 0-4     
+               ((registers[REG_PAGE_2] & 0x04) << 11) +
+               ((addr & 0x3E0 ) << 3 ) +                   // Y4:0   -> Bits 13-8
+               ((registers[REG_PAGE_2] & 0x03) << 6) +     //        -> Bits 7-6
+               ((addr & 0x1F  ) << 1) +                    // X4:0   -> Bits 1-5   
+               1;  
     }
     else {
         // General ram
         return ((registers[REG_PAGE_3] & 0x3F) << 14) + addr;
     }
-}
-
-void VideoBeast::readMem(char* filename) {
-    std::ifstream ifs(filename, std::ios::binary|std::ios::ate);
-    std::ifstream::pos_type pos = ifs.tellg();
-
-    int length = pos;
-    if( length > VIDEO_RAM_LENGTH) {
-        std::cout << "Binary file is too big for VideoBeast (maximum 1Mb). Actual size: " << (length/1024) << "K" << std::endl;
-        exit(1);
-    }
-    if( length == 0 ) {
-        std::cout << "VideoBeast binary file does not exist: " << filename << std::endl;
-        exit(1);
-    }
-
-    ifs.seekg(0, std::ios::beg);
-    ifs.read((char *)mem, length);
-    ifs.close();
-
-    std::cout << "Read VideoBeast file '" << filename << "' (" << (length/1024) << "K)" << std::endl;
 }
 
 void VideoBeast::createWindow() {
