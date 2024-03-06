@@ -115,11 +115,24 @@ Windows users can install g++ with MySys64, following [this guide](https://code.
 
 ## Linux
 
-Linux users will need to install the SDL2 development libraries, specifically `libsdl2-dev`, `libsdl2-gfx-dev`, `libsdl2-net-dev` and `libsdl2-ttf-dev` (some platforms, notably Fedora, call these `-devel` instead of `-dev`). 
+Linux users will need to install the SDL2 development libraries, along with build tooling if needed and GTK+-3. E.g.
+on Debian (Bookworm and above): 
 
-You will also need GTK+ 3.0 development libraries. Depending on your distribution, making thse visible via pkg-config (which is needed by the cmake build) _might_ be fun (spoiler: if you've been using Linuxbrew, just `brew install gtk+3` rather than fighting with your distro's package manager).
+```shell
+sudo apt-get install build-essential cmake git gtk+3-dev libsdl2-dev libsdl2-net-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-gfx-dev
+```
 
-You will also need a relatively recent version of `cmake`. 
+Some distributions, notably Red Hat-based ones, call these `-devel` instead of `-dev` - You _do_ need the development
+packages to get the appropriate headers and CMake files. On Fedora, for example:
+
+```shell
+sudo dnf install gcc gcc-c++ cmake git gtk3-devel SDL2-devel SDL2_net-devel SDL2_image-devel SDL2_ttf-devel SDL2_gfx-devel
+```
+
+> **Note**: Debian Bullseye (and older) are not officially supported by the CMake build, due to missing modern CMake 
+  files in the standard SDL2 dependencies from `apt`. If you are set on building on such a platform, then the recommended
+  path is to use [Linuxbrew](https://docs.brew.sh/Homebrew-on-Linux) and avoid using any of the built-in `apt` 
+  package dependencies which will use conflicting `glibc`.
 
 Build the executable with:
 
