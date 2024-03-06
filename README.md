@@ -18,23 +18,19 @@ All of the main features of MicroBeast are emulated, allowing software to be dev
 
 # Running
 
-Precompiled binaries are available for Windows-64 in the Release section on GitHub.
+Precompiled binaries are available for Windows-64 in the [Release section](https://github.com/atoone/BeastEm/releases) on GitHub. Download the .zip file and run `beast.bat` to start the emulator. Note you will need to run from the command line if you wish to enable VideoBeast emulation (the `-d` or `-d2` command line options).
 
-BeastEm requires a number of libraries and files to run. For Windows, these files are all supplied in the `release/win64` directory, which also contains a batch file to configure the library path and start the program.
+Linux and OSX users should follow the build instructions below to create the ``beastem`` exectutable which should be copied to a directory along with the files in the `assets` folder in order to run BeastEm.
 
-Linux users should copy the exectutable to a directory along with the files in the `assets` folder in order to run BeastEm.
+## Default MicroBeast Firmware
 
-## Run with a simple test ROM
-
-Windows users can run `beast.bat` in the `release/win64` directory.
-
-Linux users can run BeastEm with the executable name ``beastem`` on the command line.
-
-If no parameters are supplied, BeastEm will start the emulator up with a memory editor, YModem download utility and CP/M 2.2 environment with a few programs to try out. This is equivalent to running with the command line:
+If no parameters are supplied, BeastEm will start the emulator up with a recent ROM image of the [MicroBeast firmware](https://github.com/atoone/MicroBeast/wiki/Firmware). This supplies a memory editor, YModem download utility and CP/M 2.2 environment with a few programs to try out. This is equivalent to running with the command line:
 
 ```
 beastem -f flash_v1.5.bin -l 0 firmware.lst -l 23 monitor.lst
 ```
+
+Supplying a `-f` binary file command line option will override this behaviour, so the emulator can be started with your own custom firmware.
 
 ## Command line options
 
@@ -54,11 +50,11 @@ The following command line options may be used:
 
 ## Listing Files
 
-BeastEm will synchronise debug with listing files in the TASM format (each line consisting of a line number, one or more spaces and then the assembly address in hex). Other formats may be supported in future.
+BeastEm will synchronise debug with listing files in the TASM or sjsmplus format (each line consisting of a line number, one or more spaces and then the assembly address in hex). Other formats may be supported in future.
 
 A listing file is pinned to the memory page it is loaded into, as well as the physical address in the listing itself. This allows code paged in to memory to be correctly identified.
 
-Note that no checks are made that the memory contents match the provided listing, so the assembly shown may not be accurate.
+If the hex bytes in the listing file do not match the current memory contents, BeastEm will disassemble the location.
 
 ## Controlling BeastEm
 
