@@ -10,9 +10,11 @@
 #include "digit.hpp"
 #include "i2c.hpp"
 #include "display.hpp"
+#include "gui.hpp"
 #include "rtc.hpp"
 #include "uart16c550.h"
 #include "listing.hpp"
+#include "binaryFile.hpp"
 #include "instructions.hpp"
 #include "videobeast.hpp"
 
@@ -27,16 +29,28 @@ class Beast {
 
     enum Modifier {NONE, CTRL, SHIFT, CTRL_SHIFT};
 
-    enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, QUIT};
+    enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, QUIT};
 
     enum Selection {SEL_PC, SEL_A, SEL_HL, SEL_BC, SEL_DE, SEL_FLAGS, SEL_SP, SEL_IX, SEL_IY, 
         SEL_PAGING, SEL_PAGE0, SEL_PAGE1, SEL_PAGE2, SEL_PAGE3, 
         SEL_A2, SEL_HL2, SEL_BC2, SEL_DE2, 
-        SEL_MEM0, SEL_VIEWPAGE0, SEL_MEM1, SEL_VIEWPAGE1, SEL_MEM2, SEL_VIEWPAGE2, 
+        SEL_MEM0, SEL_VIEWPAGE0, SEL_VIDEOVIEW0, SEL_VIEWADDR0, SEL_MEM1, SEL_VIEWPAGE1, SEL_VIDEOVIEW1, SEL_VIEWADDR1, SEL_MEM2, SEL_VIEWPAGE2, SEL_VIDEOVIEW2, SEL_VIEWADDR2, 
+        SEL_LISTING,
         SEL_BREAKPOINT,
         SEL_END_MARKER };
 
-    enum MemView {MV_PC, MV_SP, MV_HL, MV_BC, MV_DE, MV_IX, MV_IY, MV_Z80, MV_MEM};
+    enum MemView {MV_PC, MV_SP, MV_HL, MV_BC, MV_DE, MV_IX, MV_IY, MV_Z80, MV_MEM, MV_VIDEO};
+
+    enum VideoView{VV_RAM, VV_REG, VV_PAL1, VV_PAL2, VV_SPR};
+
+    static const int PROMPT_SOURCE_FILE    = 1;
+    static const int PROMPT_BINARY_FILE    = 2;
+    static const int PROMPT_LISTING        = 3;
+    static const int PROMPT_BINARY_CPU     = 4;
+    static const int PROMPT_BINARY_PAGE    = 5;
+    static const int PROMPT_BINARY_ADDRESS = 6;
+    static const int PROMPT_BINARY_PAGE2   = 7; 
+    static const int PROMPT_BINARY_VIDEO   = 8;
 
     struct BeastKey {
         SDL_KeyCode key;
@@ -47,10 +61,11 @@ class Beast {
 
 
     public:
-        Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing);
+        Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing, std::vector<BinaryFile> files);
         ~Beast();
 
         void init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate, VideoBeast *videoBeast);
+        void reset();
         void mainLoop();
         uint64_t run(bool run, uint64_t tickCount);
 
@@ -61,8 +76,6 @@ class Beast {
         void keyUp(SDL_Keycode keyCode);
         void onDraw();
 
-        void onDebug();
-
         uint8_t readKeyboard(uint16_t port);
 
         Digit* getDigit(int index);
@@ -72,18 +85,36 @@ class Beast {
         static const int AUDIO_FREQ = 22050;
         static const int AUDIO_BUFFER_SIZE = 4096;
 
-        static const uint64_t NO_BREAKPOINT = 0xFFFFFFFFULL;
+        static const uint64_t UART_CLOCK_HZ = UINT64_C(1843200);
+
+        static const uint64_t NOT_SET = 0xFFFFFFFFULL;
+
     private:
+        SDL_Window    *window;
         SDL_Renderer  *sdlRenderer;
         SDL_Texture   *keyboardTexture;
-        uint32_t windowId;
+        SDL_Texture   *pcbTexture;
+        uint32_t      windowId;
 
-        TTF_Font *font, *smallFont, *midFont, *monoFont;
+        uint8_t       rom[(1<<19)]; // 512K rom
+        uint8_t       ram[(1<<19)]; // 512K ram
+        uint8_t*      videoRam = {0};
+
+        uint8_t                 memoryPage[4];
+        Listing                &listing;
+        std::vector<BinaryFile> binaryFiles;
+        GUI                     gui;
+
+        const char* PCB_IMAGE="layout_2d.png";
+
+        TTF_Font *font, *smallFont, *midFont;
         int screenWidth, screenHeight;
         float zoom = 1.0f;
 
         Mode    mode = DEBUG;
-        int     selection;
+        int     selection = 0;
+        int     fileActionIndex = -1;
+
         z80_t    cpu;
         z80pio_t pio;
         uart_t     uart;
@@ -102,11 +133,8 @@ class Beast {
         uint64_t clock_cycle_ps;
         uint64_t clock_time_ps  = 0;
         uint64_t targetSpeedHz;
-        uint64_t breakpoint = 0xF20D;
+        uint64_t breakpoint = NOT_SET;
         uint64_t lastBreakpoint = 0;
-
-        uint8_t rom[(1<<19)]; // 512K rom
-        uint8_t ram[(1<<19)]; // 512K ram
 
         bool     romOperation = false;
         uint8_t  romSequence = 0;
@@ -117,50 +145,25 @@ class Beast {
         const uint64_t ROM_CHIP_ERASE_PS = 100000 * 1000000ULL;
         const uint64_t ROM_SECTOR_ERASE_PS = 25000 * 1000000ULL;
 
-        uint8_t memoryPage[4];
-        bool    pagingEnabled = false;
-        uint8_t readMem(uint16_t address);
-        uint8_t readPage(int page, uint16_t address);
 
-        MemView  memView[3] = {MV_PC, MV_SP, MV_HL};
-        uint16_t memAddress[3] = {0};
-        uint16_t memPageAddress[3] = {0};
-        uint8_t  memViewPage[3] = {0};
+        bool       pagingEnabled = false;
+        uint8_t    readMem(uint16_t address);
+        uint8_t    readPage(int page, uint16_t address);
+        void       writeMem(int page, uint16_t address, uint8_t data);
 
-        bool       editMode = false;
-        uint16_t   editValue, editOldValue;
-        int        editIndex;
-        int        editDigits;
-        int        editX, editY, editOffset;
+        MemView    memView[3] = {MV_PC, MV_SP, MV_HL};
+        uint16_t   memAddress[3] = {0};
+        uint16_t   memPageAddress[3] = {0};
+        uint8_t    memViewPage[3] = {0};
+        uint32_t   memVideoAddress[3][5] = {0};
+        VideoView  memVideoView[3] = {VV_RAM, VV_RAM, VV_RAM};
 
-        const int COL1 = 50;
-        const int COL2 = 190;
-        const int COL3 = 330;
-        const int COL4 = 470;
+        uint32_t   memoryEditAddress;
+        uint32_t   memoryEditAddressMask;
+        int        memoryEditPage;
+        int        memoryEditView;
 
-        const int ROW1 = 56;
-        const int ROW2 = ROW1+16;
-        const int ROW3 = ROW2+16;
-        const int ROW4 = ROW3+16;
-        const int ROW5 = ROW4+16;
-
-        const int ROW7 = ROW5+32;
-        const int ROW8 = ROW7+16;
-
-        const int ROW11 = ROW8+40;
-        const int ROW12 = ROW11+16;
-
-        const int ROW15 = ROW12+40;
-        const int ROW16 = ROW15+16;
-
-        const int ROW19 = ROW16+44;
-        const int ROW20 = ROW19+16;
-
-        const int ROW22 = ROW20+28;
-        const int END_ROW = ROW22+(13*14);
-
-        Listing &listing;
-        Listing::Location currentLoc = {0,0, false};
+        uint64_t              listAddress = NOT_SET;
         std::vector<uint16_t> decodedAddresses;         // Addresses decoded on screen
 
         static const int FRAME_RATE = 50;
@@ -174,26 +177,53 @@ class Beast {
         const char* audioFilename = "audio.raw";
         FILE*       audioFile = nullptr;
 
-        float createRenderer(SDL_Window *window, int screenWidth, int screenHeight, float zoom);
+        std::string *listingPath;
+
+        SDL_Renderer* createRenderer(SDL_Window *window);
+        float         checkZoomFactor(int screenWidth, int screenHeight, float zoom);
+        SDL_Texture*  loadTexture(SDL_Renderer *renderer, const char* filename);
+
         void redrawScreen();
         void drawBeast();
         void drawKeys();
         void drawKey(int col, int row, int offsetX, int offsetY, bool pressed);
+        int  drawMemoryLayout(int index, int topRow, int id, SDL_Color textColor, SDL_Color bright);
+
         void displayMem(int x, int y, SDL_Color textColor, uint16_t markAddress, int page);
+        void displayVideoMem(int x, int y, SDL_Color textColor, VideoView view, uint32_t markAddress);
+
         std::string nameFor(MemView view);
-        uint16_t addressFor(int view);
-        MemView nextView(MemView view, int dir);
+        uint32_t  addressFor(int view);
+        MemView   nextView(MemView view, int dir);
+        VideoView nextVideoView(VideoView view, int dir);
+
         void updateSelection(int direction, int maxSelection);
         void itemSelect(int direction);
-        void startEdit(uint16_t value, int x, int y, int offset, int digits);
+        void startMemoryEdit(int view);
+        void updateMemoryEdit(int delta, bool startEdit);
+        uint32_t getAddressMask(int view);
+        uint32_t getVideoAddress(int index, VideoView view);
+        void     setVideoAddress(int index, VideoView view, uint32_t value);
+        uint8_t  readVideoMemory(VideoView view, uint32_t address);
+        void     writeVideoMemory(VideoView view, uint32_t memoryEditAddress, uint8_t value );
         bool itemEdit();
         void editComplete();
-        void displayEdit();
 
-        void drawListing(uint16_t address, SDL_Color textColor, SDL_Color highColor);
-        template<typename... Args> void print(int x, int y, SDL_Color color, const char *fmt, Args... args);
-        template<typename... Args> void print(int x, int y, SDL_Color color, int highlight, SDL_Color background, const char *fmt, Args... args);
-        void printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer);
+        void fileMenu(SDL_Event windowEvent);
+        void debugMenu(SDL_Event windowEvent);
+        void filePrompt(unsigned int index);
+        void sourceFilePrompt();
+        void binaryFilePrompt(int promptId);
+
+        uint8_t loadBinaryPage;
+
+        void onFile();
+        void onDebug();
+        void promptComplete();
+        void reportLoad(size_t bytes);
+        void updatePrompt();
+
+        void drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor);
         
         const static int DISPLAY_CHARS = 24;
         const static int DISPLAY_WIDTH = DISPLAY_CHARS * Digit::DIGIT_WIDTH;
@@ -210,11 +240,9 @@ class Beast {
         const int KEYBOARD_HEIGHT= KEY_HEIGHT*KEY_ROWS;
 
         const char* BEAST_FONT="Roboto-Medium.ttf";
-        const char* MONO_FONT = "RobotoMono-VariableFont_wght.ttf";
         const int FONT_SIZE = 28;
         const int SMALL_FONT_SIZE = 14;
         const int MID_FONT_SIZE = 14;
-        const int MONO_SIZE = 14;
 
         const int MAX_KEYS = 48;
         const char* KEY_CAPS[48] = {"Up", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Del",

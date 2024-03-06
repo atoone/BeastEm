@@ -3,18 +3,25 @@
 #include <cstring>
 #include <stdio.h>
 #include <iomanip>
+#include <algorithm>
 #include "z80.h"
 #include "z80pio.h"
 #include "listing.hpp"
+#include "SDL_image.h"
+#include "nfd.h"
 
-Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing) 
-    : rom {}, ram {}, memoryPage {0}, listing(listing) {
+Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing, std::vector<BinaryFile> files) 
+    : rom {}, ram {}, memoryPage {0}, listing(listing), binaryFiles(files), gui(createRenderer(window), screenWidth, screenHeight) {
 
     windowId = SDL_GetWindowID(window);
 
+    this->window = window;
     this->screenWidth = screenWidth;
     this->screenHeight = screenHeight;
-    this->zoom = createRenderer(window, screenWidth, screenHeight, zoom);
+    this->zoom = checkZoomFactor(screenWidth, screenHeight, zoom);
+
+    TTF_Init();
+    gui.init(this->zoom);
 
     instr = new Instructions();
 
@@ -27,7 +34,6 @@ Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, 
     i2c->addDevice(display2);
     i2c->addDevice(rtc);
     
-    TTF_Init();
     font = TTF_OpenFont(BEAST_FONT, FONT_SIZE*zoom);
 
     if( !font) {
@@ -45,24 +51,41 @@ Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, 
         exit(1);
     }
 
-    monoFont = TTF_OpenFont(MONO_FONT, MONO_SIZE*zoom);
+    gui.startPrompt(0, "Loading...");
+    gui.drawPrompt(true);
+    gui.endPrompt(true);
 
     keyboardTexture = SDL_CreateTexture(sdlRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, KEYBOARD_WIDTH*zoom, KEYBOARD_HEIGHT*zoom);
-    
+    pcbTexture = loadTexture(sdlRenderer, PCB_IMAGE);
+
     drawKeys();
     for( int i=0; i<DISPLAY_CHARS; i++) {
         display.push_back(Digit(sdlRenderer, zoom));
     }
 }
 
-float Beast::createRenderer(SDL_Window *window, int screenWidth, int screenHeight, float zoom) {
+SDL_Texture* Beast::loadTexture(SDL_Renderer *sdlRenderer, const char* filename) {
+    SDL_Texture *texture = NULL;
+    texture = IMG_LoadTexture(sdlRenderer, filename);
+
+    if (texture == NULL) {
+        std::cout << "Failed to load texture, '" << filename << "' " << SDL_GetError() << std::endl;
+    }
+
+    return texture;
+}
+
+SDL_Renderer* Beast::createRenderer(SDL_Window *window) {
     sdlRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
     if( !sdlRenderer) {
         std::cout << "Could not create renderer: " << SDL_GetError() << std::endl;
         exit(1);
     }
+    return sdlRenderer;
+}
 
+float Beast::checkZoomFactor(int screenWidth, int screenHeight, float zoom) {
     int rw = 0, rh = 0;
     SDL_GetRendererOutputSize(sdlRenderer, &rw, &rh);
     if(rw != screenWidth*zoom) {
@@ -110,11 +133,23 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
         display2->addDigit(getDigit(i+12));
     }
 
-    uart_init(&uart, UINT64_C(1843200), clock_time_ps);
+    uart_init(&uart, UART_CLOCK_HZ, clock_time_ps);
     
     if( videoBeast ) {
-        videoBeast->init(clock_time_ps);
+        videoRam = videoBeast->memoryPtr();
+        int leftBorder = videoBeast->init(clock_time_ps, screenWidth*zoom);
         nextVideoBeastTickPs = 0;
+
+        if( leftBorder > 0 ) SDL_SetWindowPosition(window, leftBorder, SDL_WINDOWPOS_CENTERED);
+        SDL_RaiseWindow(window);
+    }
+
+    for(auto &bf: binaryFiles) {
+        bf.load(rom, ram, pagingEnabled, memoryPage, videoRam);
+    }
+
+    for(auto &source: listing.getFiles()) {
+        listing.loadFile(source);
     }
 
     if( sampleRate > 0 ) {
@@ -148,9 +183,18 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
     }
 }
 
+void Beast::reset() {
+    z80_reset(&cpu);
+    uart_reset(&uart, UART_CLOCK_HZ);
+    pagingEnabled = false;
+    for( int i=0; i<4; i++ ) {
+        memoryPage[i] = 0;
+    }
+}
+
 void Beast::loadSamples(Sint16 *stream, int length) {
     int index = 0;
-    if( audioAvailable < length ) return;
+    //if( audioAvailable < length ) return;
 
     while(index < length && ((audioRead+1)%AUDIO_BUFFER_SIZE) != audioWrite) {
         audioRead = (audioRead+1)%AUDIO_BUFFER_SIZE;
@@ -340,9 +384,25 @@ void Beast::mainLoop() {
             mode = DEBUG;
         }
 
-        if( mode == DEBUG ) {
+        if( (mode == DEBUG) || (mode == FILES) ) {
             drawBeast();
-            onDebug();
+            
+            if( mode == DEBUG ) {
+                onDebug();
+            }
+            else {
+                onFile();
+            }
+
+            gui.drawPrompt(false);
+            gui.drawEdit();
+
+            SDL_RenderPresent(sdlRenderer);
+
+            if( gui.endPrompt(false) && gui.isPromptOK() ) {
+                promptComplete();
+            }
+
             SDL_Event windowEvent;
 
             while( SDL_PollEvent(&windowEvent ) == 0 ) {
@@ -353,11 +413,6 @@ void Beast::mainLoop() {
                 }
             }
 
-            if( windowEvent.window.windowID != windowId && videoBeast) {
-                videoBeast->handleEvent(windowEvent);
-                continue;
-            }
-
             if( SDL_RENDER_TARGETS_RESET == windowEvent.type ) {
                 redrawScreen();
             }
@@ -366,107 +421,313 @@ void Beast::mainLoop() {
                 mode = QUIT;
             }
 
-            if( SDL_KEYDOWN == windowEvent.type ) {
-                if( editMode ) {
-                    int digit = -1;
+            if( windowEvent.window.windowID != windowId && videoBeast) {
+                videoBeast->handleEvent(windowEvent);
+                continue;
+            }
 
-                    switch( windowEvent.key.keysym.sym ) {
-                        case SDLK_ESCAPE: editMode = false; break;
-                        case SDLK_RETURN: editComplete(); break;
-                        case SDLK_BACKSPACE: 
-                            if( editIndex < editDigits-1 ) {
-                                editIndex++;
-                                editValue = (editValue & ~(0x000F << (editIndex*4))) | (editOldValue & (0x000F << (editIndex*4)));
-                            } 
-                            break;
-                        case SDLK_0 ... SDLK_9: digit = windowEvent.key.keysym.sym - SDLK_0; break;
-                        case SDLK_a ... SDLK_f: digit = windowEvent.key.keysym.sym - SDLK_a + 10; break;
+            if (windowEvent.window.event == SDL_WINDOWEVENT_CLOSE) {
+                mode = QUIT;
+            }
+
+            if( SDL_KEYDOWN == windowEvent.type ) {
+                if( gui.isPrompt() ) {
+                    gui.handleKey(windowEvent.key.keysym.sym);
+                    if( gui.promptChanged() ) {
+                        updatePrompt();
                     }
-                    if( digit >= 0 ) {
-                        editValue = (editValue & ~(0x000F << (editIndex*4))) | (digit << (editIndex*4));
-                        editIndex--;
-                        if(editIndex < 0) {
+                }
+                else if( gui.isEditing() ) {
+                    if( gui.handleKey(windowEvent.key.keysym.sym) ) {
+                        if( gui.isEditOK() ) {
                             editComplete();
                         }
                     }
+                    else {
+                        switch( windowEvent.key.keysym.sym ) {
+                            case SDLK_UP       : updateMemoryEdit(-16, false); break;
+                            case SDLK_DOWN     : updateMemoryEdit(16, false); break;
+                            case SDLK_LEFT     : updateMemoryEdit(-1, false); break;
+                            case SDLK_RIGHT    : updateMemoryEdit(1, false); break;
+                        }
+                    }
+                }
+                else if( mode == DEBUG ) {
+                    debugMenu(windowEvent);
                 }
                 else {
-                    int maxSelection = (breakpoint == NO_BREAKPOINT) ? static_cast<int>(SEL_BREAKPOINT) : static_cast<int>(SEL_END_MARKER);
-
-                    switch( windowEvent.key.keysym.sym ) {
-                        case SDLK_PAGEUP  : updateSelection(-1, maxSelection); break;
-                        case SDLK_PAGEDOWN: updateSelection(1, maxSelection); break;
-                        case SDLK_RIGHT : itemSelect(1); break;
-                        case SDLK_LEFT:   itemSelect(-1); break;
-                        case SDLK_UP  :
-                            if( itemEdit() ) {
-                                editValue = (editValue-1) & (0x0FFFF >> ((4-editDigits)*4));
-                                editComplete();
-                            };
-                            break;
-                        case SDLK_DOWN  :
-                            if( itemEdit() ) {
-                                editValue = (editValue+1) & (0x0FFFF >> ((4-editDigits)*4));
-                                editComplete();
-                            };
-                            break;
-                        case SDLK_RETURN: itemEdit(); break;
-
-                        case SDLK_b    : 
-                            if( breakpoint != NO_BREAKPOINT ) {
-                                lastBreakpoint = breakpoint;
-                                breakpoint = NO_BREAKPOINT;
-                                selection = SEL_PC;
-                            }
-                            else {
-                                selection = SEL_BREAKPOINT;
-                                editMode = true;
-                                editOldValue = editValue = lastBreakpoint;
-                                editDigits = 4;
-                                editIndex = 3;
-                                editY = END_ROW;
-                                editX = 390;
-                                editOffset = 18;
-                                breakpoint = lastBreakpoint;
-                            }
-                            break;
-                        case SDLK_q    : mode = QUIT;   break;
-                        case SDLK_r    : mode = RUN;    break;
-                        case SDLK_s    : mode = STEP;   break;
-                        case SDLK_u    : mode = OUT;    break;
-                        case SDLK_o    : mode = OVER;   break;
-                        case SDLK_d    : uart_connect(&uart, false); break;
-                        case SDLK_t    : 
-                            if( instr->isConditional(readMem(cpu.pc-1), readMem(cpu.pc))) {
-                                mode = TAKE;
-                            }
-                            else {
-                                mode = STEP;
-                            }
-                            break;
-                        case SDLK_a     :
-                            if( audioFile ) {
-                                fclose(audioFile);
-                                audioFile = nullptr;
-                            }
-                            else {
-                                audioFile = fopen(audioFilename, "ab");
-                            }
-                            break;
-                    }
+                    fileMenu(windowEvent);
                 }
             }
         }
     }
 }
 
+void Beast::debugMenu(SDL_Event windowEvent) {
+    int maxSelection = (breakpoint == NOT_SET) ? static_cast<int>(SEL_BREAKPOINT) : static_cast<int>(SEL_END_MARKER);
+
+    switch( windowEvent.key.keysym.sym ) {
+        case SDLK_UP       : updateSelection(-1, maxSelection); break;
+        case SDLK_DOWN     : updateSelection(1, maxSelection); break;
+        case SDLK_LEFT  :
+            if( itemEdit() ) {
+                gui.editDelta(-1);
+                editComplete();
+            }
+            else
+                itemSelect(-1);
+            break;
+        case SDLK_RIGHT  :
+            if( itemEdit() ) {
+                gui.editDelta(1);
+                editComplete();
+            }
+            else
+                itemSelect(1);
+            break;
+        case SDLK_RETURN: 
+            if( SEL_MEM0 == selection || SEL_VIDEOVIEW0 == selection ) startMemoryEdit(0);
+            else if( SEL_MEM1 == selection || SEL_VIDEOVIEW1 == selection ) startMemoryEdit(1);
+            else if( SEL_MEM2 == selection || SEL_VIDEOVIEW2 == selection ) startMemoryEdit(2);
+            else itemEdit(); 
+            break;
+        case SDLK_SPACE : 
+            if( SEL_MEM0 <= selection && selection <= SEL_VIEWADDR0 ) startMemoryEdit(0);
+            if( SEL_MEM1 <= selection && selection <= SEL_VIEWADDR1 ) startMemoryEdit(1);
+            if( SEL_MEM2 <= selection && selection <= SEL_VIEWADDR2 ) startMemoryEdit(2);
+            break;
+        case SDLK_b    : 
+            if( breakpoint != NOT_SET ) {
+                lastBreakpoint = breakpoint;
+                breakpoint = NOT_SET;
+                selection = SEL_PC;
+            }
+            else {
+                selection = SEL_BREAKPOINT;
+                gui.startEdit( lastBreakpoint, 440, GUI::END_ROW, 16, 4);
+                breakpoint = lastBreakpoint;
+            }
+            break;
+        case SDLK_q    : mode = QUIT;   break;
+        case SDLK_r    : mode = RUN;    break;
+        case SDLK_e    : reset();                // Fall through into step
+        case SDLK_s    : mode = STEP;   break;
+        case SDLK_u    : mode = OUT;    break;
+        case SDLK_o    : mode = OVER;   break;
+        case SDLK_f    : mode = FILES;   selection = 0; break;
+        case SDLK_l    : if( listAddress == NOT_SET ) listAddress = (cpu.pc-1) & 0x0FFFF; else listAddress = NOT_SET; break;
+
+        case SDLK_d    : uart_connect(&uart, false); break;
+
+        case SDLK_t    : 
+            if( instr->isConditional(readMem(cpu.pc-1), readMem(cpu.pc))) {
+                mode = TAKE;
+            }
+            else {
+                mode = STEP;
+            }
+            break;
+        case SDLK_a     :
+            if( audioFile ) {
+                fclose(audioFile);
+                audioFile = nullptr;
+            }
+            else {
+                audioFile = fopen(audioFilename, "ab");
+            }
+            break;
+    }
+}
+
+void Beast::fileMenu(SDL_Event windowEvent) {
+    unsigned int maxSelection = listing.fileCount() + binaryFiles.size();
+
+    switch( windowEvent.key.keysym.sym ) {
+        case SDLK_UP  : updateSelection(-1, maxSelection); break;
+        case SDLK_DOWN: updateSelection(1, maxSelection); break;
+        case SDLK_b    : mode = DEBUG;   selection = 0; break;
+        case SDLK_RETURN: filePrompt(selection); break;
+        case SDLK_1 ... SDLK_9: {
+            unsigned int index = windowEvent.key.keysym.sym - SDLK_1;
+            if( index < listing.fileCount() + binaryFiles.size() ) filePrompt(index); 
+            break;
+        } 
+        case SDLK_s    : sourceFilePrompt(); break;
+        case SDLK_l    : binaryFilePrompt(PROMPT_BINARY_CPU); break;
+        case SDLK_p    : binaryFilePrompt(PROMPT_BINARY_PAGE); break;
+        case SDLK_a    : binaryFilePrompt(PROMPT_BINARY_ADDRESS); break; 
+        case SDLK_v    : binaryFilePrompt(PROMPT_BINARY_VIDEO); break; 
+    }
+}
+
+void Beast::filePrompt(unsigned int index) {
+    if( index < listing.fileCount() ) {
+        gui.startPrompt(PROMPT_SOURCE_FILE, "Select action for %s", listing.getFiles()[index].shortname.c_str());
+        gui.promptChoice({"Refresh", "Delete"});
+        fileActionIndex = index;
+    }
+    else if(index-listing.fileCount() < binaryFiles.size()) {
+        gui.startPrompt(PROMPT_BINARY_FILE, "Select action for %s", binaryFiles[index-listing.fileCount()].getShortname().c_str());
+        gui.promptChoice({"Reload", "Forget"});
+        fileActionIndex = index-listing.fileCount();
+    }
+}
+
+void Beast::sourceFilePrompt() {
+    nfdchar_t  *path;
+    nfdresult_t result = NFD_OpenDialog(&path, NULL, 0, NULL);
+    
+    SDL_RaiseWindow(window);
+
+    if (result == NFD_OKAY) {
+        listingPath = new std::string(path);
+        NFD_FreePath(path);
+        gui.startPrompt(PROMPT_LISTING, "Load listing to page 0x00");
+        gui.promptValue(0, 24, 2);
+    }   
+}
+
+void Beast::binaryFilePrompt(int promptId) {
+    nfdchar_t  *path;
+    nfdresult_t result = NFD_OpenDialog(&path, NULL, 0, NULL);
+    
+    SDL_RaiseWindow(window);
+
+    if (result == NFD_OKAY) {
+        listingPath = new std::string(path);
+        NFD_FreePath(path);
+
+        switch( promptId ) {
+            case PROMPT_BINARY_ADDRESS :
+                gui.startPrompt(PROMPT_BINARY_ADDRESS, "Load file to physical address 0x00000");
+                gui.promptValue(0, 32, 5);
+                break;
+            case PROMPT_BINARY_PAGE :
+                gui.startPrompt(PROMPT_BINARY_PAGE, "Load file to page 0x00");
+                gui.promptValue(0, 21, 2);
+                break;
+            case PROMPT_BINARY_CPU :
+                gui.startPrompt(PROMPT_BINARY_CPU, "Load file to CPU address 0x0000");
+                gui.promptValue(0, 28, 4);
+                break;
+            case PROMPT_BINARY_VIDEO :
+                gui.startPrompt(PROMPT_BINARY_VIDEO, "Load file to video address 0x00000");
+                gui.promptValue(0, 29, 5);
+                break;
+        }
+    }
+}
+
+void Beast::promptComplete() {
+    switch( gui.getPromptId() ) {
+        case PROMPT_SOURCE_FILE    : {
+            Listing::Source& source = listing.getFiles()[fileActionIndex];
+            
+            if( gui.getEditValue()==0 ) {
+                gui.startPrompt(0, "Refreshing ...");
+                gui.drawPrompt(true);
+                listing.loadFile(source); 
+                gui.endPrompt(true);
+            }
+            else {
+                listing.removeFile(fileActionIndex); selection = std::max(0, fileActionIndex-1); 
+            }
+            break;
+        }
+        case PROMPT_BINARY_FILE : {
+            if( gui.getEditValue()==0 ) {
+                gui.startPrompt(0, "Reloading ...");
+                gui.drawPrompt(true);
+                binaryFiles[fileActionIndex].load(rom, ram, pagingEnabled, memoryPage, videoRam);
+                gui.endPrompt(true);
+            }
+            else {
+                binaryFiles.erase(binaryFiles.begin() + fileActionIndex);
+            }
+            break;
+        }
+        case PROMPT_LISTING : {
+            gui.startPrompt(0, "Loading ...");
+            gui.drawPrompt(true);
+            listing.addFile( *listingPath, gui.getEditValue()); 
+            gui.endPrompt(true);
+            break;
+        }
+        case PROMPT_BINARY_ADDRESS: {
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue());
+            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
+            binaryFiles.push_back(binary);
+            break;
+        }
+        case PROMPT_BINARY_CPU: {
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), BinaryFile::LOGICAL);
+            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
+            binaryFiles.push_back(binary);
+            break;
+        }
+        case PROMPT_BINARY_PAGE:
+            loadBinaryPage = gui.getEditValue();
+            gui.startPrompt(PROMPT_BINARY_PAGE2, "Address in page 0x%02X: 0x0000", loadBinaryPage);
+            gui.promptValue(0, 25, 4);
+            break;  
+        case PROMPT_BINARY_PAGE2: {
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), BinaryFile::PAGE_OFFSET, loadBinaryPage);
+            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
+            binaryFiles.push_back(binary);
+            break;
+        }
+    }
+}
+
+void Beast::reportLoad(size_t bytes) {
+    if( bytes > 0 ) {
+        gui.startPrompt(0, "Loaded %d bytes OK", bytes);
+    }
+    else {
+        gui.startPrompt(0, "Could not load file");
+    }
+    gui.promptYesNo();
+}
+
+void Beast::updatePrompt() {
+    switch( gui.getPromptId() ) {
+        case PROMPT_LISTING        : gui.updatePrompt("Load listing to page 0x%02X", gui.getEditValue()); break;
+        case PROMPT_BINARY_ADDRESS : gui.updatePrompt("Load file to physical address 0x%05X", gui.getEditValue()); break;
+        case PROMPT_BINARY_PAGE    : gui.updatePrompt("Load file to page 0x%02X", gui.getEditValue()); break;
+        case PROMPT_BINARY_PAGE2   : gui.updatePrompt("Address in page 0x%02X: 0x%04X", loadBinaryPage, gui.getEditValue()); break;
+        case PROMPT_BINARY_CPU     : gui.updatePrompt("Load file to CPU address 0x%04X", gui.getEditValue()); break;
+        case PROMPT_BINARY_VIDEO   : gui.updatePrompt("Load file to video address 0x%05X", gui.getEditValue()); break;
+    }
+}
+
 void Beast::updateSelection(int direction, int maxSelection) {
     selection += direction;
-    if( selection < 0 ) selection = maxSelection-1;
-    if( selection >= maxSelection ) selection = 0;
-    if( selection == SEL_VIEWPAGE0 && memView[0] != MV_MEM ) selection += direction;
-    if( selection == SEL_VIEWPAGE1 && memView[1] != MV_MEM ) selection += direction;
-    if( selection == SEL_VIEWPAGE2 && memView[2] != MV_MEM ) selection += direction;
+    bool skip;
+
+    do {    
+        skip = false;
+
+        if( selection < 0 ) selection = maxSelection-1;
+        if( selection >= maxSelection ) selection = 0;
+
+        if( selection == SEL_VIEWPAGE0 &&  memView[0] != MV_MEM ) skip = true;
+        if( selection == SEL_VIDEOVIEW0 && memView[0] != MV_VIDEO ) skip = true;
+        if( selection == SEL_VIEWADDR0 && memView[0] != MV_MEM && memView[0] != MV_Z80 && memView[0] != MV_VIDEO ) skip = true;
+
+        if( selection == SEL_VIEWPAGE1 &&  memView[1] != MV_MEM ) skip = true;
+        if( selection == SEL_VIDEOVIEW1 && memView[1] != MV_VIDEO ) skip = true;
+        if( selection == SEL_VIEWADDR1 && memView[1] != MV_MEM && memView[1] != MV_Z80 && memView[1] != MV_VIDEO) skip = true;
+
+        if( selection == SEL_VIEWPAGE2 &&  memView[2] != MV_MEM ) skip = true;
+        if( selection == SEL_VIDEOVIEW2 && memView[2] != MV_VIDEO ) skip = true;
+        if( selection == SEL_VIEWADDR2 && memView[2] != MV_MEM && memView[2] != MV_Z80 && memView[2] != MV_VIDEO) skip = true;
+
+        if( selection == SEL_LISTING && listAddress == NOT_SET ) skip = true;
+
+        if( skip ) selection += direction;
+    } while( skip );
+
+
 }
 
 uint64_t Beast::run(bool run, uint64_t tickCount) {
@@ -779,65 +1040,112 @@ uint8_t Beast::readKeyboard(uint16_t port) {
     return result;
 }
 
-void Beast::startEdit(uint16_t value, int x, int y, int offset, int digits) {
-    editMode = true;
-    editValue = value;
-    editOldValue = value;
-    editX = x;
-    editY = y;
-    editOffset = offset;
-    editDigits = digits;
-    editIndex = digits-1;
+void Beast::startMemoryEdit(int view) {
+    if( gui.isContinuousEdit() ) {
+        gui.endEdit(false);
+        return;
+    }
+    memoryEditAddress = addressFor(view);
+    memoryEditPage = memView[view] == MV_MEM ? memViewPage[view] : -1;
+    memoryEditAddressMask = getAddressMask(view);
+    memoryEditView = view;
+
+    updateMemoryEdit(0, true);
+}
+
+void Beast::updateMemoryEdit(int delta, bool startEdit) {
+    if( !startEdit && !gui.isContinuousEdit() ) return;
+
+    memoryEditAddress += delta;
+    if( memoryEditPage > 0 && memoryEditPage < 0x40 ) {
+        if( (memoryEditAddress & 0xFF00) == 0xFF00 ) {
+            memoryEditPage--;
+        }
+        if( (memoryEditAddress & 0x4000) == 0x4000) {
+            memoryEditPage++;
+        }
+    }
+    memoryEditAddress &= memoryEditAddressMask;
+
+    uint8_t data = 0;
+
+    if( memView[memoryEditView] == MV_VIDEO ) {
+        data = readVideoMemory(memVideoView[memoryEditView], memoryEditAddress);
+    } 
+    else {
+        data = memoryEditPage < 0 ? readMem(memoryEditAddress): readPage(memoryEditPage, memoryEditAddress);
+    }
+    int offset = 10 + 3*(memoryEditAddress & 0x0F);
+
+    gui.startEdit(data, GUI::COL_MEM, GUI::ROW8 + 4*GUI::MEM_ROW_HEIGHT*memoryEditView, offset, 2, true);
 }
 
 bool Beast::itemEdit() {
-    switch( selection ) {
-        case SEL_PC: startEdit( cpu.pc-1, COL1, ROW1,  8, 4); break;
-        case SEL_A : startEdit( cpu.a, COL1, ROW2, 8, 2); break;
-        case SEL_HL: startEdit( cpu.hl, COL1, ROW3, 8, 4); break;
-        case SEL_BC: startEdit( cpu.bc, COL1, ROW4, 8, 4); break;
-        case SEL_DE: startEdit( cpu.de, COL1, ROW5, 8, 4); break;
+    if( gui.isContinuousEdit() ) return false;
 
-        case SEL_SP: startEdit( cpu.sp, COL2, ROW3, 8, 4); break;
-        case SEL_IX: startEdit( cpu.ix, COL2, ROW4, 8, 4); break;
-        case SEL_IY: startEdit( cpu.iy, COL2, ROW5, 8, 4); break;
+    switch( selection ) {
+        case SEL_PC: gui.startEdit( cpu.pc-1, GUI::COL1, GUI::ROW1,  8, 4); break;
+        case SEL_A : gui.startEdit( cpu.a, GUI::COL1, GUI::ROW2, 8, 2); break;
+        case SEL_HL: gui.startEdit( cpu.hl, GUI::COL1, GUI::ROW3, 8, 4); break;
+        case SEL_BC: gui.startEdit( cpu.bc, GUI::COL1, GUI::ROW4, 8, 4); break;
+        case SEL_DE: gui.startEdit( cpu.de, GUI::COL1, GUI::ROW5, 8, 4); break;
+
+        case SEL_SP: gui.startEdit( cpu.sp, GUI::COL2, GUI::ROW3, 8, 4); break;
+        case SEL_IX: gui.startEdit( cpu.ix, GUI::COL2, GUI::ROW4, 8, 4); break;
+        case SEL_IY: gui.startEdit( cpu.iy, GUI::COL2, GUI::ROW5, 8, 4); break;
 
         case SEL_PAGING: pagingEnabled = !pagingEnabled; break;
-        case SEL_PAGE0 : startEdit( memoryPage[0], COL3, ROW2, 10, 2); break;
-        case SEL_PAGE1 : startEdit( memoryPage[1], COL3, ROW3, 10, 2);  break;
-        case SEL_PAGE2 : startEdit( memoryPage[2], COL3, ROW4, 10, 2); break;
-        case SEL_PAGE3 : startEdit( memoryPage[3], COL3, ROW5, 10, 2); break;
+        case SEL_PAGE0 : gui.startEdit( memoryPage[0], GUI::COL3, GUI::ROW2, 10, 2); break;
+        case SEL_PAGE1 : gui.startEdit( memoryPage[1], GUI::COL3, GUI::ROW3, 10, 2); break;
+        case SEL_PAGE2 : gui.startEdit( memoryPage[2], GUI::COL3, GUI::ROW4, 10, 2); break;
+        case SEL_PAGE3 : gui.startEdit( memoryPage[3], GUI::COL3, GUI::ROW5, 10, 2); break;
 
-        case SEL_MEM0 : 
-            if( memView[0] == MV_Z80) startEdit( memAddress[0], 104, ROW8, 3, 4); 
-            if( memView[0] == MV_MEM) startEdit( memPageAddress[0], 104, ROW8, 3, 4); 
+        case SEL_VIEWADDR0 : 
+            if( memView[0] == MV_Z80) gui.startEdit( memAddress[0], GUI::COL1, GUI::ROW8, 3, 4); 
+            if( memView[0] == MV_MEM) gui.startEdit( memPageAddress[0], GUI::COL1, GUI::ROW9, 3, 4); 
+            if( memView[0] == MV_VIDEO) gui.startEdit( getVideoAddress(0, memVideoView[0]), GUI::COL1, GUI::ROW9, 3, 5); 
             break;
-        case SEL_MEM1 : 
-            if( memView[1] == MV_Z80) startEdit( memAddress[1], 104, ROW12, 3, 4); 
-            if( memView[1] == MV_MEM) startEdit( memPageAddress[1], 104, ROW12, 3, 4); 
+        case SEL_VIEWADDR1 : 
+            if( memView[1] == MV_Z80) gui.startEdit( memAddress[1], GUI::COL1, GUI::ROW12, 3, 4); 
+            if( memView[1] == MV_MEM) gui.startEdit( memPageAddress[1], GUI::COL1, GUI::ROW13, 3, 4); 
+            if( memView[1] == MV_VIDEO) gui.startEdit( getVideoAddress(1, memVideoView[1]), GUI::COL1, GUI::ROW13, 3, 5); 
             break;
-        case SEL_MEM2 : 
-            if( memView[2] == MV_Z80) startEdit( memAddress[2], 104, ROW16, 3, 4); 
-            if( memView[2] == MV_MEM) startEdit( memPageAddress[2], 104, ROW16, 3, 4);
+        case SEL_VIEWADDR2 : 
+            if( memView[2] == MV_Z80) gui.startEdit( memAddress[2], GUI::COL1, GUI::ROW16, 3, 4); 
+            if( memView[2] == MV_MEM) gui.startEdit( memPageAddress[2], GUI::COL1, GUI::ROW17, 3, 4);
+            if( memView[2] == MV_VIDEO) gui.startEdit( getVideoAddress(2, memVideoView[2]), GUI::COL1, GUI::ROW17, 3, 5); 
             break;
 
-        case SEL_VIEWPAGE0 : startEdit( memViewPage[0], COL1, ROW8+14, 1, 2); break;
-        case SEL_VIEWPAGE1 : startEdit( memViewPage[1], COL1, ROW12+14, 1, 2); break;
-        case SEL_VIEWPAGE2 : startEdit( memViewPage[2], COL1, ROW16+14, 1, 2); break;
+        case SEL_VIEWPAGE0 : gui.startEdit( memViewPage[0], GUI::COL1, GUI::ROW8, 1, 2);  break;
+        case SEL_VIEWPAGE1 : gui.startEdit( memViewPage[1], GUI::COL1, GUI::ROW12, 1, 2); break;
+        case SEL_VIEWPAGE2 : gui.startEdit( memViewPage[2], GUI::COL1, GUI::ROW16, 1, 2); break;
 
-        case SEL_A2: startEdit( cpu.af2 & 0xFF, COL4, ROW2, 9, 2); break;
-        case SEL_HL2: startEdit( cpu.hl2, COL4, ROW3, 9, 4); break;
-        case SEL_BC2: startEdit( cpu.bc2, COL4, ROW4, 9, 4);  break;
-        case SEL_DE2: startEdit( cpu.de2, COL4, ROW5, 9, 4); break;
+        case SEL_A2: gui.startEdit( cpu.af2 & 0xFF, GUI::COL4, GUI::ROW2, 9, 2); break;
+        case SEL_HL2: gui.startEdit( cpu.hl2, GUI::COL4, GUI::ROW3, 9, 4); break;
+        case SEL_BC2: gui.startEdit( cpu.bc2, GUI::COL4, GUI::ROW4, 9, 4);  break;
+        case SEL_DE2: gui.startEdit( cpu.de2, GUI::COL4, GUI::ROW5, 9, 4); break;
 
-        case SEL_BREAKPOINT:  startEdit( breakpoint, 390, END_ROW, 18, 4); break;
+        case SEL_LISTING: gui.startEdit( listAddress, GUI::COL1, GUI::END_ROW, 10, 4); break;
+        case SEL_BREAKPOINT:  gui.startEdit( breakpoint, 440, GUI::END_ROW, 16, 4); break;
     }
 
-    return editMode;
+    return gui.isEditing();
 }
 
 void Beast::editComplete() {
-    switch( selection ) {
+    uint32_t editValue = gui.getEditValue();
+
+    if( gui.isContinuousEdit() ) {
+        if( memView[memoryEditView] != MV_VIDEO ) {
+            writeMem(memoryEditPage, memoryEditAddress, editValue );
+        }
+        else {
+            writeVideoMemory(memVideoView[memoryEditView], memoryEditAddress, editValue );
+        }
+        updateMemoryEdit(1, false);
+        return;
+    }
+    else switch( selection ) {
         case SEL_PC: pins = z80_prefetch(&cpu, editValue); run(false, 0);  break;
         case SEL_A: cpu.a = editValue; break;
         case SEL_HL: cpu.hl = editValue; break;
@@ -853,54 +1161,121 @@ void Beast::editComplete() {
         case SEL_PAGE2: memoryPage[2] = editValue; break;
         case SEL_PAGE3: memoryPage[3] = editValue; break;
 
-        case SEL_MEM0: 
+        case SEL_VIEWADDR0: 
             if( memView[0] == MV_Z80 ) memAddress[0] = editValue;
             if( memView[0] == MV_MEM ) memPageAddress[0] = editValue & 0x3FFF;
+            if( memView[0] == MV_VIDEO ) setVideoAddress(0, memVideoView[0], getAddressMask(0) & editValue);
             break;
-        case SEL_MEM1: 
+        case SEL_VIEWADDR1: 
             if( memView[1] == MV_Z80 ) memAddress[1] = editValue;
             if( memView[1] == MV_MEM ) memPageAddress[1] = editValue & 0x3FFF;
+            if( memView[1] == MV_VIDEO ) setVideoAddress(1, memVideoView[1], getAddressMask(1) & editValue);
             break;
-        case SEL_MEM2: 
+        case SEL_VIEWADDR2: 
             if( memView[2] == MV_Z80 ) memAddress[2] = editValue;
             if( memView[2] == MV_MEM ) memPageAddress[2] = editValue & 0x3FFF;
+            if( memView[2] == MV_VIDEO ) setVideoAddress(2, memVideoView[2], getAddressMask(2) & editValue);
             break;
 
-        case SEL_VIEWPAGE0 : memViewPage[0] = editValue; break;
-        case SEL_VIEWPAGE1 : memViewPage[1] = editValue; break;
-        case SEL_VIEWPAGE2 : memViewPage[2] = editValue; break;
+        case SEL_VIEWPAGE0 : memViewPage[0] = editValue <= 0x40 ? editValue : 0x40; break;
+        case SEL_VIEWPAGE1 : memViewPage[1] = editValue <= 0x40 ? editValue : 0x40; break;
+        case SEL_VIEWPAGE2 : memViewPage[2] = editValue <= 0x40 ? editValue : 0x40; break;
 
         case SEL_A2: cpu.af2 = ((cpu.af2 & 0xFF00) | (editValue & 0x0FF)); break;
         case SEL_HL2: cpu.hl2 = editValue; break;
         case SEL_BC2: cpu.bc2 = editValue; break;
         case SEL_DE2: cpu.de2 = editValue; break;
 
+        case SEL_LISTING: listAddress = editValue; break;
         case SEL_BREAKPOINT: breakpoint = editValue; break;
     }
-    editMode = false;
+    gui.endEdit(false);
+}
+
+void Beast::onFile() {
+    boxRGBA(sdlRenderer, 32*zoom, 32*zoom, (screenWidth-24)*zoom, (screenHeight-24)*zoom, 0xF0, 0xF0, 0xE0, 0xE8);
+    
+    SDL_Color textColor = {0, 0x30, 0x30};
+    SDL_Color bright =    {0xD0, 0xFF, 0xD0};
+    SDL_Color menuColor = {0x30, 0x30, 0xA0};
+
+
+    gui.print(GUI::COL1, 34, menuColor, "Add [S]ource");
+
+    gui.print(GUI::COL2, 34, menuColor, "Load [A]ddress");
+    gui.print(GUI::COL3, 34, menuColor, "Load [P]age");
+    gui.print(GUI::COL4, 34, menuColor, "[L]oad CPU");
+
+    if( videoBeast ) {
+        gui.print(GUI::COL5, 34, menuColor, "Load [V]ideo");
+    }
+    int row = GUI::ROW2;    
+    int index = 1;
+    int id = selection;
+
+    if( listing.fileCount() > 0 ) {
+        gui.print( GUI::COL3, row, textColor, "Source Files" );
+
+        row += 2*GUI::ROW_HEIGHT;
+
+        for(auto &source: listing.getFiles()) { 
+            gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Page 0x%02X   %s", index++, source.page, source.filename.c_str());
+            row += GUI::ROW_HEIGHT;
+        }
+
+        row += GUI::ROW_HEIGHT;
+    }
+
+    if( binaryFiles.size() > 0 ) {
+        gui.print( GUI::COL3, row, textColor, "Binary Files" ); 
+        
+        row += 2*GUI::ROW_HEIGHT;
+
+        for(auto &file: binaryFiles) {
+
+            switch( file.getDestination() ) {
+                case BinaryFile::LOGICAL:
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Logical       0x%04X  %.60s", index++, file.getAddress() & 0x0FFFF, file.getFilename().c_str());
+                    break;
+                case BinaryFile::PAGE_OFFSET :
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Physical 0x%02X:0x%04X  %.60s", index++, file.getPage(), file.getAddress() & 0x03FFF, file.getFilename().c_str());
+                    break;
+                case BinaryFile::PHYSICAL :
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Physical     0x%05X  %.60s", index++, file.getAddress() & 0x0FFFFF, file.getFilename().c_str());
+                    break;
+                case BinaryFile::VIDEO_RAM :
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Video RAM    0x%05X  %.60s", index++, file.getAddress() & 0x0FFFFF, file.getFilename().c_str());
+                    break;
+            }
+            row += GUI::ROW_HEIGHT;
+        }
+    }
+
+    gui.print(GUI::COL5, GUI::END_ROW, menuColor, "[B]ack");
 }
 
 void Beast::onDebug() {
     boxRGBA(sdlRenderer, 32*zoom, 32*zoom, (screenWidth-24)*zoom, (screenHeight-24)*zoom, 0xF0, 0xF0, 0xE0, 0xE8);
     
     SDL_Color textColor = {0, 0x30, 0x30};
+    SDL_Color disassColor={0x60, 0, 0x60};
     SDL_Color highColor = {0xA0, 0x30, 0x30};
     SDL_Color bright =    {0xD0, 0xFF, 0xD0};
     SDL_Color menuColor = {0x30, 0x30, 0xA0};
 
-    print(COL1, 34, menuColor, "[R]un");
-    print(COL2, 34, menuColor, "[S]tep");
-    print(COL3, 34, menuColor, "Step [O]ver");
-    print(COL4, 34, menuColor, "Step o[U]t");
-    print(640, 34, menuColor, "Until [T]aken");
+    gui.print(GUI::COL1, 34, menuColor, "[R]un");
+    gui.print(GUI::COL2, 34, menuColor, "[S]tep");
+    gui.print(GUI::COL3, 34, menuColor, "Step [O]ver");
+    gui.print(GUI::COL4, 34, menuColor, "Step o[U]t");
+    gui.print(GUI::COL5, 34, menuColor, "Until [T]aken");
 
     int id = selection;
 
-    print(COL1, ROW1, textColor, id--?0:2, bright, "PC = 0x%04X", (uint16_t)(cpu.pc-1));
-    print(COL1, ROW2, textColor, id--?0:2, bright, " A = 0x%02X", cpu.a );
-    print(COL1, ROW3, textColor, id--?0:2, bright, "HL = 0x%04X", cpu.hl);
-    print(COL1, ROW4, textColor, id--?0:2, bright, "BC = 0x%04X", cpu.bc);
-    print(COL1, ROW5, textColor, id--?0:2, bright, "DE = 0x%04X", cpu.de);
+    gui.print(GUI::COL1, GUI::ROW1, textColor, id--?0:2, bright, "PC = 0x%04X", (uint16_t)(cpu.pc-1));
+    gui.print(GUI::COL1, GUI::ROW2, textColor, id--?0:2, bright, " A = 0x%02X", cpu.a );
+    gui.print(GUI::COL1, GUI::ROW3, textColor, id--?0:2, bright, "HL = 0x%04X", cpu.hl);
+    gui.print(GUI::COL1, GUI::ROW4, textColor, id--?0:2, bright, "BC = 0x%04X", cpu.bc);
+    gui.print(GUI::COL1, GUI::ROW5, textColor, id--?0:2, bright, "DE = 0x%04X", cpu.de);
 
     char carry = (cpu.f & Z80_CF) ? 'C' : 'c';
     char neg = (cpu.f & Z80_NF) ? 'N' : 'n';
@@ -912,114 +1287,136 @@ void Beast::onDebug() {
     char hflag = (cpu.f & Z80_HF) ? '1' : '0';
     char yflag = (cpu.f & Z80_YF) ? '1' : '0';
 
-    print(COL2, ROW1, textColor, id--?0:5, bright, "Flags %c%c%c%c%c%c%c%c", sign, zero, yflag, hflag, xflag, overflow, neg, carry);
-    print(COL2, ROW3, textColor, id--?0:2, bright, "SP = 0x%04X", cpu.sp);
-    print(COL2, ROW4, textColor, id--?0:2, bright, "IX = 0x%04X", cpu.ix);
-    print(COL2, ROW5, textColor, id--?0:2, bright, "IY = 0x%04X", cpu.iy);
+    gui.print(GUI::COL2, GUI::ROW1, textColor, id--?0:5, bright, "Flags %c%c%c%c%c%c%c%c", sign, zero, yflag, hflag, xflag, overflow, neg, carry);
+    gui.print(GUI::COL2, GUI::ROW3, textColor, id--?0:2, bright, "SP = 0x%04X", cpu.sp);
+    gui.print(GUI::COL2, GUI::ROW4, textColor, id--?0:2, bright, "IX = 0x%04X", cpu.ix);
+    gui.print(GUI::COL2, GUI::ROW5, textColor, id--?0:2, bright, "IY = 0x%04X", cpu.iy);
 
     if( pagingEnabled ) {
-        print(COL3, ROW1, textColor, id--?0:-2, bright, "Paging ON" );
+        gui.print(GUI::COL3, GUI::ROW1, textColor, id--?0:-2, bright, "Paging ON" );
     }
     else {
-        print(COL3, ROW1, textColor, id--?0:-3, bright, "Paging OFF" );
+        gui.print(GUI::COL3, GUI::ROW1, textColor, id--?0:-3, bright, "Paging OFF" );
     }
 
-    print(COL3, ROW2, textColor, id--?0:6, bright, "Page 0 0x%02X", memoryPage[0]);
-    print(COL3, ROW3, textColor, id--?0:6, bright, "Page 1 0x%02X", memoryPage[1]);
-    print(COL3, ROW4, textColor, id--?0:6, bright, "Page 2 0x%02X", memoryPage[2]);
-    print(COL3, ROW5, textColor, id--?0:6, bright, "Page 3 0x%02X", memoryPage[3]);
+    gui.print(GUI::COL3, GUI::ROW2, textColor, id--?0:6, bright, "Page 0 0x%02X", memoryPage[0]);
+    gui.print(GUI::COL3, GUI::ROW3, textColor, id--?0:6, bright, "Page 1 0x%02X", memoryPage[1]);
+    gui.print(GUI::COL3, GUI::ROW4, textColor, id--?0:6, bright, "Page 2 0x%02X", memoryPage[2]);
+    gui.print(GUI::COL3, GUI::ROW5, textColor, id--?0:6, bright, "Page 3 0x%02X", memoryPage[3]);
 
-    print(COL4, ROW2, textColor, id--?0:3, bright, " A' = 0x%02X", cpu.af2 & 0x0FF );
-    print(COL4, ROW3, textColor, id--?0:3, bright, "HL' = 0x%04X", cpu.hl2);
-    print(COL4, ROW4, textColor, id--?0:3, bright, "BC' = 0x%04X", cpu.bc2);
-    print(COL4, ROW5, textColor, id--?0:3, bright, "DE' = 0x%04X", cpu.de2);
+    gui.print(GUI::COL4, GUI::ROW2, textColor, id--?0:3, bright, " A' = 0x%02X", cpu.af2 & 0x0FF );
+    gui.print(GUI::COL4, GUI::ROW3, textColor, id--?0:3, bright, "HL' = 0x%04X", cpu.hl2);
+    gui.print(GUI::COL4, GUI::ROW4, textColor, id--?0:3, bright, "BC' = 0x%04X", cpu.bc2);
+    gui.print(GUI::COL4, GUI::ROW5, textColor, id--?0:3, bright, "DE' = 0x%04X", cpu.de2);
 
-    print(640, ROW1, textColor, "%s", (cpu.iff1 == cpu.iff2) ? (cpu.iff1 ? "EI" : "DI") : (cpu.iff1 ? "??" : "NMI"));
-    print(640, ROW2, textColor, "IM%01X", cpu.im);
-    print(640, ROW3, textColor, "I   = 0x%02X", cpu.i);
-    print(640, ROW4, textColor, "R   = 0x%02X", cpu.r);
+    gui.print(GUI::COL5, GUI::ROW1, textColor, "%s", (cpu.iff1 == cpu.iff2) ? (cpu.iff1 ? "EI" : "DI") : (cpu.iff1 ? "??" : "NMI"));
+    gui.print(GUI::COL5, GUI::ROW2, textColor, "IM%01X", cpu.im);
+    gui.print(GUI::COL5, GUI::ROW3, textColor, "I   = 0x%02X", cpu.i);
+    gui.print(GUI::COL5, GUI::ROW4, textColor, "R   = 0x%02X", cpu.r);
 
-    print(COL1, ROW8, textColor, id--?0:4, bright, "%s", nameFor(memView[0]).c_str());
-    displayMem(104, ROW7, textColor, addressFor(0), memView[0] == MV_MEM ? memViewPage[0] : -1);
-    if( memView[0] == MV_MEM ) {
-        print(COL1, ROW8+14, textColor, id--?0:2, bright, "%02X", memViewPage[0]);
-    }
-    else id--;
-
-    print(COL1, ROW12, textColor, id--?0:4, bright, "%s", nameFor(memView[1]).c_str());
-    displayMem(104, ROW11, textColor, addressFor(1), memView[1] == MV_MEM ? memViewPage[1] : -1);
-    if( memView[1] == MV_MEM ) {
-        print(COL1, ROW12+14, textColor, id--?0:2, bright, "%02X", memViewPage[1]);
-    }
-    else id--;
-
-    print(COL1, ROW16, textColor, id--?0:4, bright, "%s", nameFor(memView[2]).c_str());
-    displayMem(104, ROW15, textColor, addressFor(2), memView[2] == MV_MEM ? memViewPage[2] : -1);
-    if( memView[2] == MV_MEM ) {
-        print(COL1, ROW16+14, textColor, id--?0:2, bright, "%02X", memViewPage[2]);
-    }
-    else id--;
+    id = drawMemoryLayout(0, GUI::ROW7, id, textColor, bright);
+    id = drawMemoryLayout(1, GUI::ROW11, id, textColor, bright);
+    id = drawMemoryLayout(2, GUI::ROW15, id, textColor, bright);
 
     std::bitset<8> ioSelectA(pio.port[0].io_select);
     std::bitset<8> portDataA(Z80PIO_GET_PA(pins));
 
-    print(COL1, ROW19, textColor, "Port A");
-    print(120, ROW19, textColor, (char*)ioSelectA.to_string('O', 'I').c_str());
-    print(120, ROW20, textColor, (char*)portDataA.to_string().c_str());
+    gui.print(GUI::COL1, GUI::ROW19, textColor, "Port A");
+    gui.print(120, GUI::ROW19, textColor, (char*)ioSelectA.to_string('O', 'I').c_str());
+    gui.print(120, GUI::ROW20, textColor, (char*)portDataA.to_string().c_str());
 
     std::bitset<8> ioSelectB(pio.port[1].io_select);
     std::bitset<8> portDataB(Z80PIO_GET_PB(pins));
 
-    print(220, ROW19, textColor, "Port B");
-    print(290, ROW19, textColor, (char*)ioSelectB.to_string('O', 'I').c_str());
-    print(290, ROW20, textColor, (char*)portDataB.to_string().c_str());
+    gui.print(220, GUI::ROW19, textColor, "Port B");
+    gui.print(290, GUI::ROW19, textColor, (char*)ioSelectB.to_string('O', 'I').c_str());
+    gui.print(290, GUI::ROW20, textColor, (char*)portDataB.to_string().c_str());
 
-    print(430, ROW19, textColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
-    print(430, ROW20, textColor, "File \"%s\"", audioFilename);
+    gui.print(430, GUI::ROW19, menuColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
+    gui.print(430, GUI::ROW20, textColor, "File \"%s\"", audioFilename);
 
-    print(620, ROW19, textColor, "TTY :%d", uart_port(&uart));
+    gui.print(620, GUI::ROW19, textColor, "TTY :%d", uart_port(&uart));
     if( uart_connected(&uart)) {
-        print(620, ROW20, textColor, "Connected [D]rop");
+        gui.print(620, GUI::ROW20, menuColor, "Connected [D]rop");
     }
     else {
-        print(620, ROW20, textColor, "Disconnected");
+        gui.print(620, GUI::ROW20, textColor, "Disconnected");
     }
 
-    int page = pagingEnabled ? memoryPage[((cpu.pc-1) >> 14) & 0x03] : 0;
-    currentLoc = listing.getLocation(page << 16 | (cpu.pc-1));
+    uint16_t address = listAddress == NOT_SET ? cpu.pc-1 : listAddress;
 
-    if( currentLoc.valid ) {
-        int startLine = currentLoc.lineNum - 4;
-        if( startLine < 0 ) startLine = 0;
-        Listing::Location displayLoc = currentLoc;
+    int page = pagingEnabled ? memoryPage[((address) >> 14) & 0x03] : 0;
+    drawListing( page, address, textColor, highColor, disassColor );
 
-        for( int i=0; i<12; i++ ) {
-            displayLoc.lineNum = i+startLine;
-            std::string line = listing.getLine(displayLoc);
-            print(COL1, ROW22+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.c_str()));
-        }
+    if( listAddress == NOT_SET ) {
+        gui.print( GUI::COL1, GUI::END_ROW, menuColor, "[L]ist address");
+        id--;
     }
     else {
-        drawListing( cpu.pc-1, textColor, highColor );
+        gui.print( GUI::COL1, GUI::END_ROW, menuColor, id--?0:-4, bright, "[L]ist 0x%04X", listAddress);
     }
 
-    print( COL1, END_ROW, menuColor, "[L]ist address");
-    print( 200, END_ROW, menuColor, "[C]urrent address");
+    gui.print( GUI::COL2, GUI::END_ROW, menuColor, "R[E]set");
+    gui.print( GUI::COL3, GUI::END_ROW, menuColor, "[F]iles");
 
-    if( breakpoint != NO_BREAKPOINT ) {
-        print(390, END_ROW, menuColor, id--?0:-4, bright, "[B]reakpoint = 0x%04X", breakpoint);
+    if( breakpoint == NOT_SET ) {
+        gui.print(440, GUI::END_ROW, menuColor, "[B]reakpoint");
     }
     else {
-        print(390, END_ROW, menuColor, "[B]reakpoint");
+        gui.print(440, GUI::END_ROW, menuColor, id--?0:-4, bright, "[B]reakpoint 0x%04X", breakpoint);
+       
     }
     
-    print(620, END_ROW, menuColor, "[Q]uit");
+    gui.print(GUI::COL5, GUI::END_ROW, menuColor, "[Q]uit");
+}
 
-    if( editMode ) {
-        displayEdit();
+int Beast::drawMemoryLayout(int view, int topRow, int id, SDL_Color textColor, SDL_Color bright) {
+    gui.print(GUI::COL1, topRow, textColor, id--?0:5, bright, "%s", nameFor(memView[view]).c_str());
+    
+    uint32_t address = memView[view] != MV_VIDEO ? addressFor(view): getVideoAddress(view, memVideoView[view]);
+    int page = memView[view] == MV_MEM ? memViewPage[view] : -1;
+    
+    if( gui.isContinuousEdit() && (view==memoryEditView) ) {
+        page = memoryEditPage;
+        address = memoryEditAddress;
     }
 
-    SDL_RenderPresent(sdlRenderer);
+    if( memView[view] != MV_VIDEO ) {
+        displayMem(GUI::COL_MEM, topRow, textColor, address, page);
+    }  
+
+    if( memView[view] == MV_MEM ) {
+        gui.print(GUI::COL1, topRow+GUI::MEM_ROW_HEIGHT, textColor, id--?0:2, bright, "%02X", page);
+        id--;
+    }
+    else if( memView[view] == MV_VIDEO ) {
+        displayVideoMem(GUI::COL_MEM,topRow, textColor, memVideoView[view], address);
+        id--;
+
+        switch( memVideoView[view] ) {
+            case VV_RAM     : gui.print(GUI::COL1, topRow+GUI::MEM_ROW_HEIGHT, textColor, id--?0:3, bright, "RAM");    break;
+            case VV_REG     : gui.print(GUI::COL1, topRow+GUI::MEM_ROW_HEIGHT, textColor, id--?0:4, bright, "REGS");   break;
+            case VV_PAL1    : gui.print(GUI::COL1, topRow+GUI::MEM_ROW_HEIGHT, textColor, id--?0:5, bright, "PAL 1");    break;
+            case VV_PAL2    : gui.print(GUI::COL1, topRow+GUI::MEM_ROW_HEIGHT, textColor, id--?0:5, bright, "PAL 2");    break;
+            case VV_SPR     : gui.print(GUI::COL1, topRow+GUI::MEM_ROW_HEIGHT, textColor, id--?0:6, bright, "SPRITE"); break;
+            default:
+                gui.print(GUI::COL1, topRow+GUI::MEM_ROW_HEIGHT, textColor, id--?0:4, bright, "????");
+        }
+    }
+    else id-=2;
+
+    if( memView[view] == MV_MEM ) {
+        gui.print(GUI::COL1, topRow + GUI::MEM_ROW_HEIGHT*2, textColor, id--?0:6, bright, "0x%04X", address);
+    }
+    else if( memView[view] == MV_Z80 ) {
+        gui.print(GUI::COL1, topRow + GUI::MEM_ROW_HEIGHT, textColor, id--?0:6, bright, "0x%04X", address);
+    }
+    else if( memView[view] == MV_VIDEO ) {
+        gui.print(GUI::COL1, topRow + GUI::MEM_ROW_HEIGHT*2, textColor, id--?0:7, bright, "0x%05X", address);
+    }
+    else id--;
+
+    return id;
 }
 
 std::string Beast::nameFor(MemView view) {
@@ -1033,12 +1430,13 @@ std::string Beast::nameFor(MemView view) {
         case MV_IY : return "IY";
         case MV_Z80: return "Z80";
         case MV_MEM: return "PAGE";
+        case MV_VIDEO: return "VIDEO";
         default:
             return "???";
     }
 }
 
-uint16_t Beast::addressFor(int view) {
+uint32_t Beast::addressFor(int view) {
 switch(memView[view]) {
         case MV_PC : return cpu.pc-1;
         case MV_SP : return cpu.sp;
@@ -1049,14 +1447,33 @@ switch(memView[view]) {
         case MV_IY : return cpu.iy;
         case MV_Z80: return memAddress[view];
         case MV_MEM: return memPageAddress[view];
+        case MV_VIDEO:
+            return getVideoAddress(view, memVideoView[view]);
         default:
             return 0;
     }
 }
 
+uint32_t Beast::getAddressMask(int view) {
+    if( memView[view] == MV_MEM ) {
+        return 0x3FFF;
+    }
+    else if( memView[view] == MV_VIDEO ) {
+        switch(memVideoView[view]) {
+            case VV_RAM : return VideoBeast::VIDEO_RAM_LENGTH-1;
+            case VV_REG : return VideoBeast::REGISTERS_LENGTH-1;
+            case VV_PAL1: 
+            case VV_PAL2: return VideoBeast::PALETTE_LENGTH*2-1;
+            case VV_SPR : return VideoBeast::SPRITE_LENGTH*VideoBeast::SPRITE_BYTES-1;
+        }
+    }
+    
+    return 0x0FFFF;
+}
+
 Beast::MemView Beast::nextView(MemView view, int dir) {
     switch(view) {
-        case MV_PC : return dir == 1 ? MV_SP : MV_MEM;
+        case MV_PC : return dir == 1 ? MV_SP : (videoBeast ? MV_VIDEO : MV_MEM);
         case MV_SP : return dir == 1 ? MV_HL : MV_PC;
         case MV_HL : return dir == 1 ? MV_BC : MV_SP;
         case MV_BC : return dir == 1 ? MV_DE : MV_HL;
@@ -1064,52 +1481,239 @@ Beast::MemView Beast::nextView(MemView view, int dir) {
         case MV_IX : return dir == 1 ? MV_IY : MV_DE;
         case MV_IY : return dir == 1 ? MV_Z80 : MV_IX;
         case MV_Z80 : return dir == 1 ? MV_MEM : MV_IY;
-        case MV_MEM : return dir == 1 ? MV_PC : MV_Z80;
+        case MV_MEM : return dir == 1 ? (videoBeast ? MV_VIDEO: MV_PC) : MV_Z80;
+        case MV_VIDEO: return dir == 1 ? MV_PC : MV_MEM;
         default:
             return MV_PC;
     }
 }
 
+Beast::VideoView Beast::nextVideoView(VideoView view, int dir) {
+    switch( view ) {
+        case VV_RAM : return dir == 1 ? VV_REG : VV_SPR;
+        case VV_REG : return dir == 1 ? VV_PAL1 : VV_RAM;
+        case VV_PAL1 : return dir == 1 ? VV_PAL2 : VV_REG;
+        case VV_PAL2 : return dir == 1 ? VV_SPR : VV_PAL1;
+        case VV_SPR : return dir == 1 ? VV_RAM : VV_PAL2;
+        default:
+            return VV_RAM;        
+    }
+
+}
+
 void Beast::itemSelect(int direction) {
+    if( gui.isContinuousEdit() ) {
+        return;
+    }
+
     switch(selection) {
         case SEL_MEM0 : memView[0] = nextView(memView[0], direction); break;
         case SEL_MEM1 : memView[1] = nextView(memView[1], direction); break;
         case SEL_MEM2 : memView[2] = nextView(memView[2], direction); break; 
+        case SEL_VIDEOVIEW0 : memVideoView[0] = nextVideoView(memVideoView[0], direction); break;
+        case SEL_VIDEOVIEW1 : memVideoView[1] = nextVideoView(memVideoView[1], direction); break;
+        case SEL_VIDEOVIEW2 : memVideoView[2] = nextVideoView(memVideoView[2], direction); break;
     }
 }
 
-void Beast::drawListing(uint16_t address, SDL_Color textColor, SDL_Color highColor) {
-    int length;
-    auto f = [this](uint16_t address) { return this->readMem(address); };
+void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor) {
+    Listing::Location currentLoc = listing.getLocation(page << 16 | address);
 
     int matchedLine = -1;
 
-    for( size_t i=0; i<decodedAddresses.size(); i++) {
-        if( decodedAddresses[i] == address ) {
-            matchedLine = i;
-            break;
+    if( currentLoc.valid ) {
+        currentLoc.lineNum = currentLoc.lineNum < 4 ? 0 : currentLoc.lineNum - 4;
+
+        std::pair<Listing::Line, bool> line = listing.getLine(currentLoc);
+        if( line.second ) {
+            address = line.first.address;
         }
     }
-    if( matchedLine > 7 ) {
-        address = decodedAddresses[matchedLine-7];
-    }
-    else if( matchedLine >= 0 ) {
-        address = decodedAddresses[0];
+    else {
+        for( size_t i=0; i<decodedAddresses.size(); i++) {
+            if( decodedAddresses[i] == address ) {
+                matchedLine = i;
+                break;
+            }
+        }
+        if( matchedLine > 7 ) {
+            address = decodedAddresses[matchedLine-7];
+        }
+        else if( matchedLine >= 0 ) {
+            address = decodedAddresses[0];
+        }
     }
 
+    int length;
+    auto f = [this](uint16_t address) { return this->readMem(address); };
+    
     for( size_t i=0; i<12; i++ ) {
+        std::pair<Listing::Line, bool> line;
+
+        if( currentLoc.valid ) { 
+            line = listing.getLine(currentLoc);
+
+            while( line.second && line.first.address < address ) {
+                currentLoc.lineNum++;
+                line = listing.getLine(currentLoc);
+            } 
+
+            bool valid = line.second;
+
+            if( line.second && line.first.address == address ) {
+                for( int i=0; i<line.first.byteCount; i++ ) {
+                    if( readMem(address+i) != line.first.bytes[i] ) {
+                        valid = false;
+                        break;
+                    }
+                }
+                currentLoc.lineNum++;
+            }
+
+            if( valid && line.first.address == address ) {
+                gui.print(GUI::COL1, GUI::ROW22+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.first.text.c_str()));
+                address += line.first.byteCount;
+                continue;
+            }
+            if( line.second && line.first.address == address && line.first.isData ) {
+                std::string byteString;
+                for( int j=4; j-->0; ) {
+                    if( j < line.first.byteCount ) {
+                        char buffer[4];
+                        int c = snprintf( buffer, 4, "%02X ", readMem(address+j));
+                        if( c>0 && c<4 )
+                            byteString.insert( 0, buffer, c );
+                    }
+                    else {
+                        byteString.insert(0, "   ");
+                    }
+                }
+                gui.print(GUI::COL1, GUI::ROW22+(14*i), (address == cpu.pc-1) ? highColor: disassColor, "----   %04X %s", address, const_cast<char*>(byteString.c_str()));
+                address += line.first.byteCount;
+                continue;
+            }
+        }
+
         if( decodedAddresses.size() > i ) {
             decodedAddresses[i] = address;
         }
         else {
             decodedAddresses.push_back(address);
         }
-        std::string line = instr->decode(address, f, &length);
-        print(COL1, ROW22+(14*i), (address == cpu.pc-1) ? highColor: textColor, "%04X             %s", address, const_cast<char*>(line.c_str()));
+        std::string decoded = instr->decode(address, f, &length);
+        decoded.insert(0, "                ");
+
+        for( int j=4; j-->0; ) {
+            if( j < length) {
+                char buffer[4];
+                int c = snprintf( buffer, 4, "%02X ", readMem(address+j));
+                if( c>0 && c<4 )
+                    decoded.insert( 0, buffer, c );
+            }
+            else {
+                decoded.insert(0, "   ");
+            }
+        }
+
+        gui.print(GUI::COL1, GUI::ROW22+(14*i), (address == cpu.pc-1) ? highColor: disassColor, "----   %04X %s", address, const_cast<char*>(decoded.c_str()));
         address += length;
     }
 }
+uint8_t Beast::readVideoMemory(VideoView view, uint32_t address) {
+    switch( view ) {
+        case VV_RAM: return videoBeast->readRam(address);
+        case VV_REG: return videoBeast->readRegister(address); 
+        case VV_PAL1: return videoBeast->readPalette(1, address);  
+        case VV_PAL2: return videoBeast->readPalette(2, address);
+        case VV_SPR: return videoBeast->readSprite(address);
+    }
 
+    return 0;
+}
+
+void Beast::writeVideoMemory(VideoView view, uint32_t address, uint8_t value ) {
+    switch( view ) {
+        case VV_RAM: videoBeast->writeRam(address, value);          break;
+        case VV_REG: videoBeast->writeRegister(address, value);     break; 
+        case VV_PAL1: videoBeast->writePalette(1, address, value);  break; 
+        case VV_PAL2: videoBeast->writePalette(2, address, value);  break; 
+        case VV_SPR: videoBeast->writeSprite(address, value);       break;
+    }
+}
+
+void Beast::displayVideoMem(int x, int y, SDL_Color textColor, VideoView view, uint32_t markAddress) {
+    
+    uint32_t address = (markAddress & 0xFFFF0)-16;
+    
+    const int BUFFER_SIZE = 200;
+    char buffer[BUFFER_SIZE]; 
+
+    for( int row=0; row<3; row++ ) {
+        int c=0;
+        switch( view ) {
+            case VV_RAM : c = snprintf( buffer, BUFFER_SIZE,   "0x%05X ", address & 0x0FFFFF);  break;
+            case VV_REG : c = snprintf( buffer, BUFFER_SIZE, "   0x%02X ", address & 0X0FF);  break;
+            case VV_PAL1: c = snprintf( buffer, BUFFER_SIZE,  "  0x%03X ", address & 0x1FF);  break;
+            case VV_PAL2: c = snprintf( buffer, BUFFER_SIZE,  "  0x%03X ", address & 0x1FF);  break;
+            case VV_SPR : c = snprintf( buffer, BUFFER_SIZE,  "  0x%03X ", address & 0x7FF);  break;
+        }
+        if( c < 0 || c >= BUFFER_SIZE ) {
+            break;
+        }
+
+        for( uint16_t i=0; i<16; i++ ) {
+            uint8_t data = readVideoMemory(view, address+i);
+
+            int cs = snprintf( buffer+c, BUFFER_SIZE-c, (address+i == markAddress) ? ">%02X" : " %02X", data);
+            if( cs < 0 || cs+c >= BUFFER_SIZE ) {
+                return;
+            }
+            c+=cs;
+        }
+
+        int cn =snprintf(buffer+c, BUFFER_SIZE-c, "   ");
+        if( cn < 0 || cn+c >= BUFFER_SIZE ) {
+            return;
+        }
+        c+=cn;
+
+        if( view != VV_PAL1 && view != VV_PAL2 ) {
+            for( int i=0; i<16; i++ ) {
+                uint8_t data = readVideoMemory(view, address+i);
+
+                if( data < 32 || data > 127 ) {
+                    data = '.';
+                }
+
+                buffer[c++] = data;
+                buffer[c] = 0;
+                if( c+1 >= BUFFER_SIZE) {
+                    return;
+                }
+            }
+        }
+
+        gui.print(x, y+(GUI::MEM_ROW_HEIGHT*row), textColor, buffer);
+
+        if( view == VV_PAL1 || view == VV_PAL2 ) {
+            for( int i=0; i<8; i++ ) {
+                uint16_t packedRGB = readVideoMemory(view, address+i*2) + (readVideoMemory(view, address+i*2+1) << 8);
+                uint8_t r, g, b;
+
+                videoBeast->unpackRGB(packedRGB, &r, &g, &b);
+
+                boxRGBA(sdlRenderer, (x+480+(i*GUI::MEM_ROW_HEIGHT))*zoom, (y+(GUI::MEM_ROW_HEIGHT*row)+4)*zoom, (x+478+((i+1)*GUI::MEM_ROW_HEIGHT))*zoom, (y+(GUI::MEM_ROW_HEIGHT*(row+1))+2)*zoom, r, g, b, 0xFF);
+                if( packedRGB & 0x8000 ) {
+                    uint8_t col = ((1+r+g+b)/3) > 0x80 ? 0 : 0xFF;
+
+                    lineRGBA(sdlRenderer, (x+480+(i*GUI::MEM_ROW_HEIGHT))*zoom, (y+(GUI::MEM_ROW_HEIGHT*row)+4)*zoom, (x+478+((i+1)*GUI::MEM_ROW_HEIGHT))*zoom, (y+(GUI::MEM_ROW_HEIGHT*(row+1))+2)*zoom, col, col, col, 0xFF);
+                    lineRGBA(sdlRenderer, (x+480+(i*GUI::MEM_ROW_HEIGHT))*zoom, (y+(GUI::MEM_ROW_HEIGHT*(row+1))+2)*zoom, (x+478+((i+1)*GUI::MEM_ROW_HEIGHT))*zoom, (y+(GUI::MEM_ROW_HEIGHT*row)+4)*zoom, col, col, col, 0xFF);
+                }
+            }
+        }
+        address += 16;
+    }
+}
 void Beast::displayMem(int x, int y, SDL_Color textColor, uint16_t markAddress, int page) {
     uint16_t address = (markAddress & 0xFFF0)-16;
 
@@ -1118,7 +1722,7 @@ void Beast::displayMem(int x, int y, SDL_Color textColor, uint16_t markAddress, 
     const int BUFFER_SIZE = 200;
     char buffer[BUFFER_SIZE]; 
     for( int row=0; row<3; row++ ) {
-        int c = snprintf( buffer, BUFFER_SIZE, "0x%04X ", address & addressMask);
+        int c = snprintf( buffer, BUFFER_SIZE, " 0x%04X ", address & addressMask);
         if( c < 0 || c >= BUFFER_SIZE ) {
             break;
         }
@@ -1149,116 +1753,72 @@ void Beast::displayMem(int x, int y, SDL_Color textColor, uint16_t markAddress, 
                 return;
             }
         }
-        print(x, y+2+(14*row), textColor, buffer);
+        gui.print(x, y+(GUI::MEM_ROW_HEIGHT*row), textColor, buffer);
         address += 16;
     }
 }
 
-uint8_t Beast::readMem(uint16_t address) {
-    uint32_t mappedAddr = address & 0x3FFF;
-    bool isRam = false;
-    
-    if( pagingEnabled ) {
-        int page = memoryPage[(address >> 14) & 0x03];
-        isRam = (page & 0xE0) == 0x20;
-        mappedAddr |= (page & 0x1F) << 14;
+void Beast::writeMem(int page, uint16_t address, uint8_t data) {
+    if( page < 0 ) {
+        page = memoryPage[(address >> 14) & 0x03];
     }
-    return isRam ? ram[mappedAddr] : rom[mappedAddr];
+
+    uint32_t mappedAddr = (address & 0x3FFF) | ((page & 0x1F) << 14);
+
+    if( (page & 0xE0) == 0x20 ) {
+        ram[mappedAddr] = data;
+    }
+    else if( (page & 0xE0) == 0x40 ) {
+        if( videoBeast ) {
+            videoBeast->write(address, data, clock_time_ps);
+        }
+    }
+    else {
+        rom[mappedAddr] = data;
+    }
+}
+
+uint8_t Beast::readMem(uint16_t address) {
+    int page = pagingEnabled ? memoryPage[(address >> 14) & 0x03] : 0;
+    return readPage(page, address);
 }
 
 uint8_t Beast::readPage(int page, uint16_t address) {
-    bool isRam = page > 0x1F;
+    bool isRam = (page & 0xE0) == 0x20;
+    if( !isRam && ((page & 0xE0) == 0x40)) {
+        // Videobeast
+        if( videoBeast ) {
+            return videoBeast->read(address, clock_time_ps);
+        }
+        else {
+            return 0;
+        }
+    }
     uint32_t mappedAddr = (address & 0x3FFF) | (page & 0x1F) << 14;
     return isRam ? ram[mappedAddr] : rom[mappedAddr];
 }
 
-template<typename... Args> void Beast::print(int x, int y, SDL_Color color, const char *fmt, Args... args) {
-    char buffer[200]; 
-
-    int c = snprintf(buffer, sizeof(buffer), fmt, args...);
-
-    if( c > 0 && c<(int)sizeof(buffer)) {
-        printb(x,y, color, 0, {0}, buffer);
-    }
-}
-
-template<typename... Args> void Beast::print(int x, int y, SDL_Color color, int highlight, SDL_Color background, const char *fmt, Args... args) {
-    char buffer[200]; 
-
-    int c = snprintf(buffer, sizeof(buffer), fmt, args...);
-
-    if( c > 0 && c<(int)sizeof(buffer)) {
-        printb(x,y, color, highlight, background, buffer);
-    }
-}
-
-void Beast::displayEdit() {
-    char buffer[2] = {'0', 0};
-    int width;
-    int height;
-
-    SDL_Color background = {0xFF, 0xFF, 0xFF};
-
-    TTF_SizeUTF8(monoFont, buffer, &width, &height);
-    boxRGBA(sdlRenderer, editX*zoom+(width*(editOffset-1)), (editY+1)*zoom, editX*zoom+(width*(editOffset+editDigits-1)), (editY-2)*zoom+height, background.r, background.g, background.b, 0xFF);
-
-    SDL_Rect textRect;
-
-    SDL_Color normal = {0x00, 0x00, 0x00};
-    SDL_Color edited = {0xF0, 0x40, 0x40};
-
-    for( int i=editDigits-1; i>=0; i--) {
-        snprintf(buffer, sizeof(buffer), "%01X", (editValue >> (i*4)) & 0x0F);
-
-        SDL_Color color = i == editIndex ? edited: normal;
-
-        SDL_Surface *textSurface = TTF_RenderText_Blended(monoFont, buffer, color);
-        SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
-
-        textRect.x = editX*zoom+(width*(editOffset+(editDigits-i)-2)); 
-        textRect.y = editY*zoom;
-        textRect.w = textSurface->w;
-        textRect.h = textSurface->h;
-
-        SDL_RenderCopy(sdlRenderer, textTexture, NULL, &textRect);
-
-        SDL_DestroyTexture(textTexture);
-        SDL_FreeSurface(textSurface);
-    }
-}
-
-void Beast::printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer) {
-    SDL_Surface *textSurface = TTF_RenderText_Blended(monoFont, buffer, color);
-    SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
-
-    if( highlight != 0 ) {  
-        int width;
-        int height;
-
-        if( highlight > 0 ) {
-            buffer[highlight] = (char)0;
-            TTF_SizeUTF8(monoFont, buffer, &width, &height);
-            boxRGBA(sdlRenderer, x*zoom, (y+1)*zoom, x*zoom+width, (y-2)*zoom+height, background.r, background.g, background.b, 0xFF);
-        }
-        else if( highlight < 0 ) {
-            buffer += strlen(buffer)+highlight;
-            TTF_SizeUTF8(monoFont, buffer, &width, &height);
-            boxRGBA(sdlRenderer, x*zoom+textSurface->w-width, (y+1)*zoom, x*zoom+textSurface->w, (y-2)*zoom+height, background.r, background.g, background.b, 0xFF);
-        }
+uint32_t Beast::getVideoAddress(int index, VideoView view) {
+    switch( view ) {
+        case VV_RAM : return memVideoAddress[index][0];
+        case VV_REG : return memVideoAddress[index][1];
+        case VV_PAL1: return memVideoAddress[index][2];
+        case VV_PAL2: return memVideoAddress[index][3];
+        case VV_SPR : return memVideoAddress[index][4];
     }
 
-    SDL_Rect textRect;
-    textRect.x = x*zoom; 
-    textRect.y = y*zoom;
-    textRect.w = textSurface->w;
-    textRect.h = textSurface->h;
-
-    SDL_RenderCopy(sdlRenderer, textTexture, NULL, &textRect);
-
-    SDL_DestroyTexture(textTexture);
-    SDL_FreeSurface(textSurface);
+    return 0;
 }
 
+void Beast::setVideoAddress(int index, VideoView view, uint32_t value) {
+    switch( view ) {
+        case VV_RAM : memVideoAddress[index][0] = value;  break;
+        case VV_REG : memVideoAddress[index][1] = value;  break;
+        case VV_PAL1: memVideoAddress[index][2] = value;  break;
+        case VV_PAL2: memVideoAddress[index][3] = value;  break;
+        case VV_SPR : memVideoAddress[index][4] = value;  break;
+    }
+}
 
 void Beast::onDraw() {
     // Do something..
@@ -1278,10 +1838,18 @@ void Beast::drawBeast() {
     int keyboardTop = (screenHeight - KEYBOARD_HEIGHT);
     int displayTop = (keyboardTop-8 - Digit::DIGIT_HEIGHT);
 
+    SDL_Point size;
+    SDL_QueryTexture(pcbTexture, NULL, NULL, &size.x, &size.y);
+
+    int pcbHeight = (int)((screenWidth / (float)size.x) * size.y);
+
     SDL_SetRenderDrawColor(sdlRenderer, 0x0, 0x0, 0x0, SDL_ALPHA_OPAQUE);
     SDL_RenderClear(sdlRenderer);
     SDL_Rect textRect = {0, (int)(keyboardTop*zoom), (int)(KEYBOARD_WIDTH*zoom), (int)(KEYBOARD_HEIGHT*zoom)};
     SDL_RenderCopy(sdlRenderer, keyboardTexture, NULL, &textRect);
+
+    SDL_Rect pcbRect = {0, (int)((displayTop-pcbHeight) * zoom)-4, (int)(screenWidth*zoom), (int)(displayTop * zoom)-4 };
+    SDL_RenderCopy(sdlRenderer, pcbTexture, NULL, &pcbRect);
 
     for( int i=0; i<DISPLAY_CHARS; i++) {
         display[i].onDraw(sdlRenderer, 4 + i*(Digit::DIGIT_WIDTH+1), displayTop);

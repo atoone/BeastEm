@@ -11,10 +11,6 @@ class VideoBeast {
     static const int MAX_LAYER_TIMES = MAX_LAYERS + 3;
 
     static const int VIDEO_MODES = 2;
-    static const int VIDEO_RAM_LENGTH = 1024*1024;
-
-    static const int REGISTERS_LENGTH = 256;
-    static const int PALETTE_LENGTH   = 256;
 
     static const int MAX_LINE_WIDTH   = 1024;
 
@@ -81,18 +77,41 @@ class VideoBeast {
     };
 
     public:
-        VideoBeast(char* initialMemFile, float zoom);
+        VideoBeast(float zoom);
         ~VideoBeast();
 
-        void     init(uint64_t clock_time_ps);
+        int     init(uint64_t clock_time_ps, int guiWidth);
 
         uint64_t tick(uint64_t clock_time_ps);
 
         void     write(uint16_t addr, uint8_t data, uint64_t clock_time_ps);
         uint8_t  read(uint16_t addr, uint64_t clock_time_ps);
 
-        void handleEvent(SDL_Event windowEvent);
+        uint8_t  readRam(uint32_t address);
+        uint8_t  readRegister(uint32_t address);
+        uint8_t  readPalette(int palette, uint32_t address);
+        uint8_t  readSprite(uint32_t address);
+
+        uint8_t* memoryPtr();
+
+        void     writeRam(uint32_t address, uint8_t value);
+        void     writeRegister(uint8_t address, uint8_t value);
+        void     writePalette(int palette, uint16_t address, uint8_t value);
+        void     writeSprite(uint16_t address, uint8_t value);
+
+        // Get a colour value for the window surface from a packed RGB palette entry
+        uint32_t getColour(uint16_t packedRGB);
+        void     unpackRGB(uint16_t packedRGB, uint8_t *r, uint8_t *g, uint8_t *b);
+
+        void     handleEvent(SDL_Event windowEvent);
     
+        // Note these must all be a power of 2
+        static const int VIDEO_RAM_LENGTH = 1024*1024;
+        static const int REGISTERS_LENGTH = 256; 
+        static const int PALETTE_LENGTH   = 256;
+        static const int SPRITE_LENGTH    = 256;
+        static const int SPRITE_BYTES     = 8;
+
     private:
         uint8_t mem[VIDEO_RAM_LENGTH];
 
@@ -114,6 +133,7 @@ class VideoBeast {
         uint64_t next_line_time_ps;
         uint64_t next_multiply_available_ps;
 
+        uint64_t frameCount = 0;
         uint16_t currentLine = 0;
         uint16_t displayLine = 0;
         uint8_t  currentLayer = IDLE;
@@ -147,9 +167,6 @@ class VideoBeast {
 
         uint32_t background;
 
-        // Read a file into graphics ram
-        void readMem(char* filename);
-
         void tickNextFrame();
 
         void createWindow();
@@ -159,9 +176,6 @@ class VideoBeast {
 
         void loadPalette(const char *filename, uint32_t *palette, uint16_t *paletteReg);
         void loadRegisters(const char *filename);
-
-        // Get a colour value for the window surface from a packed RGB palette entry
-        uint32_t getColour(uint16_t packedRGB);
 
         uint64_t drawTextLayer(int layberBase);
         uint64_t drawTileLayer(int layberBase);

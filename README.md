@@ -1,6 +1,6 @@
 # Feersum MicroBeast Emulator
 
-Emulator for the MicroBeast Z80 computer kit. Features include:
+Emulator for the [MicroBeast Z80 computer kit](https://feertech.com/microbeast/). Features include:
 
 * 512K RAM, 512K ROM (4x16K paging)
 * Z80 PIO with software I2C bus
@@ -18,23 +18,19 @@ All of the main features of MicroBeast are emulated, allowing software to be dev
 
 # Running
 
-Precompiled binaries are available for Windows-64 in the Release section on GitHub.
+Precompiled binaries are available for Windows-64 in the [Release section](https://github.com/atoone/BeastEm/releases) on GitHub. Download the .zip file and run `beast.bat` to start the emulator. Note you will need to run from the command line if you wish to enable VideoBeast emulation (the `-d` or `-d2` command line options).
 
-BeastEm requires a number of libraries and files to run. For Windows, these files are all supplied in the `release/win64` directory, which also contains a batch file to configure the library path and start the program.
+Linux and OSX users should follow the build instructions below to create the ``beastem`` exectutable which should be copied to a directory along with the files in the `assets` folder in order to run BeastEm.
 
-Linux users should copy the exectutable to a directory along with the files in the `assets` folder in order to run BeastEm.
+## Default MicroBeast Firmware
 
-## Run with a simple test ROM
-
-Windows users can run `beast.bat` in the `release/win64` directory.
-
-Linux users can run BeastEm with the executable name ``beastem`` on the command line.
-
-If no parameters are supplied, BeastEm will start the emulator up with an (incomplete) monitor ROM that exercises some of the features of MicroBeast. This is equivalent to running with the command line:
+If no parameters are supplied, BeastEm will start the emulator up with a recent ROM image of the [MicroBeast firmware](https://github.com/atoone/MicroBeast/wiki/Firmware). This supplies a memory editor, YModem download utility and CP/M 2.2 environment with a few programs to try out. This is equivalent to running with the command line:
 
 ```
-beastem -f flash_v1.5.bin -l 0 firmware.lst -l 23 bios.lst
+beastem -f flash_v1.5.bin -l 0 firmware.lst -l 23 monitor.lst
 ```
+
+Supplying a `-f` binary file command line option will override this behaviour, so the emulator can be started with your own custom firmware.
 
 ## Command line options
 
@@ -54,17 +50,17 @@ The following command line options may be used:
 
 ## Listing Files
 
-BeastEm will synchronise debug with listing files in the TASM format (each line consisting of a line number, one or more spaces and then the assembly address in hex). Other formats may be supported in future.
+BeastEm will synchronise debug with listing files in the TASM or sjsmplus format (each line consisting of a line number, one or more spaces and then the assembly address in hex). Other formats may be supported in future.
 
 A listing file is pinned to the memory page it is loaded into, as well as the physical address in the listing itself. This allows code paged in to memory to be correctly identified.
 
-Note that no checks are made that the memory contents match the provided listing, so the assembly shown may not be accurate.
+If the hex bytes in the listing file do not match the current memory contents, BeastEm will disassemble the location.
 
 ## Controlling BeastEm
 
 The Emulator starts in the debug view, showing the state of the CPU, PIO and a disassembly or listing of the current execution address. When the emulator is running, the debug view is hidden and keyboard input goes directly to MicroBeast. At any time, hitting `ESCAPE` will return to the debug view.
 
-![BeastEm Debug View](docs/beastem_0_6.png)
+![BeastEm Debug View](docs/beastem_1.1.png)
 
 In the debug view, most commands take a single keypress. The currently implemented commands are:
 
@@ -75,18 +71,22 @@ In the debug view, most commands take a single keypress. The currently implement
 | `O` | Run until the following instruction is reached (eg. **O**ver a `CALL` or `DJNZ` instruction) |
 | `U` | Run until the current subroutine is returned from.                                           |
 | `T` | Run until the current conditional branch is **T**aken                                        |
+| `L` | Toggle listing following PC, or at specific address                                          |
+| `E` | Soft reset CPU                                                                               |
+| `F` | File management: Load source and binary files                                                |
 | `B` | Toggle breakpoint, edit value when breakpoint enabled                                        |
 | `D` | When a terminal is connected over a network port, **D**isconnect it and await a new connection |
-| `Q` | Quit                                                                                         |
 | `A` | Toggles appending audio output to the chosen audio file                                      |
-| `PG-Up`, `PG-Down` | Select debug values for editing                                               |
-| `Left`, `Right`    | When a memory view is selected, choose the register pair or address to view   |
+| `Q` | Quit                                                                                         |
+| `Up`, `Down`    | Select debug values for editing                                                  |
+| `Left`, `Right` | Update selected item (increment/decrement registers, select memory view etc.)    |
 
 When a value is selected, hitting `Enter` will allow a new value to be set, or toggle a binary `On|Off` value.
 
 Besides showing the address pointed to by register pairs, the memory views also allow memory to be directly
-inspected. The `Z80` option views the CPU's memory map (0-64K), whereas the `PAGE` option allows any page
-in the 1Mb paged memory (512K ROM, 512K RAM) to be examined.
+inspected and edited. `Z80` views the CPU's logical memory map (0-64K), whereas the `PAGE` option allows any page
+in the 1Mb physical memory (512K ROM, 512K RAM) to be examined. When VideoBeast is enabled, `Video RAM`
+allows video memory, registers and palettes to be viewed and edited.
 
 ## Serial over Network
 
@@ -111,9 +111,29 @@ Windows users can install g++ with MySys64, following [this guide](https://code.
 
 ## Linux
 
-Linux users will need to install the SDL2 development libraries, specifically `libsdl2-dev`, `libsdl2-gfx-dev`, `libsdl2-net-dev` and `libsdl2-ttf-dev`. Build the executable with:
+Linux users will need to install the SDL2 development libraries, along with build tooling if needed and GTK+-3. E.g.
+on Debian (Bookworm and above): 
 
 ```shell
+sudo apt-get install build-essential cmake git gtk+3-dev libsdl2-dev libsdl2-net-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-gfx-dev
+```
+
+Some distributions, notably Red Hat-based ones, call these `-devel` instead of `-dev` - You _do_ need the development
+packages to get the appropriate headers and CMake files. On Fedora, for example:
+
+```shell
+sudo dnf install gcc gcc-c++ cmake git gtk3-devel SDL2-devel SDL2_net-devel SDL2_image-devel SDL2_ttf-devel SDL2_gfx-devel
+```
+
+> **Note**: Debian Bullseye (and older) are not officially supported by the CMake build, due to missing modern CMake 
+  files in the standard SDL2 dependencies from `apt`. If you are set on building on such a platform, then the recommended
+  path is to use [Linuxbrew](https://docs.brew.sh/Homebrew-on-Linux) and avoid using any of the built-in `apt` 
+  package dependencies which will use conflicting `glibc`.
+
+Build the executable with:
+
+```shell
+cmake .
 make clean all
 ```
 
@@ -129,15 +149,16 @@ Once the executable is built, copy it and the files in the `assets` folder to th
 
 ## macOS
 
-Install the required SDL libraries, for example using [homebrew](https://brew.sh/):
+Install the required SDL libraries, along with cmake if necessary, for example using [homebrew](https://brew.sh/):
 
 ```shell
-brew install sdl2 sdl_2gfx sdl2_image sdl2_net sdl2_ttf
+brew install cmake sdl2 sdl_2gfx sdl2_image sdl2_net sdl2_ttf
 ```
 
 And build with:
 
 ```shell
+cmake .
 make clean all
 ```
 
@@ -163,19 +184,13 @@ The emulator is a **work in progress**, and assumes relatively well behaved code
 
 BeastEm is one part of a much bigger project to build a unique new computer, so other parts of that larger project may take precedence.
 
-Some features are not yet implemented:
+VideoBeast is currently prototype hardware, with some features (noteably sprites and SD-Card access) not yet available. BeastEm emulates the current APIs reasonably accurately. More information is on the VideoBeast [introduction Page](VIDEOBEAST.md)
+
+Some features of MicroBeast are not yet implemented:
 
 * RTC Alarms, battery monitoring
 * PIO inputs
-* Flash ROM erase and write
 
-The Debugger is also on early release, currently missing:
-
-* Memory editing
-* Read / write binary files during emulation
-* Navigating through listings/disassembly.
-
-The included monitor ROM is also early code, demonstrating some simple concepts on MicroBeast. It is included only for test purposes.
 
 # Help
 

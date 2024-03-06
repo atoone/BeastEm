@@ -3,15 +3,14 @@
 #include <fstream>
 #include <algorithm> 
 
-VideoBeast::VideoBeast(char *initialMemFile, float zoom) {
-    readMem(initialMemFile);
+VideoBeast::VideoBeast(float zoom) {
     requestedZoom = zoom;
 }
 
 VideoBeast::~VideoBeast() {
 }
 
-void VideoBeast::init(uint64_t clock_time_ps) {
+int VideoBeast::init(uint64_t clock_time_ps, int guiWidth) {
     if( surface == nullptr ) {
         createWindow();
     }
@@ -31,12 +30,28 @@ void VideoBeast::init(uint64_t clock_time_ps) {
 
     background = getColour((registers[REG_BACKGROUND_H] << 8) + registers[REG_BACKGROUND_L]);
     clearWindow();
+
+    SDL_DisplayMode display;
+
+    int displayIndex = SDL_GetWindowDisplayIndex(window);
+    if( SDL_GetDesktopDisplayMode(displayIndex, &display) == 0) {
+        int space = (display.w - guiWidth - (VIDEO_MODE[mode].pixelWidth * zoom))/3;
+        if( space < 0 ) space = 0;
+        SDL_SetWindowPosition(window, display.w - (VIDEO_MODE[mode].pixelWidth * zoom) - space, SDL_WINDOWPOS_CENTERED);
+
+        return space;
+    }
+    return -1;
 }
 
 uint32_t VideoBeast::getColour(uint16_t packedRGB) {
     uint8_t r,g,b;
     SDL_GetRGB(packedRGB, pixel_format, &r, &g, &b);
     return SDL_MapRGB(surface->format, r, g, b);
+}
+
+void VideoBeast::unpackRGB(uint16_t packedRGB, uint8_t *r, uint8_t *g, uint8_t *b) {
+    SDL_GetRGB(packedRGB, pixel_format, r, g, b);
 }
 
 uint64_t VideoBeast::drawBppBitmap(int layerBase) {
@@ -94,8 +109,11 @@ uint64_t VideoBeast::drawTextLayer(int layerBase) {
 
     int mapAddress = (registers[layerBase + REG_OFF_TEXT_MAP] << 14)  + ((row & 0x1F8) << 5); // leftmost column of current row
     int fontAddress = (registers[layerBase + REG_OFF_TEXT_FONT] << 11);
+    int bitmapAddress = (registers[layerBase + REG_OFF_TEXT_BITMAP] << 14);
 
     int paletteIndex = (registers[layerBase + REG_OFF_TEXT_PALETTE] & 0x0F) << 4;
+
+    bool sinclairAttributes = (registers[layerBase + REG_OFF_TEXT_PALETTE] & 0x10) != 0;
 
     int discard = (scrollX & 0x07);
 
@@ -105,13 +123,25 @@ uint64_t VideoBeast::drawTextLayer(int layerBase) {
         int glyph = mem[address];
         int attributes = mem[address+1];
 
+        if( sinclairAttributes ) {
+            if( (attributes & 0x80) && (frameCount & 0x10) ) {
+                attributes = ((attributes & 0x40) >> 3) | (attributes & 0x07) |
+                             ((attributes & 0x40) << 1) | ((attributes & 0x38) << 1);
+            }
+            else {
+                attributes = ((attributes & 0x40) >> 3) | ((attributes & 0x38) >> 3) |
+                             ((attributes & 0x40) << 1) | ((attributes & 0x07) << 4);
+            }
+        }
         uint32_t foreground = palette1[paletteIndex + (attributes >> 4)];
         bool transparentFG  = (paletteReg1[paletteIndex + (attributes >> 4)] & 0x8000) != 0;
 
         uint32_t background = palette1[paletteIndex + (attributes & 0x0F)];
         bool transparentBG  = (paletteReg1[paletteIndex + (attributes & 0x0F)] & 0x8000) != 0;
 
-        uint8_t pixels = mem[fontAddress + (8*glyph) + (row& 0x7)]; // TODO: 1bpp graphics..
+        uint8_t pixels = ((glyph == 0xFF) && (bitmapAddress != 0)) ?
+            mem[bitmapAddress + ((row & 0x1FF) << 7) + ((scrollX & 0x3F8) >>3)] :
+            mem[fontAddress + (8*glyph) + (row& 0x7)]; 
 
         pixels <<= discard;
         for( int count = 8-discard; count--> 0 && x < end; ) {
@@ -223,7 +253,8 @@ void VideoBeast::loadRegisters(const char *filename) {
     myfile.close();
 }
 
-void VideoBeast::handleEvent(SDL_Event windowEvent) {
+void VideoBeast::handleEvent(SDL_Event windowEvent)
+{
     if( SDL_KEYDOWN == windowEvent.type && windowEvent.window.windowID == windowID ) {
         switch( windowEvent.key.keysym.sym ) {
             case SDLK_d : 
@@ -240,6 +271,7 @@ void VideoBeast::tickNextFrame() {
     drawNextLine = true;
     displayLine = 0;
     currentLine = 0;
+    frameCount++;
     SDL_UpdateWindowSurface(window);
     isDoubled = (registers[REG_MODE] & 0x08) != 0;
 
@@ -411,7 +443,15 @@ uint64_t VideoBeast::tick(uint64_t clock_time_ps) {
 void VideoBeast::write(uint16_t addr, uint8_t data, uint64_t clock_time_ps) {
     if( (addr & 0x3FFE) == 0x3FFE ) {
         // Top two registers, always visible
-        registers[addr & 0xFF] = data;
+        if( addr & 0x01 ) {
+            if(registers[REG_LOCKED] == SET_UNLOCKED) {
+                registers[addr & 0xFF] = data;
+            }
+        }
+        else {
+            registers[addr & 0xFF] = data;
+        }
+        
     }
     else if( (addr & 0x3F00) == 0x3F00 && registers[REG_LOCKED] == SET_UNLOCKED ) {
         // Register access
@@ -496,7 +536,7 @@ void VideoBeast::write(uint16_t addr, uint8_t data, uint64_t clock_time_ps) {
                 mem[getSinclairAddress(addr)] = data;
                 break;
             default:
-                std::cout << "Videobeast unknown page map mode " << (registers[REG_MODE] >> 5) << std::endl;
+                mem[ (registers[REG_PAGE_0] << 12) + (addr & 0x3FFF) ] = data;
 
         } 
     }
@@ -580,7 +620,7 @@ uint8_t VideoBeast::read(uint16_t addr, uint64_t clock_time_ps) {
             case 4:
                 return mem[getSinclairAddress(addr)];
             default:
-                std::cout << "Videobeast unknown page map mode " << (registers[REG_MODE] >> 5) << std::endl;
+                return mem[ (registers[REG_PAGE_0] << 12) + (addr & 0x3FFF) ];
 
         } 
     }
@@ -588,14 +628,74 @@ uint8_t VideoBeast::read(uint16_t addr, uint64_t clock_time_ps) {
     return 0;
 }
 
+uint8_t VideoBeast::readRam(uint32_t address) {
+    return mem[ address & (VIDEO_RAM_LENGTH-1) ];
+}
+
+uint8_t VideoBeast::readRegister(uint32_t address) {
+    return registers[address & (REGISTERS_LENGTH-1)];
+}
+
+uint8_t VideoBeast::readPalette(int palette, uint32_t address) {
+    uint16_t value = 0;
+
+    if( palette == 1 ) {
+        value = paletteReg1[(address >> 1) & (PALETTE_LENGTH-1)];
+    }
+    else {
+        value = paletteReg2[(address >> 1) & (PALETTE_LENGTH-1)];
+    }
+
+    return (address & 1) ? value >> 8 : value;
+}
+
+uint8_t VideoBeast::readSprite(uint32_t address) {
+    return 0; // TODO: Return sprite data
+}
+
+uint8_t* VideoBeast::memoryPtr() {
+    return mem;
+}
+
+void VideoBeast::writeRam(uint32_t address, uint8_t value)  {
+    mem[ address & (VIDEO_RAM_LENGTH-1) ] = value;
+}
+
+void VideoBeast::writeRegister(uint8_t address, uint8_t value) {
+    registers[address] = value;
+}
+
+void VideoBeast::writePalette(int palette, uint16_t address, uint8_t value) {
+    uint16_t mask = 0x0FF00;
+    uint16_t update= value & 0x0FF;
+
+    uint16_t index = (address >> 1) & (PALETTE_LENGTH-1);
+
+    if( address & 1) {
+        mask = 0x0FF;
+        update <<=8;
+    }
+
+    if( palette == 1 ) {
+        paletteReg1[index] = (paletteReg1[index] & mask) | update;
+    }
+    else {
+        paletteReg2[index] = (paletteReg2[index] & mask) | update;
+    }
+}
+
+void VideoBeast::writeSprite(uint16_t address, uint8_t value) {
+    // TODO: Update sprite data
+}
+
 uint32_t VideoBeast::getSinclairAddress(uint16_t addr) {
     addr = addr & 0x3FFF;
     if( addr < 0x1800 ) {
         // Spectrum bitmap
         return ((registers[REG_PAGE_1] & 0x3F) << 14) + 
-               ((registers[REG_PAGE_2] & 0x04) << 11) +
-               ((addr & 0x1800)) +                         // Y7:6   -> Bits 14-13
-               ((addr & 0xE0  ) << 4) +                    // Y5:3   -> Bits 12-10
+               ((registers[REG_PAGE_2] & 0x04) << 12) +
+               ((addr & 0x1800) << 2) +                    // Y7:6   -> Bits 14-13
+               ((addr & 0xE0  ) << 5) +                    // Y5:3   -> Bits 12-10
                ((addr & 0x700 ) >> 1) +                    // Y2:0   -> Bits 9-7
                ((registers[REG_PAGE_2] & 0x03) << 5) +     //        -> Bits 6-5
                ((addr & 0x1F  ));                          // X4:0   -> Bits 0-4          
@@ -603,36 +703,16 @@ uint32_t VideoBeast::getSinclairAddress(uint16_t addr) {
     else if( addr < 0x1B00 ) {
         // Spectrum attributes
         return ((registers[REG_PAGE_0] & 0x3F) << 14) + 
-               ((registers[REG_PAGE_2] & 0x04) << 10) +
-               ((addr & 0x3E0 ) << 2 ) +                   // Y4:0   -> Bits 11-7
-               ((registers[REG_PAGE_2] & 0x03) << 5) +     //        -> Bits 6-5
-               ((addr & 0x1F  ));                          // X4:0   -> Bits 0-4     
+               ((registers[REG_PAGE_2] & 0x04) << 11) +
+               ((addr & 0x3E0 ) << 3 ) +                   // Y4:0   -> Bits 13-8
+               ((registers[REG_PAGE_2] & 0x03) << 6) +     //        -> Bits 7-6
+               ((addr & 0x1F  ) << 1) +                    // X4:0   -> Bits 1-5   
+               1;  
     }
     else {
         // General ram
         return ((registers[REG_PAGE_3] & 0x3F) << 14) + addr;
     }
-}
-
-void VideoBeast::readMem(char* filename) {
-    std::ifstream ifs(filename, std::ios::binary|std::ios::ate);
-    std::ifstream::pos_type pos = ifs.tellg();
-
-    int length = pos;
-    if( length > VIDEO_RAM_LENGTH) {
-        std::cout << "Binary file is too big for VideoBeast (maximum 1Mb). Actual size: " << (length/1024) << "K" << std::endl;
-        exit(1);
-    }
-    if( length == 0 ) {
-        std::cout << "VideoBeast binary file does not exist: " << filename << std::endl;
-        exit(1);
-    }
-
-    ifs.seekg(0, std::ios::beg);
-    ifs.read((char *)mem, length);
-    ifs.close();
-
-    std::cout << "Read VideoBeast file '" << filename << "' (" << (length/1024) << "K)" << std::endl;
 }
 
 void VideoBeast::createWindow() {

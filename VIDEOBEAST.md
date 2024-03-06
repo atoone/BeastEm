@@ -1,5 +1,9 @@
 # Getting started with VideoBeast
 
+VideoBeast is a [new graphics chip](https://feertech.com/microbeast/videobeast.html) for 8-bit processors that provides arcade quality 2D graphics. It is a work in progress, with early prototype hardware currently in testing. BeastEm includes an emulator for current features ( documented [here](https://feertech.com/microbeast/videobeast_doc.html) ) allowing experimentation with the hardware.
+
+![VideoBeast](docs/videobeast.jpg)
+
 ## Enabling VideoBeast in BeastEm
 
 To enable VideoBeast emulation, start BeastEm with either `-d` or `-d2` command line arguments followed by the filename of a video memory file. Either option will open a VideoBeast window once BeastEm starts, but the `-d2` option will magnify the display by a factor of two. VideoBeast initialises its 1Mb video RAM with the specified file - and the emulator includes a demonstration file, `videobeast.dat`
@@ -18,7 +22,7 @@ C3 E2 FD                 JP  0xFDE2
 
 This will map the 16Kb VideoBeast page into the Z80 memory map from address `0x4000` to `0x7FFF`. Note that the BIOS routine will RETurn at the end, so the snippet above should be CALLed to work.
 
-You can try this out by starting the memory editor in MicroBeast (Cursor down to find it from the main clock display), and editing from address `0x8000` - enter the byte sequence for the snippet above, `3E 01 1E 40 C3 E2 FD`, then move the cursor to the start of the sequence and hit `X` to execute. 
+You can try this out by starting the memory editor in MicroBeast within the emulator (Cursor down to find it from the main clock display), and editing from address `0x8000` - enter the byte sequence for the snippet above, `3E 01 1E 40 C3 E2 FD`, then move the cursor to the start of the sequence and hit `X` to execute. 
 
 Now, navigate to address `0x4000` (hit delete to stop editing values, then Enter to go to a new address). The default register configuration (specified in the `video_registers.mem` file) boots VideoBeast with the start of video RAM paged in and configured as a Text layer. Editing the first two bytes from address `0x4000` to `65 10` should display the character `e` on screen. Try different values to see how Text layers behave.
 
@@ -91,6 +95,18 @@ The address space below the registers can itself be thought of as one or more ba
 
 Various mappings are available, including two 8Kb banks (allowing us to copy between different locations in VideoBeast RAM) and a special Sinclair mapping that decodes host addresses in the Spectrum screen layout into VideoBeast Text layer addresses. 
 
+# Missing Features
+
+Note that VideoBeast is a work in progress, and some features are not yet ready or missing from the emulation. In particular, at present the following are not supported:
+
+* Sprites
+* SD-Card interface
+* Line interrupts
+
+These will be added as soon as the hardware implementation stabilises.
+
 # Trying it out
 
-Coming soon - putting this into practise in the emulator.
+Once enabled in the emulator, MicroBeast software can access VideoBeast through the paging and registers above. Some simple code to test and demonstrate the system will be added to this repository soon.
+
+Note also that the BeastEm debug menu allows register, palette and video ram to be directly viewed and edited - use `Up` or `Down` to select a memory view, then `Left` or `Right` to select `VIDEO` view. Remember that editing VideoBeast registers will not immediately update the emulated screen - when the debug view is shown, both MicroBeast and VideoBeast are halted, and the screen will not be updated until the simulation reaches the time of the next frame of video output.
