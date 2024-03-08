@@ -31,7 +31,8 @@ class Listing {
             std::vector<Line> lines;
         };
 
-        void    addFile(std::string filename, int page);
+        bool    isValidFile(std::string filename);
+        int     addFile(std::string filename, int page);
         void    loadFile(Source &source);
 
         void    removeFile(unsigned int fileNum);
@@ -48,6 +49,7 @@ class Listing {
 
         const char* addressRegex = "^[0-9]+(\\++\\s*|\\s+)([0-9a-f]{4})";
 
+        bool isValidListing(std::ifstream& stream);
         int fromHex(char c);
 
 };

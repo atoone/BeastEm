@@ -53,7 +53,7 @@ void printHelp() {
     std::cout << "   -l [page] <listing file>       : Read assembly listing file for code in page <page> (hex)" << std::endl;
     std::cout << "   -a <audio-device-num>          : Override the default audio device selection" << std::endl;
     std::cout << "   -s <audio-sample-rate>         : Override the default audio sample rate (22050)" << std::endl;
-    std::cout << "   -v <Audio volume>              : Value 0 to 10 (default 5)" << std::endl;
+    std::cout << "   -v <Audio volume>              : Value 0 to 10 (default 4)" << std::endl;
     std::cout << "   -k <CPU speed>                 : Integer KHz (default 8000)" << std::endl;
     std::cout << "   -b <breakpoint>                : Stop at address (hex)" << std::endl;
     std::cout << "   -z <zoom-level>                : Zoom the user interface by the given value" << std::endl;
@@ -198,7 +198,7 @@ int main( int argc, char *argv[] ) {
     NFD_Init();
     SDL_Init( SDL_INIT_EVERYTHING );
 
-    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator v1.1 rc1", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
+    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator v1.1 rc2", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
 
     if( NULL == window ) {
         std::cout << "Could not create window: " << SDL_GetError() << std::endl;

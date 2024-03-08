@@ -356,6 +356,7 @@ uint64_t VideoBeast::tick(uint64_t clock_time_ps) {
             if( debugFromNs != 0 ) {
                 std::cout << "Clear line " << (displayLine-1) << " current line " << currentLine << " time " << (clock_time_ps/1000 - debugFromNs) << std::endl;
             }
+            background = getColour((registers[REG_BACKGROUND_H] << 8) + registers[REG_BACKGROUND_L]);
             for( int i=0; i<MAX_LINE_WIDTH; i++ ) {
                 line_buffer[i] = background;
             }

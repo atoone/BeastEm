@@ -1,6 +1,5 @@
 #include "listing.hpp"
 #include <iostream>
-#include <iostream>
 #include <sstream>
 #include <fstream>
 #include <regex>
@@ -43,13 +42,16 @@ void Listing::removeFile(unsigned int fileNum) {
     }
 }
 
-void Listing::addFile(std::string filename, int page) {
+int Listing::addFile(std::string filename, int page) {
     std::ifstream myfile(filename);
     if(!myfile) {
         std::cout << "Listing file does not exist: " << filename << std::endl;
         exit(1);
     }
+    bool isValid = isValidListing(myfile);
     myfile.close();
+
+    if(!isValid) return -1;
 
     unsigned int fileNum = sources.size();
 
@@ -62,6 +64,50 @@ void Listing::addFile(std::string filename, int page) {
     Source source = {shortname, filename, fileNum, page, {}};
 
     sources.push_back(source);
+    return sources.size()-1;
+}
+
+bool Listing::isValidFile(std::string filename) {
+    std::ifstream myfile(filename);
+    if(!myfile) {
+        return false;
+    }
+    bool isValid = isValidListing(myfile);
+    myfile.close();
+    return isValid;
+}
+
+bool Listing::isValidListing(std::ifstream& stream) {
+    char buffer[4096];
+    stream.read(buffer, sizeof(buffer));
+    int length = stream.gcount();
+
+    stream.seekg(0, std::ios::beg);
+
+    if( length < 5 ) {
+        return false;
+    }
+    int lineLength = 0;
+
+    for( int i=0; i<length; i++ ) {
+        if(buffer[i] == '\0') return false;
+
+        if(buffer[i] == '\n' || buffer[i] == '\r' ) {
+            if( lineLength > 300 ) {
+                return false;
+            }
+            lineLength = 0;
+        }
+        else {
+            lineLength++;
+        }
+    }
+
+    if( lineLength > 300 ) {
+        return false;
+    }
+
+    return true;
 }
 
 void Listing::loadFile(Source &source) {
@@ -76,6 +122,11 @@ void Listing::loadFile(Source &source) {
     std::string text;
 
     std::ifstream myfile(source.filename);
+
+    if( !isValidListing(myfile) ) {
+        std::cout << "File '" << source.filename << "' does not appear to be a valid listing. Did you mean to load a binary file with '-f'?" << std::endl;
+        return;
+    }
 
     while (std::getline(myfile, text)) {
         lineNum++;

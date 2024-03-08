@@ -35,6 +35,7 @@ class Beast {
         SEL_PAGING, SEL_PAGE0, SEL_PAGE1, SEL_PAGE2, SEL_PAGE3, 
         SEL_A2, SEL_HL2, SEL_BC2, SEL_DE2, 
         SEL_MEM0, SEL_VIEWPAGE0, SEL_VIDEOVIEW0, SEL_VIEWADDR0, SEL_MEM1, SEL_VIEWPAGE1, SEL_VIDEOVIEW1, SEL_VIEWADDR1, SEL_MEM2, SEL_VIEWPAGE2, SEL_VIDEOVIEW2, SEL_VIEWADDR2, 
+        SEL_VOLUME,
         SEL_LISTING,
         SEL_BREAKPOINT,
         SEL_END_MARKER };
@@ -82,9 +83,11 @@ class Beast {
         
         void loadSamples(Sint16 *stream, int length);
 
-        static const int AUDIO_FREQ = 22050;
-        static const int AUDIO_BUFFER_SIZE = 4096;
+        static const int AUDIO_FREQ = 16000;
+        static const int AUDIO_BUFFER_SIZE = 16384;
+        static const int BYTES_PER_SAMPLE = 2;
 
+        static const uint64_t ONE_SECOND_PS = UINT64_C(1000000000000);
         static const uint64_t UART_CLOCK_HZ = UINT64_C(1843200);
 
         static const uint64_t NOT_SET = 0xFFFFFFFFULL;
@@ -106,6 +109,7 @@ class Beast {
         GUI                     gui;
 
         const char* PCB_IMAGE="layout_2d.png";
+        const char* DEFAULT_VIDEO_FILE="videobeast.dat";
 
         TTF_Font *font, *smallFont, *midFont;
         int screenWidth, screenHeight;
@@ -169,8 +173,9 @@ class Beast {
         static const int FRAME_RATE = 50;
 
         int16_t     audioBuffer[AUDIO_BUFFER_SIZE] = {0};
+        int16_t     audioLastSample = 0;
         int         audioRead = 0;
-        int         audioWrite= 1;
+        int         audioWrite= 0;
         int         audioAvailable = 0;
         uint64_t    audioSampleRatePs;
         int         volume;
@@ -180,8 +185,10 @@ class Beast {
         std::string *listingPath;
 
         SDL_Renderer* createRenderer(SDL_Window *window);
+        void          initVideoBeast();
         float         checkZoomFactor(int screenWidth, int screenHeight, float zoom);
         SDL_Texture*  loadTexture(SDL_Renderer *renderer, const char* filename);
+        void          setupAudio(int audioDevice, int sampleRate, int volume);
 
         void redrawScreen();
         void drawBeast();
