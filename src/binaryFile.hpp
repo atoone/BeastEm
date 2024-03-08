@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <cstdint>
 
 class BinaryFile {
     static const int ROM_SIZE = (1<<19);
