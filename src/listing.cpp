@@ -113,6 +113,16 @@ bool Listing::isValidListing(std::ifstream& stream) {
 void Listing::loadFile(Source &source) {
 
     source.lines.clear();
+    std::cout << "Clearing old lines " << source.fileNum << std::endl;
+    for( auto it = lineMap.begin(); it != lineMap.end();) {
+        if (it->second.fileNum == source.fileNum) {
+            it = lineMap.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+    std::cout << "Lines cleared" << std::endl;
 
     uint16_t address = 0;
     bool foundAddress = false;

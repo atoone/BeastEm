@@ -377,8 +377,12 @@ void Beast::mainLoop() {
                     mode = STEP;
                     continue;
                 }
+                
                 uint16_t breakPoint = cpu.pc+length;
                 uint64_t tickCount = 0;
+
+                std::cout << "Breakpoint for OVER is " << breakpoint << " PC " << cpu.pc << " Length " << length << std::endl;
+
                 do {
                     tickCount = run(false, tickCount);
                 }

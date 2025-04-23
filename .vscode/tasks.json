@@ -25,7 +25,12 @@
                 "-lnfd",
                 "-lole32",
                 "-luuid",
-                "-lshell32"
+                "-lshell32",
+                "-static-libgcc",
+                "-static-libstdc++",
+                "-Wl,-Bstatic,--whole-archive",
+                "-lwinpthread",
+                "-Wl,--no-whole-archive"
             ],
             "options": {
                 "cwd": "${fileDirname}"

@@ -46,12 +46,18 @@ int VideoBeast::init(uint64_t clock_time_ps, int guiWidth) {
 
 uint32_t VideoBeast::getColour(uint16_t packedRGB) {
     uint8_t r,g,b;
-    SDL_GetRGB(packedRGB, pixel_format, &r, &g, &b);
+    //SDL_GetRGB(packedRGB, pixel_format, &r, &g, &b);
+    r = (int)(((packedRGB >> 12) & 0x07) * (255/7.0));
+    g = (int)(((packedRGB >> 7) & 0x07) * (255/7.0));
+    b = (int)(((packedRGB >> 2) & 0x07) * (255/7.0));
     return SDL_MapRGB(surface->format, r, g, b);
 }
 
 void VideoBeast::unpackRGB(uint16_t packedRGB, uint8_t *r, uint8_t *g, uint8_t *b) {
-    SDL_GetRGB(packedRGB, pixel_format, r, g, b);
+    //SDL_GetRGB(packedRGB, pixel_format, r, g, b);
+    *r = (int)(((packedRGB >> 12) & 0x07) * (255/7.0));
+    *g = (int)(((packedRGB >> 7) & 0x07) * (255/7.0));
+    *b = (int)(((packedRGB >> 2) & 0x07) * (255/7.0));
 }
 
 uint64_t VideoBeast::drawBppBitmap(int layerBase) {
@@ -69,7 +75,7 @@ uint64_t VideoBeast::drawBppBitmap(int layerBase) {
         int address = baseAddress + ((scrollX++) & 0x1FF);
         line_buffer[x] = palette2[mem[address]];
     }
-    return (end-start) * RENDER_CLOCK_PS / 2;
+    return (end > start) ? (end-start) * RENDER_CLOCK_PS / 2: 0;
 }
 
 uint64_t VideoBeast::draw4ppBitmap(int layerBase) {
@@ -94,7 +100,7 @@ uint64_t VideoBeast::draw4ppBitmap(int layerBase) {
         }
         scrollX++;
     }
-    return (end-start) * RENDER_CLOCK_PS / 4;
+    return (end > start) ? (end-start) * RENDER_CLOCK_PS / 4: 0;
 }
 
 
@@ -159,7 +165,7 @@ uint64_t VideoBeast::drawTextLayer(int layerBase) {
         discard = 0;
         scrollX += 8;
     }
-    return (end-start) * RENDER_CLOCK_PS / 4;
+    return (end > start) ? (end-start) * RENDER_CLOCK_PS / 4: 0;
 }
 
 uint64_t VideoBeast::drawTileLayer(int layerBase) {
@@ -169,14 +175,14 @@ uint64_t VideoBeast::drawTileLayer(int layerBase) {
     int row = ((currentLine - 8*registers[layerBase + REG_OFF_LAYER_TOP]) + scrollY ) & 0x1FF;
 
     int start = registers[layerBase + REG_OFF_LAYER_LEFT]*8;
-    int end = registers[layerBase + REG_OFF_LAYER_RIGHT]*8;
+    int end = (registers[layerBase + REG_OFF_LAYER_RIGHT]+1)*8;
 
     int mapAddress = (registers[layerBase + REG_OFF_TILE_MAP] << 14)  + ((row & 0x1F8) << 5); // leftmost column of current row
     int tileAddress = (registers[layerBase + REG_OFF_TILE_GRAPHIC] << 15);
 
     int discard = (scrollX & 0x07);
 
-    for( int x=start; x<end; ) {
+    for( int x=start; x<end;) {
         int address = mapAddress + ((scrollX >> 2) & 0xFE);
 
         int tile = ((mem[address+1] & 0x03) << 8) + mem[address];
@@ -202,7 +208,93 @@ uint64_t VideoBeast::drawTileLayer(int layerBase) {
         scrollX += 8;
     }
 
-    return (end-start) * RENDER_CLOCK_PS / 2;
+    return (end > start) ? (end-start) * RENDER_CLOCK_PS / 2 : 0;
+}
+
+uint64_t VideoBeast::drawSpriteLayer(int layerBase) {
+    int scrollY = ((registers[layerBase + REG_OFF_LAYER_XY] & 0xF0) << 4) + registers[layerBase + REG_OFF_LAYER_Y_L];
+    int scrollX = ((registers[layerBase + REG_OFF_LAYER_XY] & 0x0F) << 8) + registers[layerBase + REG_OFF_LAYER_X_L];
+
+    int row = ((currentLine - 8*registers[layerBase + REG_OFF_LAYER_TOP]) + scrollY ) & 0x1FF;
+
+    int start = registers[layerBase + REG_OFF_LAYER_LEFT]*8;
+    int end = registers[layerBase + REG_OFF_LAYER_RIGHT]*8;
+
+    int listAddress = (registers[layerBase + REG_OFF_SPRITE_LIST] << 11); 
+    int graphicAddress = (registers[layerBase + REG_OFF_SPRITE_GRAPHIC] << 15);
+    int count = registers[layerBase + REG_OFF_SPRITE_COUNT]+2;                    // FIXME: Count is high
+
+    uint64_t ticks = count;
+
+    int last_sprite_row = 0;
+    int last_sprite_x   = 0;
+
+    for(int i=0; i<count; i++) {
+        int base = listAddress + 8*i;
+        uint16_t y_data = mem[base+4] + (mem[base+5] << 8);
+        if( (y_data & 0x8000) == 0 ) {
+            continue; // Sprite enable flag = 0
+        }
+
+        bool is_relative = (y_data & 0x4000) != 0;
+        bool is_flip     = (y_data & 0x0800) != 0;
+
+        int sprite_row = (is_relative ? (last_sprite_row + (y_data & 0x3FF))  : row - (y_data & 0x3FF));
+        int sprite_height = ((y_data >> 12) & 0x03)+1;
+        if( sprite_row < 0 || sprite_row >= (sprite_height*8) ) {
+            continue; // Sprite vertical out of bounds
+        }
+
+        if( is_flip ) {
+            sprite_row = (sprite_height*8)-1-sprite_row;
+        }
+        ticks++;
+
+        uint16_t x_data = mem[base+2] + (mem[base+3] << 8);
+        
+        bool is_mirror = (x_data & 0x0800) != 0;
+
+        int sprite_width = ((x_data >> 12) & 0x03)+1;
+        int sprite_x = ((x_data & 0x7FF) - scrollX) & 0x7FF;
+
+        if( is_relative ) sprite_x = (last_sprite_x + sprite_x) & 0x7FF;
+        //if( (sprite_x + (sprite_width*8)) < start || sprite_x > end) {
+        //    continue; // Sprite horizontal out of bounds
+        //}
+        ticks++;
+
+        int paletteIndex = mem[base+1] & 0xF0;
+        int sprite_cell = (mem[base] + ((mem[base+1] & 0x3) << 8)) * sprite_width;
+
+        sprite_cell += ((sprite_row >> 3) & 0x03) * sprite_width;
+
+        int cellBase = graphicAddress + (sprite_cell * 32) + ((sprite_row & 0x07) * 4);
+
+        ticks += sprite_width * 2;
+
+        int x = (start + sprite_x) & 0x7FF;
+        
+        if( is_mirror ) {
+            x += (sprite_width*8)-1;
+        }
+
+        for(int j=0; j<sprite_width; j++) {
+            uint32_t pixels = (mem[cellBase] << 24) + (mem[cellBase+1] << 16) + (mem[cellBase+2] << 8) + (mem[cellBase+3]);
+            for( int k=0; k<8; k++ ) {
+                int colourIdx = paletteIndex + ((pixels >> 28) & 0x0F);
+                if( x >= start && x < end && (paletteReg1[colourIdx] & 0x08000) == 0) {
+                    line_buffer[x] = palette1[colourIdx];
+                }
+                pixels <<= 4;
+                x += is_mirror ?  -1: 1;
+            }
+            cellBase += 32;
+        }
+        last_sprite_row = sprite_row;
+        last_sprite_x   = sprite_x;
+    }
+
+    return ticks * RENDER_CLOCK_PS;
 }
 
 void VideoBeast::loadPalette(const char *filename, uint32_t *palette, uint16_t *paletteReg) {
@@ -404,6 +496,9 @@ uint64_t VideoBeast::tick(uint64_t clock_time_ps) {
                 case LAYER_TYPE_4BPP : 
                     next_action_time_ps = clock_time_ps + draw4ppBitmap(layer_base);
                     break;
+                case LAYER_TYPE_SPRITE :
+                    next_action_time_ps = clock_time_ps + drawSpriteLayer(layer_base);
+                    break;
             }
         }
 
@@ -431,7 +526,8 @@ uint64_t VideoBeast::tick(uint64_t clock_time_ps) {
     }
 
     if( next_action_time_ps > next_line_time_ps ) {
-        std::cout << "Videobeast scan time exceeded on line " << currentLine << std::endl;
+        // TODO: More debug here...
+        // std::cout << "Videobeast scan time exceeded on line " << currentLine << std::endl;
     }
 
     if( next_line_time_ps <= clock_time_ps ) {
