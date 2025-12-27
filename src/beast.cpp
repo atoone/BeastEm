@@ -443,7 +443,6 @@ void Beast::mainLoop() {
 
             if( windowEvent.window.windowID != windowId && videoBeast) {
                 videoBeast->handleEvent(windowEvent);
-                continue;
             }
 
             if (windowEvent.window.event == SDL_WINDOWEVENT_CLOSE) {
@@ -843,6 +842,8 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                     if( clock_time_ps >= romCompletePs ) {
                         romSequence = 0;
                         romOperation = false;
+                        uint8_t data = rom[mappedAddr];
+                        Z80_SET_DATA(pins, data);
                     }
                     else {
                         uint8_t data = rom[mappedAddr] ^ romOperationMask;
@@ -1002,8 +1003,11 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                 if( windowEvent.window.windowID != windowId && videoBeast) {
                     videoBeast->handleEvent(windowEvent);
                 }
-                else if( SDL_QUIT == windowEvent.type ) {
-                    mode = QUIT;
+
+                if( SDL_WINDOWEVENT == windowEvent.type ) {
+                    if( windowEvent.window.event == SDL_WINDOWEVENT_CLOSE ) {
+                        mode = QUIT;
+                    }
                     break;
                 }
                 else if( SDL_KEYDOWN == windowEvent.type ) {
@@ -1052,6 +1056,13 @@ void Beast::keyDown(SDL_Keycode keyCode) {
                     keySet.insert(KEY_SHIFT);
                     keySet.insert(KEY_CTRL);
                     break;
+                case SHIFT_SWAP:
+                    if( keySet.count(KEY_SHIFT) == 0) {
+                        keySet.insert(KEY_SHIFT);
+                    }
+                    else {
+                        keySet.erase(KEY_SHIFT);
+                    }
             };
             keySet.insert(KEY_MAP[i].row*12 + KEY_MAP[i].col);
             break;
@@ -1590,7 +1601,7 @@ void Beast::itemSelect(int direction) {
 }
 
 void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor) {
-    Listing::Location currentLoc = listing.getLocation(page << 16 | address);
+    Listing::Location currentLoc = listing.getLocation(page << 16 | (uint32_t)address);
 
     int matchedLine = -1;
 
@@ -1643,27 +1654,30 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
                 currentLoc.lineNum++;
             }
 
-            if( valid && line.first.address == address ) {
-                gui.print(GUI::COL1, GUI::ROW22+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.first.text.c_str()));
-                address += line.first.byteCount;
-                continue;
-            }
-            if( line.second && line.first.address == address && line.first.isData ) {
-                std::string byteString;
-                for( int j=4; j-->0; ) {
-                    if( j < line.first.byteCount ) {
-                        char buffer[4];
-                        int c = snprintf( buffer, 4, "%02X ", readMem(address+j));
-                        if( c>0 && c<4 )
-                            byteString.insert( 0, buffer, c );
-                    }
-                    else {
-                        byteString.insert(0, "   ");
-                    }
+            if( !(line.first.isData && (address == cpu.pc-1) )) {
+                // Ignore listing lines where they are interpreting current execution address as data
+                if( valid && line.first.address == address ) {
+                    gui.print(GUI::COL1, GUI::ROW22+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.first.text.c_str()));
+                    address += line.first.byteCount;
+                    continue;
                 }
-                gui.print(GUI::COL1, GUI::ROW22+(14*i), (address == cpu.pc-1) ? highColor: disassColor, "----   %04X %s", address, const_cast<char*>(byteString.c_str()));
-                address += line.first.byteCount;
-                continue;
+                if( line.second && line.first.address == address && line.first.isData) {
+                    std::string byteString;
+                    for( int j=4; j-->0; ) {
+                        if( j < line.first.byteCount ) {
+                            char buffer[4];
+                            int c = snprintf( buffer, 4, "%02X ", readMem(address+j));
+                            if( c>0 && c<4 )
+                                byteString.insert( 0, buffer, c );
+                        }
+                        else {
+                            byteString.insert(0, "   ");
+                        }
+                    }
+                    gui.print(GUI::COL1, GUI::ROW22+(14*i), (address == cpu.pc-1) ? highColor: disassColor, "----   %04X %s", address, const_cast<char*>(byteString.c_str()));
+                    address += line.first.byteCount;
+                    continue;
+                }
             }
         }
 

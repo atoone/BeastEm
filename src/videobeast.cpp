@@ -185,10 +185,10 @@ uint64_t VideoBeast::drawTileLayer(int layerBase) {
     for( int x=start; x<end;) {
         int address = mapAddress + ((scrollX >> 2) & 0xFE);
 
-        int tile = ((mem[address+1] & 0x03) << 8) + mem[address];
-        int paletteIndex = mem[address+1] & 0xF0;
+        int tile = ((mem[(address+1) & 0xFFFFF] & 0x03) << 8) + mem[address & 0xFFFFF];
+        int paletteIndex = mem[(address+1) & 0xFFFFF] & 0xF0;
 
-        if( (mem[address+1] & 0x08) == 0 ) {
+        if( (mem[(address+1) & 0xFFFFF] & 0x08) == 0 ) {
             int tileBase = tileAddress + (32*tile) + (4 * (row & 0x07));
             uint32_t pixels = ((mem[tileBase] << 24) + (mem[tileBase+1] << 16) + (mem[tileBase+2] << 8) + (mem[tileBase+3])) << (discard*4);
 
@@ -349,10 +349,10 @@ void VideoBeast::handleEvent(SDL_Event windowEvent)
 {
     if( SDL_KEYDOWN == windowEvent.type && windowEvent.window.windowID == windowID ) {
         switch( windowEvent.key.keysym.sym ) {
-            case SDLK_d : 
+            case SDLK_LEFTBRACKET : 
                 debug_layers  = !debug_layers;
                 break;
-            case SDLK_b :
+            case SDLK_RIGHTBRACKET :
                 layer_time_alpha = 1.0-layer_time_alpha;
                 break;
         }

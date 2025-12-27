@@ -45,7 +45,7 @@ class Listing {
 
     private:
         std::vector<Source> sources;
-        std::map<int, Location> lineMap;
+        std::map<uint32_t, Location> lineMap;
 
         const char* addressRegex = "^[0-9]+(\\++\\s*|\\s+)([0-9a-f]{4})";
 

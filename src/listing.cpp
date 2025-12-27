@@ -124,7 +124,7 @@ void Listing::loadFile(Source &source) {
     }
     std::cout << "Lines cleared" << std::endl;
 
-    uint16_t address = 0;
+    uint32_t address = 0;
     bool foundAddress = false;
     unsigned int lineNum = 0;
     unsigned int addressLine = 0;
@@ -153,7 +153,7 @@ void Listing::loadFile(Source &source) {
         std::regex matcher = std::regex(addressRegex, std::regex::icase);
         std::smatch match;
         if(std::regex_search(text, match, matcher)) {
-            uint16_t nextAddress = std::stoi(match.str(2), nullptr, 16);
+            uint32_t nextAddress = std::stoi(match.str(2), nullptr, 16);
 
             if( foundAddress && (nextAddress != address) ) {
                 Location loc = {source.fileNum, addressLine, true};
@@ -197,7 +197,7 @@ void Listing::loadFile(Source &source) {
     
     if( foundAddress ) {
         Location loc = {source.fileNum, addressLine, true};
-        lineMap.emplace(address, loc);
+        lineMap.emplace((source.page << 16) | address, loc);
     }
     std::cout << "Parsed listing, file "<< source.filename <<" for page " << source.page << " has " << lineNum << " lines." << std::endl;
 }

@@ -26,21 +26,21 @@ const int ONE_KILOHERTZ = 1000; // 1 KHz
 const int DEFAULT_SPEED = 8000;
 
 bool isHexNum(char* value) {
-    std::regex matcher = std::regex("[0-9a-f]+", std::regex::icase);
+    std::regex matcher = std::regex("^[0-9a-f]+$", std::regex::icase);
     std::smatch match;
     std::string str(value);
     return std::regex_search(str, match, matcher);
 }
 
 bool isNum(char* value) {
-    std::regex matcher = std::regex("[0-9]+", std::regex::icase);
+    std::regex matcher = std::regex("^[0-9]+$", std::regex::icase);
     std::smatch match;
     std::string str(value);
     return std::regex_search(str, match, matcher);
 }
 
 bool isFloatNum(char* value) {
-    std::regex matcher = std::regex("[0-9\\.]+", std::regex::icase);
+    std::regex matcher = std::regex("^[0-9\\.]+$", std::regex::icase);
     std::smatch match;
     std::string str(value);
     return std::regex_search(str, match, matcher);
@@ -198,7 +198,7 @@ int main( int argc, char *argv[] ) {
     NFD_Init();
     SDL_Init( SDL_INIT_EVERYTHING );
 
-    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator v1.1 rc2", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
+    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator v1.2", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
 
     if( NULL == window ) {
         std::cout << "Could not create window: " << SDL_GetError() << std::endl;
@@ -213,7 +213,7 @@ int main( int argc, char *argv[] ) {
         std::cout << "No file or listing arguments, loading firmware" << std::endl;
         listing.addFile("firmware.lst", 0);
         listing.addFile("monitor.lst", 35);
-        binaries.push_back(BinaryFile("flash_v1.5.bin", 0));
+        binaries.push_back(BinaryFile("flash_v1.6.bin", 0));
     }
 
     Beast beast = Beast(window, WIDTH, HEIGHT, zoom, listing, binaries);

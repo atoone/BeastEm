@@ -27,7 +27,7 @@
 
 class Beast {
 
-    enum Modifier {NONE, CTRL, SHIFT, CTRL_SHIFT};
+    enum Modifier {NONE, CTRL, SHIFT, CTRL_SHIFT, SHIFT_SWAP};
 
     enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, QUIT};
 
@@ -298,7 +298,7 @@ class Beast {
             BeastKey{SDLK_i, 1, 8, NONE},
             BeastKey{SDLK_o, 1, 9, NONE},
             BeastKey{SDLK_p, 1, 10, NONE},
-            BeastKey{SDLK_SEMICOLON, 1, 11, NONE},
+            BeastKey{SDLK_SEMICOLON, 1, 11, SHIFT_SWAP},
   
             BeastKey{SDLK_LCTRL, 3, 1, NONE},
             BeastKey{SDLK_a, 2, 1, NONE},

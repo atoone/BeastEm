@@ -222,7 +222,7 @@ std::string Instructions::decode(uint16_t address, std::function<uint8_t(uint16_
         for(auto opcode: CB_OPCODES) {
             if( opcode.opcode == op2 ) {
                 *length += opcode.length;
-                return decodeOpcode(opcode.mnemonic, address, fetch);
+                return decodeOpcode(opcode.mnemonic, ++address, fetch);
             }
         }
         return "Unknown";
@@ -233,7 +233,7 @@ std::string Instructions::decode(uint16_t address, std::function<uint8_t(uint16_
         for(auto opcode: ED_OPCODES) {
             if( opcode.opcode == op2 ) {
                 *length += opcode.length;
-                return decodeOpcode(opcode.mnemonic, address, fetch);
+                return decodeOpcode(opcode.mnemonic, ++address, fetch);
             }
         }
         return "Unknown";
