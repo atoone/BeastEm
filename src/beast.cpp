@@ -202,15 +202,6 @@ void Beast::setupAudio(int audioDevice, int sampleRate, int volume) {
     }
 }
 
-void Beast::reset() {
-    z80_reset(&cpu);
-    uart_reset(&uart, UART_CLOCK_HZ);
-    pagingEnabled = false;
-    for( int i=0; i<4; i++ ) {
-        memoryPage[i] = 0;
-    }
-}
-
 void Beast::loadSamples(Sint16 *stream, int length) {
     std::fill(stream, stream+length, audioLastSample);
 
