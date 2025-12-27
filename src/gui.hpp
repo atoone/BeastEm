@@ -48,6 +48,8 @@ class GUI {
         static const int ROW22 = ROW20+28;
         static const int END_ROW = ROW22+(13*14);
 
+        enum EditType {ET_HEX, ET_BASE_10};
+
         GUI(SDL_Renderer *sdlRenderer, int screenWidth, int screenHeight):
             sdlRenderer (sdlRenderer),
             screenWidth (screenWidth),
@@ -57,7 +59,7 @@ class GUI {
 
         void      init(float zoom);
 
-        void      startEdit(uint32_t value, int x, int y, int offset, int digits, bool isContinue = false);
+        void      startEdit(uint32_t value, int x, int y, int offset, int digits, bool isContinue = false, EditType editType = ET_HEX);
         bool      isEditing();
         bool      isContinuousEdit();
         bool      isEditOK();
@@ -129,6 +131,7 @@ class GUI {
         int        editIndex = -1;
         bool       editContinue = false;
         bool       editOK = false;
+        EditType   editType;
 
         int        promptId;
         PromptType promptType;

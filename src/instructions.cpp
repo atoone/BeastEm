@@ -217,19 +217,23 @@ std::string Instructions::decode(uint16_t address, std::function<uint8_t(uint16_
         }
     }
     if( op1 == 0xCB ) {
+        *length = 1;
+
         for(auto opcode: CB_OPCODES) {
             if( opcode.opcode == op2 ) {
                 *length += opcode.length;
-                return decodeOpcode(opcode.mnemonic, address, fetch);
+                return decodeOpcode(opcode.mnemonic, ++address, fetch);
             }
         }
         return "Unknown";
     }
     if( op1 == 0xED ) {
+        *length = 1;
+
         for(auto opcode: ED_OPCODES) {
             if( opcode.opcode == op2 ) {
                 *length += opcode.length;
-                return decodeOpcode(opcode.mnemonic, address, fetch);
+                return decodeOpcode(opcode.mnemonic, ++address, fetch);
             }
         }
         return "Unknown";
@@ -254,7 +258,7 @@ int Instructions::instructionLength(uint8_t op1, uint8_t op2) {
     if( op1 == 0xED ) {
         for(auto opcode: ED_OPCODES) {
             if( opcode.opcode == op2 && opcode.length > 0 ) {
-                return opcode.length;
+                return opcode.length+1;
             }
         }
         return -1;

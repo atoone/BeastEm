@@ -68,6 +68,10 @@ class VideoBeast {
     static const int REG_OFF_BITMAP_BASE    = 8;  // Bitmap base / 16K
     static const int REG_OFF_BITMAP_PALETTE = 10; // [3:0] - Palette index
 
+    static const int REG_OFF_SPRITE_LIST    = 8;
+    static const int REG_OFF_SPRITE_GRAPHIC = 9;
+    static const int REG_OFF_SPRITE_COUNT   = 10;
+    
     struct VideoMode {
         int pixelWidth, pixelHeight;
         
@@ -181,6 +185,7 @@ class VideoBeast {
         uint64_t drawTileLayer(int layberBase);
         uint64_t drawBppBitmap(int layberBase);
         uint64_t draw4ppBitmap(int layberBase);
+        uint64_t drawSpriteLayer(int layerBase);
 
         // Sinclair address mode
         uint32_t getSinclairAddress(uint16_t addr);

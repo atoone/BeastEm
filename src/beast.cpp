@@ -1,5 +1,6 @@
 #include "beast.hpp"
 #include <iostream>
+#include <fstream>
 #include <cstring>
 #include <stdio.h>
 #include <iomanip>
@@ -102,14 +103,6 @@ float Beast::checkZoomFactor(int screenWidth, int screenHeight, float zoom) {
     return zoom;
 }
 
-void audio_callback(void *_beast, Uint8 *_stream, int _length) {
-    Sint16 *stream = (Sint16*) _stream;
-    int length = _length / 2;
-    Beast* beast = (Beast*) _beast;
-
-    beast->loadSamples(stream, length);
-}
-
 void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate, VideoBeast *videoBeast) {
     this->videoBeast = videoBeast;
 
@@ -118,7 +111,8 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
     z80pio_init(&pio);
 
     this->targetSpeedHz = targetSpeedHz;
-    clock_cycle_ps = UINT64_C(1000000000000) / targetSpeedHz;
+    clock_cycle_ps = ONE_SECOND_PS / targetSpeedHz;
+    
     float speed = targetSpeedHz / 1000000.0f;
 
     std::cout << "Clock cycle time ps = " << clock_cycle_ps << ", speed = " << std::setprecision(2) << std::fixed << speed << "MHz" << std::endl;
@@ -136,12 +130,7 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
     uart_init(&uart, UART_CLOCK_HZ, clock_time_ps);
     
     if( videoBeast ) {
-        videoRam = videoBeast->memoryPtr();
-        int leftBorder = videoBeast->init(clock_time_ps, screenWidth*zoom);
-        nextVideoBeastTickPs = 0;
-
-        if( leftBorder > 0 ) SDL_SetWindowPosition(window, leftBorder, SDL_WINDOWPOS_CENTERED);
-        SDL_RaiseWindow(window);
+        initVideoBeast();
     }
 
     for(auto &bf: binaryFiles) {
@@ -152,6 +141,36 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
         listing.loadFile(source);
     }
 
+    setupAudio(audioDevice, sampleRate, volume);
+}
+
+void Beast::initVideoBeast() {
+    videoRam = videoBeast->memoryPtr();
+    int leftBorder = videoBeast->init(clock_time_ps, screenWidth*zoom);
+    nextVideoBeastTickPs = 0;
+
+    if( leftBorder > 0 ) SDL_SetWindowPosition(window, leftBorder, SDL_WINDOWPOS_CENTERED);
+    SDL_RaiseWindow(window);
+}
+
+void Beast::reset() {
+    z80_reset(&cpu);
+    uart_reset(&uart, UART_CLOCK_HZ);
+    pagingEnabled = false;
+    for( int i=0; i<4; i++ ) {
+        memoryPage[i] = 0;
+    }
+}
+
+void audio_callback(void *_beast, Uint8 *_stream, int _length) {
+    Sint16 *stream = (Sint16*) _stream;
+    int length = _length / 2;
+    Beast* beast = (Beast*) _beast;
+
+    beast->loadSamples(stream, length);
+}
+
+void Beast::setupAudio(int audioDevice, int sampleRate, int volume) {
     if( sampleRate > 0 ) {
         audioSampleRatePs = UINT64_C(1000000000000) / sampleRate;
         this->volume = volume;
@@ -193,20 +212,26 @@ void Beast::reset() {
 }
 
 void Beast::loadSamples(Sint16 *stream, int length) {
-    int index = 0;
-    //if( audioAvailable < length ) return;
+    std::fill(stream, stream+length, audioLastSample);
 
-    while(index < length && ((audioRead+1)%AUDIO_BUFFER_SIZE) != audioWrite) {
-        audioRead = (audioRead+1)%AUDIO_BUFFER_SIZE;
-        stream[index++] = audioBuffer[audioRead];
-        audioAvailable--;
+    if( audioAvailable < length ) return;
+
+    int block1Length = length;
+    int block2Length = 0;
+    if( audioRead + length > AUDIO_BUFFER_SIZE ) {
+        block1Length = AUDIO_BUFFER_SIZE - audioRead;
+        block2Length = length - block1Length;
     }
 
-    if( index > 0 && audioFile ) {
-        fwrite(stream, 2, index, audioFile);
-    }
-    while(index < length) {
-        stream[index++] = audioBuffer[audioRead];
+    SDL_memcpy(stream, audioBuffer + audioRead, block1Length*2);
+    SDL_memcpy(stream + block1Length, audioBuffer, block2Length*2);
+
+    audioLastSample = audioBuffer[((audioRead + length -1) % AUDIO_BUFFER_SIZE)];
+
+    audioRead = (audioRead + length) % AUDIO_BUFFER_SIZE;
+    audioAvailable -= length;
+    if( audioFile ) {
+        fwrite(stream, 2, length, audioFile);
     }
 }
 
@@ -361,8 +386,12 @@ void Beast::mainLoop() {
                     mode = STEP;
                     continue;
                 }
+                
                 uint16_t breakPoint = cpu.pc+length;
                 uint64_t tickCount = 0;
+
+                std::cout << "Breakpoint for OVER is " << breakpoint << " PC " << cpu.pc << " Length " << length << std::endl;
+
                 do {
                     tickCount = run(false, tickCount);
                 }
@@ -423,7 +452,6 @@ void Beast::mainLoop() {
 
             if( windowEvent.window.windowID != windowId && videoBeast) {
                 videoBeast->handleEvent(windowEvent);
-                continue;
             }
 
             if (windowEvent.window.event == SDL_WINDOWEVENT_CLOSE) {
@@ -527,15 +555,7 @@ void Beast::debugMenu(SDL_Event windowEvent) {
                 mode = STEP;
             }
             break;
-        case SDLK_a     :
-            if( audioFile ) {
-                fclose(audioFile);
-                audioFile = nullptr;
-            }
-            else {
-                audioFile = fopen(audioFilename, "ab");
-            }
-            break;
+
     }
 }
 
@@ -552,11 +572,38 @@ void Beast::fileMenu(SDL_Event windowEvent) {
             if( index < listing.fileCount() + binaryFiles.size() ) filePrompt(index); 
             break;
         } 
+        case SDLK_r    : mode = RUN;    break;
         case SDLK_s    : sourceFilePrompt(); break;
-        case SDLK_l    : binaryFilePrompt(PROMPT_BINARY_CPU); break;
+        case SDLK_c    : binaryFilePrompt(PROMPT_BINARY_CPU); break;
         case SDLK_p    : binaryFilePrompt(PROMPT_BINARY_PAGE); break;
-        case SDLK_a    : binaryFilePrompt(PROMPT_BINARY_ADDRESS); break; 
-        case SDLK_v    : binaryFilePrompt(PROMPT_BINARY_VIDEO); break; 
+        case SDLK_l    : binaryFilePrompt(PROMPT_BINARY_ADDRESS); break; 
+        case SDLK_v    : {
+            if( videoBeast ) {
+                binaryFilePrompt(PROMPT_BINARY_VIDEO); 
+            }
+            else {
+                videoBeast = new VideoBeast(1.0f);
+                initVideoBeast();
+                std::ifstream myfile(DEFAULT_VIDEO_FILE);
+
+                if(myfile) {
+                    myfile.close();
+                    BinaryFile file = BinaryFile(DEFAULT_VIDEO_FILE, 0, BinaryFile::VIDEO_RAM);
+                    binaryFiles.push_back(file);
+                    file.load(rom, ram, pagingEnabled, memoryPage, videoRam);
+                }
+            }
+            break;
+        } 
+        case SDLK_a     :
+            if( audioFile ) {
+                fclose(audioFile);
+                audioFile = nullptr;
+            }
+            else {
+                audioFile = fopen(audioFilename, "ab");
+            }
+            break;
     }
 }
 
@@ -582,8 +629,15 @@ void Beast::sourceFilePrompt() {
     if (result == NFD_OKAY) {
         listingPath = new std::string(path);
         NFD_FreePath(path);
-        gui.startPrompt(PROMPT_LISTING, "Load listing to page 0x00");
-        gui.promptValue(0, 24, 2);
+        
+        if( listing.isValidFile(*listingPath) ) {
+            gui.startPrompt(PROMPT_LISTING, "Load listing to page 0x00");
+            gui.promptValue(0, 24, 2);
+        }
+        else {
+            gui.startPrompt(0, "This is not a valid source file");
+            gui.promptYesNo();
+        }
     }   
 }
 
@@ -600,7 +654,7 @@ void Beast::binaryFilePrompt(int promptId) {
         switch( promptId ) {
             case PROMPT_BINARY_ADDRESS :
                 gui.startPrompt(PROMPT_BINARY_ADDRESS, "Load file to physical address 0x00000");
-                gui.promptValue(0, 32, 5);
+                gui.promptValue(0, 33, 5);
                 break;
             case PROMPT_BINARY_PAGE :
                 gui.startPrompt(PROMPT_BINARY_PAGE, "Load file to page 0x00");
@@ -649,7 +703,10 @@ void Beast::promptComplete() {
         case PROMPT_LISTING : {
             gui.startPrompt(0, "Loading ...");
             gui.drawPrompt(true);
-            listing.addFile( *listingPath, gui.getEditValue()); 
+            int index = listing.addFile( *listingPath, gui.getEditValue()); 
+            if( index >= 0 ) {
+                listing.loadFile(listing.getFiles()[index]);
+            }
             gui.endPrompt(true);
             break;
         }
@@ -672,6 +729,12 @@ void Beast::promptComplete() {
             break;  
         case PROMPT_BINARY_PAGE2: {
             BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), BinaryFile::PAGE_OFFSET, loadBinaryPage);
+            reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
+            binaryFiles.push_back(binary);
+            break;
+        }
+        case PROMPT_BINARY_VIDEO: {
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), BinaryFile::VIDEO_RAM);
             reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
             binaryFiles.push_back(binary);
             break;
@@ -723,7 +786,7 @@ void Beast::updateSelection(int direction, int maxSelection) {
         if( selection == SEL_VIEWADDR2 && memView[2] != MV_MEM && memView[2] != MV_Z80 && memView[2] != MV_VIDEO) skip = true;
 
         if( selection == SEL_LISTING && listAddress == NOT_SET ) skip = true;
-
+        if( selection == SEL_VOLUME && audioSampleRatePs == 0 ) skip = true;
         if( skip ) selection += direction;
     } while( skip );
 
@@ -788,6 +851,8 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                     if( clock_time_ps >= romCompletePs ) {
                         romSequence = 0;
                         romOperation = false;
+                        uint8_t data = rom[mappedAddr];
+                        Z80_SET_DATA(pins, data);
                     }
                     else {
                         uint8_t data = rom[mappedAddr] ^ romOperationMask;
@@ -947,8 +1012,11 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                 if( windowEvent.window.windowID != windowId && videoBeast) {
                     videoBeast->handleEvent(windowEvent);
                 }
-                else if( SDL_QUIT == windowEvent.type ) {
-                    mode = QUIT;
+
+                if( SDL_WINDOWEVENT == windowEvent.type ) {
+                    if( windowEvent.window.event == SDL_WINDOWEVENT_CLOSE ) {
+                        mode = QUIT;
+                    }
                     break;
                 }
                 else if( SDL_KEYDOWN == windowEvent.type ) {
@@ -997,6 +1065,13 @@ void Beast::keyDown(SDL_Keycode keyCode) {
                     keySet.insert(KEY_SHIFT);
                     keySet.insert(KEY_CTRL);
                     break;
+                case SHIFT_SWAP:
+                    if( keySet.count(KEY_SHIFT) == 0) {
+                        keySet.insert(KEY_SHIFT);
+                    }
+                    else {
+                        keySet.erase(KEY_SHIFT);
+                    }
             };
             keySet.insert(KEY_MAP[i].row*12 + KEY_MAP[i].col);
             break;
@@ -1120,6 +1195,8 @@ bool Beast::itemEdit() {
         case SEL_VIEWPAGE1 : gui.startEdit( memViewPage[1], GUI::COL1, GUI::ROW12, 1, 2); break;
         case SEL_VIEWPAGE2 : gui.startEdit( memViewPage[2], GUI::COL1, GUI::ROW16, 1, 2); break;
 
+        case SEL_VOLUME : gui.startEdit( volume, 430, GUI::ROW19, 9, 2, false, GUI::ET_BASE_10); break;
+
         case SEL_A2: gui.startEdit( cpu.af2 & 0xFF, GUI::COL4, GUI::ROW2, 9, 2); break;
         case SEL_HL2: gui.startEdit( cpu.hl2, GUI::COL4, GUI::ROW3, 9, 4); break;
         case SEL_BC2: gui.startEdit( cpu.bc2, GUI::COL4, GUI::ROW4, 9, 4);  break;
@@ -1181,6 +1258,8 @@ void Beast::editComplete() {
         case SEL_VIEWPAGE1 : memViewPage[1] = editValue <= 0x40 ? editValue : 0x40; break;
         case SEL_VIEWPAGE2 : memViewPage[2] = editValue <= 0x40 ? editValue : 0x40; break;
 
+        case SEL_VOLUME : if( editValue <= 10 && editValue >= 0 ) volume = editValue; break;
+
         case SEL_A2: cpu.af2 = ((cpu.af2 & 0xFF00) | (editValue & 0x0FF)); break;
         case SEL_HL2: cpu.hl2 = editValue; break;
         case SEL_BC2: cpu.bc2 = editValue; break;
@@ -1202,12 +1281,15 @@ void Beast::onFile() {
 
     gui.print(GUI::COL1, 34, menuColor, "Add [S]ource");
 
-    gui.print(GUI::COL2, 34, menuColor, "Load [A]ddress");
+    gui.print(GUI::COL2, 34, menuColor, "[L]oad Address");
     gui.print(GUI::COL3, 34, menuColor, "Load [P]age");
-    gui.print(GUI::COL4, 34, menuColor, "[L]oad CPU");
+    gui.print(GUI::COL4, 34, menuColor, "Load [C]PU");
 
     if( videoBeast ) {
         gui.print(GUI::COL5, 34, menuColor, "Load [V]ideo");
+    }
+    else {
+        gui.print(GUI::COL5, 34, menuColor, "Start [V]ideoBeast");
     }
     int row = GUI::ROW2;    
     int index = 1;
@@ -1249,6 +1331,13 @@ void Beast::onFile() {
             }
             row += GUI::ROW_HEIGHT;
         }
+    }
+
+    gui.print(GUI::COL1, GUI::END_ROW, menuColor, "[R]un");
+
+    if( audioSampleRatePs > 0 ) {
+        gui.print(GUI::COL2, GUI::END_ROW, menuColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
+        gui.print(GUI::COL3+40, GUI::END_ROW, textColor, "File \"%s\"", audioFilename);
     }
 
     gui.print(GUI::COL5, GUI::END_ROW, menuColor, "[B]ack");
@@ -1332,8 +1421,12 @@ void Beast::onDebug() {
     gui.print(290, GUI::ROW19, textColor, (char*)ioSelectB.to_string('O', 'I').c_str());
     gui.print(290, GUI::ROW20, textColor, (char*)portDataB.to_string().c_str());
 
-    gui.print(430, GUI::ROW19, menuColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
-    gui.print(430, GUI::ROW20, textColor, "File \"%s\"", audioFilename);
+    if( audioSampleRatePs > 0 ) {
+        gui.print(430, GUI::ROW19, textColor, id--?0:6, bright, "Volume  %02d", volume);
+    }
+    else {
+        gui.print(430, GUI::ROW19, textColor, "Audio Disabled");
+    }
 
     gui.print(620, GUI::ROW19, textColor, "TTY :%d", uart_port(&uart));
     if( uart_connected(&uart)) {
@@ -1517,7 +1610,7 @@ void Beast::itemSelect(int direction) {
 }
 
 void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor) {
-    Listing::Location currentLoc = listing.getLocation(page << 16 | address);
+    Listing::Location currentLoc = listing.getLocation(page << 16 | (uint32_t)address);
 
     int matchedLine = -1;
 
@@ -1570,27 +1663,30 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
                 currentLoc.lineNum++;
             }
 
-            if( valid && line.first.address == address ) {
-                gui.print(GUI::COL1, GUI::ROW22+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.first.text.c_str()));
-                address += line.first.byteCount;
-                continue;
-            }
-            if( line.second && line.first.address == address && line.first.isData ) {
-                std::string byteString;
-                for( int j=4; j-->0; ) {
-                    if( j < line.first.byteCount ) {
-                        char buffer[4];
-                        int c = snprintf( buffer, 4, "%02X ", readMem(address+j));
-                        if( c>0 && c<4 )
-                            byteString.insert( 0, buffer, c );
-                    }
-                    else {
-                        byteString.insert(0, "   ");
-                    }
+            if( !(line.first.isData && (address == cpu.pc-1) )) {
+                // Ignore listing lines where they are interpreting current execution address as data
+                if( valid && line.first.address == address ) {
+                    gui.print(GUI::COL1, GUI::ROW22+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.first.text.c_str()));
+                    address += line.first.byteCount;
+                    continue;
                 }
-                gui.print(GUI::COL1, GUI::ROW22+(14*i), (address == cpu.pc-1) ? highColor: disassColor, "----   %04X %s", address, const_cast<char*>(byteString.c_str()));
-                address += line.first.byteCount;
-                continue;
+                if( line.second && line.first.address == address && line.first.isData) {
+                    std::string byteString;
+                    for( int j=4; j-->0; ) {
+                        if( j < line.first.byteCount ) {
+                            char buffer[4];
+                            int c = snprintf( buffer, 4, "%02X ", readMem(address+j));
+                            if( c>0 && c<4 )
+                                byteString.insert( 0, buffer, c );
+                        }
+                        else {
+                            byteString.insert(0, "   ");
+                        }
+                    }
+                    gui.print(GUI::COL1, GUI::ROW22+(14*i), (address == cpu.pc-1) ? highColor: disassColor, "----   %04X %s", address, const_cast<char*>(byteString.c_str()));
+                    address += line.first.byteCount;
+                    continue;
+                }
             }
         }
 

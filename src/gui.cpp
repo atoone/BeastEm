@@ -16,7 +16,7 @@ void GUI::init(float zoom) {
     TTF_SizeUTF8(monoFont, padding, &charWidth, &charHeight);
 }
 
-void GUI::startEdit(uint32_t value, int x, int y, int offset, int digits, bool isContinue) {
+void GUI::startEdit(uint32_t value, int x, int y, int offset, int digits, bool isContinue, EditType editType) {
     editValue = value;
     editOldValue = value;
 
@@ -25,6 +25,7 @@ void GUI::startEdit(uint32_t value, int x, int y, int offset, int digits, bool i
     editOffset = offset;
     editDigits = digits;  
     editIndex = digits-1;
+    this->editType = editType;
 
     editContinue = isContinue;
     editOK = false;
@@ -66,8 +67,13 @@ void GUI::drawEdit() {
     SDL_Color edited = {0xF0, 0x40, 0x40};
 
     for( int i=editDigits-1; i>=0; i--) {
-        snprintf(buffer, sizeof(buffer), "%01X", (editValue >> (i*4)) & 0x0F);
-
+        if( editType == ET_HEX ) {
+            snprintf(buffer, sizeof(buffer), "%01X", (editValue >> (i*4)) & 0x0F);
+        }
+        else if( editType == ET_BASE_10 ) {
+            int divisor = i > 0 ? i*10: 1;
+            snprintf(buffer, sizeof(buffer), "%01d", (editValue / divisor) % 10);
+        }
         SDL_Color color = i == editIndex ? edited: normal;
 
         SDL_Surface *textSurface = TTF_RenderText_Blended(monoFont, buffer, color);
@@ -144,7 +150,13 @@ uint32_t GUI::getEditValue() {
 
 void GUI::editDigit(uint8_t digit) {
     if( editIndex >= 0 ) {
-        editValue = (editValue & ~(0x000F << (editIndex*4))) | (digit << (editIndex*4));
+        if( editType == ET_HEX ) {
+            editValue = (editValue & ~(0x000F << (editIndex*4))) | (digit << (editIndex*4));
+        }
+        else if( editType == ET_BASE_10 && digit < 10 ) {
+            int divisor = editIndex > 0 ? 10 * editIndex: 1;
+            editValue = editValue - (((editValue / divisor) % 10) * divisor) + (digit * divisor);
+        }
         editOK = --editIndex < 0;
     }
 }
