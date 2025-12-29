@@ -131,6 +131,7 @@ void Listing::loadFile(Source &source) {
 
     std::string text;
 
+    source.lastRead = std::filesystem::last_write_time(source.filename);
     std::ifstream myfile(source.filename);
 
     if( !isValidListing(myfile) ) {
@@ -230,4 +231,19 @@ std::pair<Listing::Line, bool> Listing::getLine(Location location) {
         return std::pair<Listing::Line, bool>( sources[location.fileNum].lines[location.lineNum], true );
     }
     return std::pair<Listing::Line, bool>(Listing::Line {}, false);
+}
+
+bool Listing::isWatched(Source &file) {
+    return file.watch;
+}
+
+bool Listing::isUpdated(Source &file) {
+    if( file.watch ) {
+        return file.lastRead < std::filesystem::last_write_time(file.filename);
+    }
+    return false;
+}
+
+void Listing::toggleWatch(Source &file) {
+    file.watch = !file.watch;
 }

@@ -162,11 +162,10 @@ void GUI::editDigit(uint8_t digit) {
 }
 
 void GUI::editDelta(int delta) {
-    editValue = (editValue+delta) & (0x0FFFFF >> ((5-editDigits)*4));
+    editValue = (editValue+delta) & (0x0FFFFFF >> ((6-editDigits)*4));
 }
 
-void GUI::editBackspace() {
-    if( editIndex < editDigits ) {
+void GUI::editBackspace() {    if( editIndex < (editDigits-1) ) {
         editIndex++;
         editValue = (editValue & ~(0x000F << (editIndex*4))) | (editOldValue & (0x000F << (editIndex*4)));
     }                  
@@ -211,7 +210,8 @@ void GUI::drawPrompt(bool immediate) {
     SDL_FreeSurface(textSurface);
 
     if( promptType == PT_CHOICE ) {
-        textSurface = TTF_RenderText_Blended(monoFont, promptChoices[editValue].c_str(), color);
+        std::string prompt = (editValue > 0 ? "< ": "  ")+promptChoices[editValue]+(editValue < promptChoices.size()-1 ? " >": "  ");
+        textSurface = TTF_RenderText_Blended(monoFont, prompt.c_str(), color);
         textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
         textRect.x = (screenWidth - textSurface->w)/2;
         textRect.y = promptY+charHeight/2;
@@ -237,6 +237,8 @@ void GUI::promptValue(uint32_t value, int offset, int digits) {
     startEdit(value, promptX, promptY-charHeight/2, offset, digits, true);
     oldPromptValue = value;
     promptType = PT_VALUE;
+    promptStarted = true;
+    promptCompleted = false;
 }
 
 void GUI::promptChoice(std::vector<std::string> choices) {
@@ -268,7 +270,6 @@ void GUI::prompt() {
     promptType = PT_NONE;
     promptStarted = true;
     promptCompleted = false;
-    return;
 }
 
 

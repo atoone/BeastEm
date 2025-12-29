@@ -427,6 +427,7 @@ void Beast::mainLoop() {
 
             while( SDL_PollEvent(&windowEvent ) == 0 ) {
                 SDL_Delay(25);
+                checkWatchedFiles();
                 if( !uart_connected(&uart) ) {
                     uart_connect(&uart, true);
                     break;
@@ -554,9 +555,9 @@ void Beast::fileMenu(SDL_Event windowEvent) {
     unsigned int maxSelection = listing.fileCount() + binaryFiles.size();
 
     switch( windowEvent.key.keysym.sym ) {
-        case SDLK_UP  : updateSelection(-1, maxSelection); break;
-        case SDLK_DOWN: updateSelection(1, maxSelection); break;
-        case SDLK_b    : mode = DEBUG;   selection = 0; break;
+        case SDLK_UP   : updateSelection(-1, maxSelection); break;
+        case SDLK_DOWN : updateSelection(1, maxSelection); break;
+        case SDLK_k    : mode = DEBUG;   selection = 0; break;
         case SDLK_RETURN: filePrompt(selection); break;
         case SDLK_1 ... SDLK_9: {
             unsigned int index = windowEvent.key.keysym.sym - SDLK_1;
@@ -595,18 +596,25 @@ void Beast::fileMenu(SDL_Event windowEvent) {
                 audioFile = fopen(audioFilename, "ab");
             }
             break;
+        case SDLK_w      :
+            gui.startPrompt(PROMPT_WRITE_ADDRESS, "Save data from address 0x%05X", writeDataAddress);
+            gui.promptValue(writeDataAddress, 26, 5);
+            break;
     }
 }
 
 void Beast::filePrompt(unsigned int index) {
     if( index < listing.fileCount() ) {
-        gui.startPrompt(PROMPT_SOURCE_FILE, "Select action for %s", listing.getFiles()[index].shortname.c_str());
-        gui.promptChoice({"Refresh", "Delete"});
+        Listing::Source& source = listing.getFiles()[index];
+        gui.startPrompt(PROMPT_SOURCE_FILE, "Select action for %s", source.shortname.c_str());
+        gui.promptChoice({"Refresh", listing.isWatched(source) ? "Unwatch": "Watch", "Delete"});
         fileActionIndex = index;
     }
     else if(index-listing.fileCount() < binaryFiles.size()) {
-        gui.startPrompt(PROMPT_BINARY_FILE, "Select action for %s", binaryFiles[index-listing.fileCount()].getShortname().c_str());
-        gui.promptChoice({"Reload", "Forget"});
+        BinaryFile file = binaryFiles[index-listing.fileCount()];
+
+        gui.startPrompt(PROMPT_BINARY_FILE, "Select action for %s", file.getShortname().c_str());
+        gui.promptChoice({"Reload", file.isWatched() ? "Unwatch": "Watch", "Forget"});
         fileActionIndex = index-listing.fileCount();
     }
 }
@@ -630,6 +638,58 @@ void Beast::sourceFilePrompt() {
             gui.promptYesNo();
         }
     }   
+}
+
+void Beast::writeDataPrompt() {
+    nfdchar_t   *path;
+    nfdresult_t result = NFD_SaveDialog(&path, NULL, 0, NULL, NULL);
+
+    if (result == NFD_OKAY) {
+        std::string dataPath = std::string(path);
+        NFD_FreePath(path);
+
+        std::ofstream outputFileStream;
+        outputFileStream.open(dataPath, std::ios::out|std::ios::binary);
+
+        int writeDataRemaining = writeDataLength;
+        int writeDataDest = writeDataAddress;
+
+        if( writeDataDest < ROM_SIZE ) {
+            int actualLength = std::min(writeDataLength, ROM_SIZE-writeDataDest);
+
+            // Write out ROM
+            outputFileStream.write((char *)&rom[writeDataDest], actualLength);
+
+            writeDataDest = 0;
+            writeDataRemaining -= actualLength;
+        }
+        else {
+            writeDataDest -= ROM_SIZE;
+        }
+
+        if( writeDataRemaining > 0 && writeDataDest < RAM_SIZE ) {
+            int actualLength = std::min(writeDataRemaining, RAM_SIZE-writeDataDest);
+
+            // Write out RAM
+            outputFileStream.write((char *)&ram[writeDataDest], actualLength);
+
+            writeDataDest = 0;
+            writeDataRemaining -= actualLength;
+        }
+        else {
+            writeDataDest -= RAM_SIZE;
+        }
+
+        if( writeDataRemaining > 0 && writeDataDest < VideoBeast::VIDEO_RAM_LENGTH) {
+            int actualLength = std::min(writeDataRemaining, VideoBeast::VIDEO_RAM_LENGTH-writeDataDest);
+
+            // Write out Video RAM
+            outputFileStream.write((char *)videoBeast->memoryPtr() + writeDataDest, actualLength);
+        }
+        outputFileStream.close();
+    }
+    gui.startPrompt(0, "Wrote 0x%05X bytes from address 0x%05X", writeDataLength, writeDataAddress);
+    gui.promptYesNo();
 }
 
 void Beast::binaryFilePrompt(int promptId) {
@@ -674,6 +734,9 @@ void Beast::promptComplete() {
                 listing.loadFile(source); 
                 gui.endPrompt(true);
             }
+            else if( gui.getEditValue()==1 ) {
+                listing.toggleWatch(source);
+            }
             else {
                 listing.removeFile(fileActionIndex); selection = std::max(0, fileActionIndex-1); 
             }
@@ -685,6 +748,9 @@ void Beast::promptComplete() {
                 gui.drawPrompt(true);
                 binaryFiles[fileActionIndex].load(rom, ram, pagingEnabled, memoryPage, videoRam);
                 gui.endPrompt(true);
+            }
+            else if( gui.getEditValue()== 1) {
+                binaryFiles[fileActionIndex].toggleWatch();
             }
             else {
                 binaryFiles.erase(binaryFiles.begin() + fileActionIndex);
@@ -730,6 +796,17 @@ void Beast::promptComplete() {
             binaryFiles.push_back(binary);
             break;
         }
+        case PROMPT_WRITE_ADDRESS: {
+            writeDataAddress = gui.getEditValue();
+            gui.startPrompt(PROMPT_WRITE_LENGTH, "Length to write 0x%05X", writeDataLength);
+            gui.promptValue(writeDataLength, 19, 5);
+            break;
+        }
+        case PROMPT_WRITE_LENGTH: {
+            writeDataLength = gui.getEditValue();
+            writeDataPrompt();
+            break;
+        }
     }
 }
 
@@ -751,6 +828,8 @@ void Beast::updatePrompt() {
         case PROMPT_BINARY_PAGE2   : gui.updatePrompt("Address in page 0x%02X: 0x%04X", loadBinaryPage, gui.getEditValue()); break;
         case PROMPT_BINARY_CPU     : gui.updatePrompt("Load file to CPU address 0x%04X", gui.getEditValue()); break;
         case PROMPT_BINARY_VIDEO   : gui.updatePrompt("Load file to video address 0x%05X", gui.getEditValue()); break;
+        case PROMPT_WRITE_ADDRESS  : gui.updatePrompt("Save data from address 0x%05X", gui.getEditValue()); break;
+        case PROMPT_WRITE_LENGTH   : gui.updatePrompt("Length to write 0x%05X", gui.getEditValue()); break;
     }
 }
 
@@ -1026,6 +1105,7 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                 }
             }
             onDraw();
+            checkWatchedFiles();
         }
         tickCount++;
         if( (uint64_t)(cpu.pc-1) == breakpoint && z80_opdone(&cpu)) {
@@ -1292,7 +1372,8 @@ void Beast::onFile() {
         row += 2*GUI::ROW_HEIGHT;
 
         for(auto &source: listing.getFiles()) { 
-            gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Page 0x%02X   %s", index++, source.page, source.filename.c_str());
+            const char* watch = listing.isWatched(source) ? "W" : " ";
+            gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] %s Page 0x%02X     %s", index++, watch, source.page, source.filename.c_str());
             row += GUI::ROW_HEIGHT;
         }
 
@@ -1305,33 +1386,63 @@ void Beast::onFile() {
         row += 2*GUI::ROW_HEIGHT;
 
         for(auto &file: binaryFiles) {
+            const char* watch = file.isWatched() ? "W" : " ";
 
             switch( file.getDestination() ) {
                 case BinaryFile::LOGICAL:
-                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Logical       0x%04X  %.60s", index++, file.getAddress() & 0x0FFFF, file.getFilename().c_str());
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] %s Logical       0x%04X  %.60s", index++, watch, file.getAddress() & 0x0FFFF, file.getFilename().c_str());
                     break;
                 case BinaryFile::PAGE_OFFSET :
-                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Physical 0x%02X:0x%04X  %.60s", index++, file.getPage(), file.getAddress() & 0x03FFF, file.getFilename().c_str());
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] %s Physical 0x%02X:0x%04X  %.60s", index++, watch, file.getPage(), file.getAddress() & 0x03FFF, file.getFilename().c_str());
                     break;
                 case BinaryFile::PHYSICAL :
-                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Physical     0x%05X  %.60s", index++, file.getAddress() & 0x0FFFFF, file.getFilename().c_str());
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] %s Physical     0x%05X  %.60s", index++, watch, file.getAddress() & 0x0FFFFF, file.getFilename().c_str());
                     break;
                 case BinaryFile::VIDEO_RAM :
-                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] Video RAM    0x%05X  %.60s", index++, file.getAddress() & 0x0FFFFF, file.getFilename().c_str());
+                    gui.print( GUI::COL1, row, textColor, id--?0:4, bright, "[%2d] %s Video RAM    0x%05X  %.60s", index++, watch, file.getAddress() & 0x0FFFFF, file.getFilename().c_str());
                     break;
             }
             row += GUI::ROW_HEIGHT;
         }
     }
 
-    gui.print(GUI::COL1, GUI::END_ROW, menuColor, "[R]un");
+    gui.print(GUI::COL1, GUI::END_ROW, menuColor, "Bac[K]");
+    gui.print(GUI::COL2, GUI::END_ROW, menuColor, "[W]rite");
+    gui.print(GUI::COL3, GUI::END_ROW, menuColor, "[R]un");
 
     if( audioSampleRatePs > 0 ) {
-        gui.print(GUI::COL2, GUI::END_ROW, menuColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
-        gui.print(GUI::COL3+40, GUI::END_ROW, textColor, "File \"%s\"", audioFilename);
+        gui.print(GUI::COL4-40, GUI::END_ROW, menuColor, "[A]ppend audio %s", audioFile?"ON":"OFF");
+        gui.print(GUI::COL5, GUI::END_ROW, textColor, "File \"%s\"", audioFilename);
     }
 
-    gui.print(GUI::COL5, GUI::END_ROW, menuColor, "[B]ack");
+}
+
+void Beast::checkWatchedFiles() {
+    if(gui.isPrompt()) {
+        return;
+    }
+
+    for(auto &source: listing.getFiles()) { 
+        if( listing.isUpdated(source) ) {
+            gui.startPrompt(0, "Reloading %s", source.filename.c_str());
+            gui.drawPrompt(true);
+
+            listing.loadFile(source); 
+
+            gui.endPrompt(true);
+        }
+    }
+
+    for(auto &file: binaryFiles) {
+        if( file.isUpdated() ) {
+            file.load(rom, ram, pagingEnabled, memoryPage, videoRam);
+
+            gui.startPrompt(0, "Reloaded file %s", file.getFilename().c_str());
+            gui.drawPrompt(true);
+            SDL_Delay(500);
+            gui.endPrompt(true);
+        }
+    }
 }
 
 void Beast::onDebug() {

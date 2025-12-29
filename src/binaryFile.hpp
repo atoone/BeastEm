@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <cstdint>
+#include <filesystem>
 
 class BinaryFile {
     static const int ROM_SIZE = (1<<19);
@@ -11,6 +12,7 @@ class BinaryFile {
         enum BINARY_DEST {PHYSICAL, PAGE_OFFSET, LOGICAL, VIDEO_RAM};
 
 
+
         BinaryFile(std::string filename, uint32_t address, BINARY_DEST destination=BINARY_DEST::PHYSICAL, uint8_t page=0);
 
         std::string getFilename();
@@ -18,6 +20,9 @@ class BinaryFile {
         uint32_t    getAddress();
         uint8_t     getPage();
         BINARY_DEST getDestination();
+        bool        isWatched();
+        bool        isUpdated();
+        void        toggleWatch();
 
         size_t load(uint8_t *rom, uint8_t *ram, bool pagingEnabled, uint8_t pageMap[4], uint8_t *videoRam);
     private:
@@ -26,6 +31,6 @@ class BinaryFile {
         uint32_t    address;
         uint8_t     page;
         BINARY_DEST destination;
-
-
+        bool        watch;
+        std::filesystem::file_time_type  lastRead;
 };

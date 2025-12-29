@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <iostream>
+#include <filesystem>
 #include <string>
 #include <map>
 #include <vector>
@@ -29,6 +30,8 @@ class Listing {
             unsigned int fileNum;
             int page;
             std::vector<Line> lines;
+            bool         watch;
+            std::filesystem::file_time_type  lastRead;
         };
 
         bool    isValidFile(std::string filename);
@@ -42,6 +45,10 @@ class Listing {
 
         Location getLocation(uint32_t address);
         std::pair<Line, bool>    getLine(Location location);
+
+        bool        isWatched(Source &file);
+        bool        isUpdated(Source &file);
+        void        toggleWatch(Source &file);
 
     private:
         std::vector<Source> sources;

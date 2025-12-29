@@ -66,6 +66,8 @@
         "regex": "cpp",
         "string_view": "cpp",
         "numbers": "cpp",
-        "iomanip": "cpp"
-    }
+        "iomanip": "cpp",
+        "filesystem": "cpp"
+    },
+    "idf.pythonInstallPath": "C:\\Users\\Andy\\.espressif\\tools\\idf-python\\3.8.7\\python.exe"
 }

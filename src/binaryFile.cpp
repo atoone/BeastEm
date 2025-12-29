@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <filesystem>
 
 const char filePathSeparator =
 #ifdef _WIN32
@@ -44,6 +45,21 @@ uint8_t BinaryFile::getPage() {
 
 BinaryFile::BINARY_DEST BinaryFile::getDestination() {
     return destination;
+}
+
+bool BinaryFile::isWatched() {
+    return watch;
+}
+
+bool BinaryFile::isUpdated() {
+    if( watch ) {
+        return lastRead < std::filesystem::last_write_time(filename);
+    }
+    return false;
+}
+
+void BinaryFile::toggleWatch() {
+    watch = !watch;
 }
 
 size_t BinaryFile::load(uint8_t *rom, uint8_t *ram, bool pagingEnabled, uint8_t pageMap[4], uint8_t *videoRam) {
@@ -125,6 +141,8 @@ size_t BinaryFile::load(uint8_t *rom, uint8_t *ram, bool pagingEnabled, uint8_t 
             loadAddress += loadLength;
             remaining -= loadLength;
         }
+        lastRead = std::filesystem::last_write_time(filename);
+
         std::cout << "Read file '" << filename << "' (" << (length/1024) << "K) to " << destStr << std::endl;
     }
     else if( destination == VIDEO_RAM ) {

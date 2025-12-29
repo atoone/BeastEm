@@ -52,6 +52,11 @@ class Beast {
     static const int PROMPT_BINARY_ADDRESS = 6;
     static const int PROMPT_BINARY_PAGE2   = 7; 
     static const int PROMPT_BINARY_VIDEO   = 8;
+    static const int PROMPT_WRITE_ADDRESS  = 9; 
+    static const int PROMPT_WRITE_LENGTH   = 10;
+
+    static const int ROM_SIZE = 1<<19;
+    static const int RAM_SIZE = 1<<19;
 
     struct BeastKey {
         SDL_KeyCode key;
@@ -99,8 +104,8 @@ class Beast {
         SDL_Texture   *pcbTexture;
         uint32_t      windowId;
 
-        uint8_t       rom[(1<<19)]; // 512K rom
-        uint8_t       ram[(1<<19)]; // 512K ram
+        uint8_t       rom[ROM_SIZE]; // 512K rom
+        uint8_t       ram[RAM_SIZE]; // 512K ram
         uint8_t*      videoRam = {0};
 
         uint8_t                 memoryPage[4];
@@ -184,6 +189,9 @@ class Beast {
 
         std::string *listingPath;
 
+        int         writeDataLength;
+        int         writeDataAddress;
+
         SDL_Renderer* createRenderer(SDL_Window *window);
         void          initVideoBeast();
         float         checkZoomFactor(int screenWidth, int screenHeight, float zoom);
@@ -221,6 +229,7 @@ class Beast {
         void filePrompt(unsigned int index);
         void sourceFilePrompt();
         void binaryFilePrompt(int promptId);
+        void checkWatchedFiles();
 
         uint8_t loadBinaryPage;
 
@@ -229,6 +238,8 @@ class Beast {
         void promptComplete();
         void reportLoad(size_t bytes);
         void updatePrompt();
+
+        void writeDataPrompt();
 
         void drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor);
         
