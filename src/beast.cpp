@@ -597,8 +597,8 @@ void Beast::fileMenu(SDL_Event windowEvent) {
             }
             break;
         case SDLK_w      :
-            gui.startPrompt(PROMPT_WRITE_ADDRESS, "Save data from address 0x%05X", writeDataAddress);
-            gui.promptValue(writeDataAddress, 26, 5);
+            gui.startPrompt(PROMPT_WRITE_ADDRESS, "Save data from address 0x%06X", writeDataAddress);
+            gui.promptValue(writeDataAddress, 26, 6);
             break;
     }
 }
@@ -798,8 +798,8 @@ void Beast::promptComplete() {
         }
         case PROMPT_WRITE_ADDRESS: {
             writeDataAddress = gui.getEditValue();
-            gui.startPrompt(PROMPT_WRITE_LENGTH, "Length to write 0x%05X", writeDataLength);
-            gui.promptValue(writeDataLength, 19, 5);
+            gui.startPrompt(PROMPT_WRITE_LENGTH, "Length to write 0x%06X", writeDataLength);
+            gui.promptValue(writeDataLength, 19, 6);
             break;
         }
         case PROMPT_WRITE_LENGTH: {
@@ -828,8 +828,8 @@ void Beast::updatePrompt() {
         case PROMPT_BINARY_PAGE2   : gui.updatePrompt("Address in page 0x%02X: 0x%04X", loadBinaryPage, gui.getEditValue()); break;
         case PROMPT_BINARY_CPU     : gui.updatePrompt("Load file to CPU address 0x%04X", gui.getEditValue()); break;
         case PROMPT_BINARY_VIDEO   : gui.updatePrompt("Load file to video address 0x%05X", gui.getEditValue()); break;
-        case PROMPT_WRITE_ADDRESS  : gui.updatePrompt("Save data from address 0x%05X", gui.getEditValue()); break;
-        case PROMPT_WRITE_LENGTH   : gui.updatePrompt("Length to write 0x%05X", gui.getEditValue()); break;
+        case PROMPT_WRITE_ADDRESS  : gui.updatePrompt("Save data from address 0x%06X", gui.getEditValue()); break;
+        case PROMPT_WRITE_LENGTH   : gui.updatePrompt("Length to write 0x%06X", gui.getEditValue()); break;
     }
 }
 
