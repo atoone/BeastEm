@@ -49,15 +49,15 @@ bool isFloatNum(char* value) {
 void printHelp() {
     std::cout << "Usage: beastem <options>" << std::endl;
     std::cout << "Options are:" << std::endl;
-    std::cout << "   -f [offset] <binary filename>  : Read binary file into memory at address <offset> (hex)" << std::endl;
-    std::cout << "   -l [page] <listing file>       : Read assembly listing file for code in page <page> (hex)" << std::endl;
-    std::cout << "   -a <audio-device-num>          : Override the default audio device selection" << std::endl;
-    std::cout << "   -s <audio-sample-rate>         : Override the default audio sample rate (22050)" << std::endl;
-    std::cout << "   -v <Audio volume>              : Value 0 to 10 (default 4)" << std::endl;
-    std::cout << "   -k <CPU speed>                 : Integer KHz (default 8000)" << std::endl;
-    std::cout << "   -b <breakpoint>                : Stop at address (hex)" << std::endl;
-    std::cout << "   -z <zoom-level>                : Zoom the user interface by the given value" << std::endl;
-    std::cout << "   -d <filename> | -d2 <filename> : Start VideoBeast with the given file in video ram" << std::endl;              
+    std::cout << "   -f/fw [offset] <binary filename> : Read/watch binary file into memory at address <offset> (hex)" << std::endl;
+    std::cout << "   -l/lw [page] <listing file>      : Read/watch assembly listing file for code in page <page> (hex)" << std::endl;
+    std::cout << "   -a <audio-device-num>            : Override the default audio device selection" << std::endl;
+    std::cout << "   -s <audio-sample-rate>           : Override the default audio sample rate (22050)" << std::endl;
+    std::cout << "   -v <Audio volume>                : Value 0 to 10 (default 4)" << std::endl;
+    std::cout << "   -k <CPU speed>                   : Integer KHz (default 8000)" << std::endl;
+    std::cout << "   -b <breakpoint>                  : Stop at address (hex)" << std::endl;
+    std::cout << "   -z <zoom-level>                  : Zoom the user interface by the given value" << std::endl;
+    std::cout << "   -d <filename> | -d2 <filename>   : Start VideoBeast with the given file in video ram" << std::endl;              
 }
 
 int main( int argc, char *argv[] ) {
