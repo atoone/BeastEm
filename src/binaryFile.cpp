@@ -12,9 +12,10 @@ const char filePathSeparator =
                             '/';
 #endif
 
-BinaryFile::BinaryFile(std::string filename, uint32_t address, BINARY_DEST destination, uint8_t page) :
+BinaryFile::BinaryFile(std::string filename, uint32_t address, bool watch, BINARY_DEST destination, uint8_t page) :
             filename(filename),
             address(address),
+            watch(watch),
             page(page),
             destination(destination) {
 

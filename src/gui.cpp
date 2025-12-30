@@ -234,7 +234,7 @@ void GUI::promptYesNo() {
 }
 
 void GUI::promptValue(uint32_t value, int offset, int digits) {
-    startEdit(value, promptX, promptY-charHeight/2, offset, digits, true);
+    startEdit(value, promptX/zoom, (promptY-charHeight/2)/zoom, offset, digits, true);
     oldPromptValue = value;
     promptType = PT_VALUE;
     promptStarted = true;

@@ -580,7 +580,7 @@ void Beast::fileMenu(SDL_Event windowEvent) {
 
                 if(myfile) {
                     myfile.close();
-                    BinaryFile file = BinaryFile(DEFAULT_VIDEO_FILE, 0, BinaryFile::VIDEO_RAM);
+                    BinaryFile file = BinaryFile(DEFAULT_VIDEO_FILE, 0, false, BinaryFile::VIDEO_RAM);
                     binaryFiles.push_back(file);
                     file.load(rom, ram, pagingEnabled, memoryPage, videoRam);
                 }
@@ -607,7 +607,7 @@ void Beast::filePrompt(unsigned int index) {
     if( index < listing.fileCount() ) {
         Listing::Source& source = listing.getFiles()[index];
         gui.startPrompt(PROMPT_SOURCE_FILE, "Select action for %s", source.shortname.c_str());
-        gui.promptChoice({"Refresh", listing.isWatched(source) ? "Unwatch": "Watch", "Delete"});
+        gui.promptChoice({"Reload", listing.isWatched(source) ? "Unwatch": "Watch", "Forget"});
         fileActionIndex = index;
     }
     else if(index-listing.fileCount() < binaryFiles.size()) {
@@ -687,9 +687,10 @@ void Beast::writeDataPrompt() {
             outputFileStream.write((char *)videoBeast->memoryPtr() + writeDataDest, actualLength);
         }
         outputFileStream.close();
+
+        gui.startPrompt(0, "Wrote 0x%05X bytes from address 0x%05X", writeDataLength, writeDataAddress);
+        gui.promptYesNo();
     }
-    gui.startPrompt(0, "Wrote 0x%05X bytes from address 0x%05X", writeDataLength, writeDataAddress);
-    gui.promptYesNo();
 }
 
 void Beast::binaryFilePrompt(int promptId) {
@@ -729,7 +730,7 @@ void Beast::promptComplete() {
             Listing::Source& source = listing.getFiles()[fileActionIndex];
             
             if( gui.getEditValue()==0 ) {
-                gui.startPrompt(0, "Refreshing ...");
+                gui.startPrompt(0, "Reloading ...");
                 gui.drawPrompt(true);
                 listing.loadFile(source); 
                 gui.endPrompt(true);
@@ -760,7 +761,7 @@ void Beast::promptComplete() {
         case PROMPT_LISTING : {
             gui.startPrompt(0, "Loading ...");
             gui.drawPrompt(true);
-            int index = listing.addFile( *listingPath, gui.getEditValue()); 
+            int index = listing.addFile( *listingPath, gui.getEditValue(), false); 
             if( index >= 0 ) {
                 listing.loadFile(listing.getFiles()[index]);
             }
@@ -768,13 +769,13 @@ void Beast::promptComplete() {
             break;
         }
         case PROMPT_BINARY_ADDRESS: {
-            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue());
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), false);
             reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
             binaryFiles.push_back(binary);
             break;
         }
         case PROMPT_BINARY_CPU: {
-            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), BinaryFile::LOGICAL);
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), false, BinaryFile::LOGICAL);
             reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
             binaryFiles.push_back(binary);
             break;
@@ -785,13 +786,13 @@ void Beast::promptComplete() {
             gui.promptValue(0, 25, 4);
             break;  
         case PROMPT_BINARY_PAGE2: {
-            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), BinaryFile::PAGE_OFFSET, loadBinaryPage);
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), false, BinaryFile::PAGE_OFFSET, loadBinaryPage);
             reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
             binaryFiles.push_back(binary);
             break;
         }
         case PROMPT_BINARY_VIDEO: {
-            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), BinaryFile::VIDEO_RAM);
+            BinaryFile binary = BinaryFile(*listingPath, gui.getEditValue(), false, BinaryFile::VIDEO_RAM);
             reportLoad( binary.load(rom, ram, pagingEnabled, memoryPage, videoRam) );
             binaryFiles.push_back(binary);
             break;

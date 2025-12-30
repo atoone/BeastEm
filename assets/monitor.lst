@@ -120,12 +120,12 @@
 0116   DB9B CD 11 E5                        CALL    pause_for_ticks
 0117   DB9E             
 0118   DB9E CD 04 F0                        CALL    m_print_inline
-0119   DBA1 0A 0D 4D 69                     .DB     NEWLINE, CARRIAGE_RETURN, "MicroBeast Monitor 1.6", 0
+0119   DBA1 0A 0D 4D 69                     .DB     NEWLINE, CARRIAGE_RETURN, "MicroBeast Monitor 1.7", 0
 0119   DBA5 63 72 6F 42 
 0119   DBA9 65 61 73 74 
 0119   DBAD 20 4D 6F 6E 
 0119   DBB1 69 74 6F 72 
-0119   DBB5 20 31 2E 36 
+0119   DBB5 20 31 2E 37 
 0119   DBB9 00 
 0120   DBBA             
 0121   DBBA 01 60 00                        LD      BC, 60h
@@ -1035,7 +1035,7 @@
 0684   E32A CD 00 EC                        CALL    bios_conout
 0685   E32D             
 0686   E32D CD 04 F0    _hex_values         CALL    m_print_inline
-0687   E330 1B 62 27 00                     .DB     ESCAPE_CHAR, 'b', CPM_NUM+8, 0
+0687   E330 1B 62 26 00                     .DB     ESCAPE_CHAR, 'b', CPM_NUM+7, 0
 0688   E334             
 0689   E334 2A 72 E1                        LD      HL, (monitor_address)
 0690   E337 06 08                           LD      B, 8
@@ -3029,819 +3029,820 @@
 0687+  EE25 77                              LD      (HL), A
 0688+  EE26 C5                              PUSH    BC
 0689+  EE27 E5                              PUSH    HL
-0690+  EE28 D5                              PUSH    DE
-0691+  EE29 79                              LD      A, C                    ; Ugh... disp_char_bright has parameters in other order..
-0692+  EE2A 4E                              LD      C, (HL)
-0693+  EE2B CB 21                           SLA     C
-0694+  EE2D CB 21                           SLA     C
-0695+  EE2F CB 21                           SLA     C
-0696+  EE31 CD 65 F7                        CALL    disp_char_bright    ; Column A, brightness C
-0697+  EE34 D1                              POP     DE
-0698+  EE35 E1                              POP     HL
-0699+  EE36 C1                              POP     BC
-0700+  EE37             
-0701+  EE37 23          _redraw_skip_bri    INC     HL
-0702+  EE38 13                              INC     DE
-0703+  EE39 0C                              INC     C
-0704+  EE3A 10 C9                           DJNZ    _redraw_loop
-0705+  EE3C             
-0706+  EE3C 3A 32 FF                        LD      A, (console_flags)
-0707+  EE3F 4F                              LD      C, A
-0708+  EE40 E6 24                           AND     CFLAGS_SHOW_MOVED | CFLAGS_LED_OFF
-0709+  EE42 28 5D                           JR      Z, _redraw_done
-0710+  EE44             
-0711+  EE44                                 ; We've moved the cursor, so draw the last character as our location bitmap..
-0712+  EE44 36 00       _redraw_moved       LD      (HL), 0
-0713+  EE46 23                              INC     HL
-0714+  EE47 36 80                           LD      (HL), DISP_DEFAULT_BRIGHTNESS
-0715+  EE49 79                              LD      A, C
-0716+  EE4A E6 20                           AND     CFLAGS_LED_OFF
-0717+  EE4C 79                              LD      A, C
-0718+  EE4D 28 05                           JR      Z, _led_normal
-0719+  EE4F             
-0720+  EE4F 21 07 09                        LD      HL, LED_OFF_BITMAP
-0721+  EE52 18 41                           JR      _redraw_map2
-0722+  EE54             
-0723+  EE54 E6 02       _led_normal         AND     CFLAGS_TRACK_CURSOR
-0724+  EE56 20 4F                           JR      NZ, _redraw_tracking
-0725+  EE58             
-0726+  EE58 21 00 00                        LD      HL, 0
-0727+  EE5B ED 4B 2D FF                     LD      BC, (cursor_row)
-0728+  EE5F 0D                              DEC     C
-0729+  EE60                                 
-0730+  EE60 ED 5B 2B FF                     LD      DE, (display_row)
-0731+  EE64 7B                              LD      A, E
-0732+  EE65 A7                              AND     A
-0733+  EE66 20 05                           JR      NZ, _redraw_not_top
-0734+  EE68 21 01 00                        LD      HL, MOVE_TOP_BITMAP
-0735+  EE6B 18 0A                           JR      _redraw_not_bottom
-0736+  EE6D             
-0737+  EE6D 3A 2F FF    _redraw_not_top     LD      A, (console_height)
-0738+  EE70 3D                              DEC     A
-0739+  EE71 BB                              CP      E
-0740+  EE72 20 03                           JR      NZ, _redraw_not_bottom
-0741+  EE74 21 08 00                        LD      HL, MOVE_BOTTOM_BITMAP
-0742+  EE77             
-0743+  EE77 7B          _redraw_not_bottom  LD      A, E
-0744+  EE78 B9                              CP      C
-0745+  EE79 01 00 00                        LD      BC, 0
-0746+  EE7C 20 04                           JR      NZ, _redraw_not_row
-0747+  EE7E 0E C0                           LD      C, MOVE_ROW_BITMAP_L
-0748+  EE80 18 08                           JR      _redraw_map
-0749+  EE82             
-0750+  EE82 06 28       _redraw_not_row     LD      B, MOVE_BELOW_BITMAP_H
-0751+  EE84 38 02                           JR      C, _redraw_not_above
-0752+  EE86 18 02                           JR      _redraw_map
-0753+  EE88             
-0754+  EE88 06 05       _redraw_not_above   LD      B, MOVE_ABOVE_BITMAP_H
-0755+  EE8A             
-0756+  EE8A 09          _redraw_map         ADD     HL, BC
-0757+  EE8B 3A 2C FF                        LD      A, (display_col)
-0758+  EE8E A7                              AND     A
-0759+  EE8F 20 04                           JR      NZ, _redraw_map2
-0760+  EE91 3E 30                           LD      A, MOVE_AT_LEFT_BITMAP
-0761+  EE93 B5                              OR      L
-0762+  EE94 6F                              LD      L, A
-0763+  EE95 3E 17       _redraw_map2        LD      A, DISPLAY_WIDTH-1
-0764+  EE97 CD C4 F7                        CALL    disp_bitmask
-0765+  EE9A             
-0766+  EE9A 3E 17                           LD      A, DISPLAY_WIDTH-1
-0767+  EE9C 0E 80                           LD      C, DISP_DEFAULT_BRIGHTNESS
-0768+  EE9E CD 65 F7                        CALL    disp_char_bright
-0769+  EEA1             
-0770+  EEA1 3A 3A FF    _redraw_done        LD      A, (page_1_mapping)
-0771+  EEA4 D3 71                           OUT     (IO_MEM_1), A
-0772+  EEA6 C9                              RET
-0773+  EEA7             
-0774+  EEA7 21 3F 2D    _redraw_tracking    LD      HL, 2d3fh          ; Tracking symbol
-0775+  EEAA 18 E9                           JR      _redraw_map2
-0776+  EEAC             
-0777+  EEAC             MOVE_TOP_BITMAP     .EQU    0001h
-0778+  EEAC             MOVE_BOTTOM_BITMAP  .EQU    0008h
-0779+  EEAC             MOVE_ROW_BITMAP_L   .EQU    0c0h
-0780+  EEAC             MOVE_ABOVE_BITMAP_H .EQU    05h
-0781+  EEAC             MOVE_BELOW_BITMAP_H .EQU    28h
-0782+  EEAC             MOVE_AT_LEFT_BITMAP .EQU    030h
-0783+  EEAC             LED_OFF_BITMAP      .EQU    0907h
-0784+  EEAC             
-0785+  EEAC             ;---------------------------------------- Simple character output.. 
-0786+  EEAC ED 5B 2D FF _conout_character   LD      DE, (cursor_row)
-0787+  EEB0 FE 0D                           CP      CARRIAGE_RETURN
-0788+  EEB2 20 05                           JR      NZ, _conout_not_cr
-0789+  EEB4                
-0790+  EEB4 16 01                           LD      D, 1
-0791+  EEB6 C3 20 ED                        JP      _conout_csr_update
-0792+  EEB9             
-0793+  EEB9 FE 0A       _conout_not_cr      CP      NEWLINE
-0794+  EEBB 20 04                           JR      NZ, _conout_not_lf
-0795+  EEBD             
-0796+  EEBD 1C                              INC     E
-0797+  EEBE C3 20 ED                        JP      _conout_csr_update
-0798+  EEC1             
-0799+  EEC1 FE 08       _conout_not_lf      CP      BACKSPACE_CHAR
-0800+  EEC3 20 05                           JR      NZ, _conout_visible
-0801+  EEC5             
-0802+  EEC5 15                              DEC     D
-0803+  EEC6 C2 20 ED                        JP      NZ, _conout_csr_update
-0804+  EEC9 C9                              RET
-0805+  EECA             
-0806+  EECA                                 ; Now, C is character to write,
-0807+  EECA ED 5B 2D FF _conout_visible     LD      DE, (cursor_row)
-0808+  EECE 15                              DEC     D                       ; 1 based col
-0809+  EECF 1D                              DEC     E                       ; 1 based row
-0810+  EED0             
-0811+  EED0 3A 2A FF                        LD      A, (screen_offset)      ; Write the character and colour into our screen buffer
-0812+  EED3 83                              ADD     A, E
-0813+  EED4             
-0814+  EED4 E6 3F                           AND     03Fh
-0815+  EED6 F6 40                           OR      040h                    ; We're going to use page 1 for the screen buffer
-0816+  EED8 67                              LD      H, A
-0817+  EED9 7A                              LD      A, D
-0818+  EEDA CB 27                           SLA     A
-0819+  EEDC 6F                              LD      L, A
-0820+  EEDD 3A 29 FF                        LD      A, (screen_page)
-0821+  EEE0 D3 71                           OUT     (IO_MEM_1), A
-0822+  EEE2 71                              LD      (HL), C
-0823+  EEE3 3A 31 FF                        LD      A, (console_colour)
-0824+  EEE6 23                              INC     HL
-0825+  EEE7 77                              LD      (HL), A
-0826+  EEE8 3A 3A FF                        LD      A, (page_1_mapping)
-0827+  EEEB D3 71                           OUT     (IO_MEM_1), A
-0828+  EEED             
-0829+  EEED ED 5B 2D FF                     LD      DE, (cursor_row)
-0830+  EEF1 3A 30 FF                        LD      A, (console_width)
-0831+  EEF4 6F                              LD      L, A
-0832+  EEF5 7A                              LD      A, D
-0833+  EEF6 BD                              CP      L
-0834+  EEF7 28 04                           JR      Z, _conout_wrap
-0835+  EEF9 14                              INC     D
-0836+  EEFA C3 20 ED                        JP      _conout_csr_update
-0837+  EEFD             
-0838+  EEFD 16 01       _conout_wrap        LD      D, 1
-0839+  EEFF 1C                              INC     E
-0840+  EF00 C3 20 ED                        JP      _conout_csr_update          ; If we've wrapped, use the new wrap position..
-0841+  EF03             ;
+0690+  EE28 D5                              PUSH    DE                
+0691+  EE29 7E                              LD      A, (HL)             ; Ugh... disp_char_bright has parameters in other order..
+0692+  EE2A CB 3F                           SRL     A
+0693+  EE2C E6 78                           AND     078h
+0694+  EE2E 47                              LD      B, A
+0695+  EE2F 79                              LD      A, C
+0696+  EE30 48                              LD      C, B
+0697+  EE31 CD 65 F7                        CALL    disp_char_bright    ; Column A, brightness C
+0698+  EE34 D1                              POP     DE
+0699+  EE35 E1                              POP     HL
+0700+  EE36 C1                              POP     BC
+0701+  EE37             
+0702+  EE37 23          _redraw_skip_bri    INC     HL
+0703+  EE38 13                              INC     DE
+0704+  EE39 0C                              INC     C
+0705+  EE3A 10 C9                           DJNZ    _redraw_loop
+0706+  EE3C             
+0707+  EE3C 3A 32 FF                        LD      A, (console_flags)
+0708+  EE3F 4F                              LD      C, A
+0709+  EE40 E6 24                           AND     CFLAGS_SHOW_MOVED | CFLAGS_LED_OFF
+0710+  EE42 28 5D                           JR      Z, _redraw_done
+0711+  EE44             
+0712+  EE44                                 ; We've moved the cursor, so draw the last character as our location bitmap..
+0713+  EE44 36 00       _redraw_moved       LD      (HL), 0
+0714+  EE46 23                              INC     HL
+0715+  EE47 36 80                           LD      (HL), DISP_DEFAULT_BRIGHTNESS
+0716+  EE49 79                              LD      A, C
+0717+  EE4A E6 20                           AND     CFLAGS_LED_OFF
+0718+  EE4C 79                              LD      A, C
+0719+  EE4D 28 05                           JR      Z, _led_normal
+0720+  EE4F             
+0721+  EE4F 21 07 09                        LD      HL, LED_OFF_BITMAP
+0722+  EE52 18 41                           JR      _redraw_map2
+0723+  EE54             
+0724+  EE54 E6 02       _led_normal         AND     CFLAGS_TRACK_CURSOR
+0725+  EE56 20 4F                           JR      NZ, _redraw_tracking
+0726+  EE58             
+0727+  EE58 21 00 00                        LD      HL, 0
+0728+  EE5B ED 4B 2D FF                     LD      BC, (cursor_row)
+0729+  EE5F 0D                              DEC     C
+0730+  EE60                                 
+0731+  EE60 ED 5B 2B FF                     LD      DE, (display_row)
+0732+  EE64 7B                              LD      A, E
+0733+  EE65 A7                              AND     A
+0734+  EE66 20 05                           JR      NZ, _redraw_not_top
+0735+  EE68 21 01 00                        LD      HL, MOVE_TOP_BITMAP
+0736+  EE6B 18 0A                           JR      _redraw_not_bottom
+0737+  EE6D             
+0738+  EE6D 3A 2F FF    _redraw_not_top     LD      A, (console_height)
+0739+  EE70 3D                              DEC     A
+0740+  EE71 BB                              CP      E
+0741+  EE72 20 03                           JR      NZ, _redraw_not_bottom
+0742+  EE74 21 08 00                        LD      HL, MOVE_BOTTOM_BITMAP
+0743+  EE77             
+0744+  EE77 7B          _redraw_not_bottom  LD      A, E
+0745+  EE78 B9                              CP      C
+0746+  EE79 01 00 00                        LD      BC, 0
+0747+  EE7C 20 04                           JR      NZ, _redraw_not_row
+0748+  EE7E 0E C0                           LD      C, MOVE_ROW_BITMAP_L
+0749+  EE80 18 08                           JR      _redraw_map
+0750+  EE82             
+0751+  EE82 06 28       _redraw_not_row     LD      B, MOVE_BELOW_BITMAP_H
+0752+  EE84 38 02                           JR      C, _redraw_not_above
+0753+  EE86 18 02                           JR      _redraw_map
+0754+  EE88             
+0755+  EE88 06 05       _redraw_not_above   LD      B, MOVE_ABOVE_BITMAP_H
+0756+  EE8A             
+0757+  EE8A 09          _redraw_map         ADD     HL, BC
+0758+  EE8B 3A 2C FF                        LD      A, (display_col)
+0759+  EE8E A7                              AND     A
+0760+  EE8F 20 04                           JR      NZ, _redraw_map2
+0761+  EE91 3E 30                           LD      A, MOVE_AT_LEFT_BITMAP
+0762+  EE93 B5                              OR      L
+0763+  EE94 6F                              LD      L, A
+0764+  EE95 3E 17       _redraw_map2        LD      A, DISPLAY_WIDTH-1
+0765+  EE97 CD C4 F7                        CALL    disp_bitmask
+0766+  EE9A             
+0767+  EE9A 3E 17                           LD      A, DISPLAY_WIDTH-1
+0768+  EE9C 0E 80                           LD      C, DISP_DEFAULT_BRIGHTNESS
+0769+  EE9E CD 65 F7                        CALL    disp_char_bright
+0770+  EEA1             
+0771+  EEA1 3A 3A FF    _redraw_done        LD      A, (page_1_mapping)
+0772+  EEA4 D3 71                           OUT     (IO_MEM_1), A
+0773+  EEA6 C9                              RET
+0774+  EEA7             
+0775+  EEA7 21 3F 2D    _redraw_tracking    LD      HL, 2d3fh          ; Tracking symbol
+0776+  EEAA 18 E9                           JR      _redraw_map2
+0777+  EEAC             
+0778+  EEAC             MOVE_TOP_BITMAP     .EQU    0001h
+0779+  EEAC             MOVE_BOTTOM_BITMAP  .EQU    0008h
+0780+  EEAC             MOVE_ROW_BITMAP_L   .EQU    0c0h
+0781+  EEAC             MOVE_ABOVE_BITMAP_H .EQU    05h
+0782+  EEAC             MOVE_BELOW_BITMAP_H .EQU    28h
+0783+  EEAC             MOVE_AT_LEFT_BITMAP .EQU    030h
+0784+  EEAC             LED_OFF_BITMAP      .EQU    0907h
+0785+  EEAC             
+0786+  EEAC             ;---------------------------------------- Simple character output.. 
+0787+  EEAC ED 5B 2D FF _conout_character   LD      DE, (cursor_row)
+0788+  EEB0 FE 0D                           CP      CARRIAGE_RETURN
+0789+  EEB2 20 05                           JR      NZ, _conout_not_cr
+0790+  EEB4                
+0791+  EEB4 16 01                           LD      D, 1
+0792+  EEB6 C3 20 ED                        JP      _conout_csr_update
+0793+  EEB9             
+0794+  EEB9 FE 0A       _conout_not_cr      CP      NEWLINE
+0795+  EEBB 20 04                           JR      NZ, _conout_not_lf
+0796+  EEBD             
+0797+  EEBD 1C                              INC     E
+0798+  EEBE C3 20 ED                        JP      _conout_csr_update
+0799+  EEC1             
+0800+  EEC1 FE 08       _conout_not_lf      CP      BACKSPACE_CHAR
+0801+  EEC3 20 05                           JR      NZ, _conout_visible
+0802+  EEC5             
+0803+  EEC5 15                              DEC     D
+0804+  EEC6 C2 20 ED                        JP      NZ, _conout_csr_update
+0805+  EEC9 C9                              RET
+0806+  EECA             
+0807+  EECA                                 ; Now, C is character to write,
+0808+  EECA ED 5B 2D FF _conout_visible     LD      DE, (cursor_row)
+0809+  EECE 15                              DEC     D                       ; 1 based col
+0810+  EECF 1D                              DEC     E                       ; 1 based row
+0811+  EED0             
+0812+  EED0 3A 2A FF                        LD      A, (screen_offset)      ; Write the character and colour into our screen buffer
+0813+  EED3 83                              ADD     A, E
+0814+  EED4             
+0815+  EED4 E6 3F                           AND     03Fh
+0816+  EED6 F6 40                           OR      040h                    ; We're going to use page 1 for the screen buffer
+0817+  EED8 67                              LD      H, A
+0818+  EED9 7A                              LD      A, D
+0819+  EEDA CB 27                           SLA     A
+0820+  EEDC 6F                              LD      L, A
+0821+  EEDD 3A 29 FF                        LD      A, (screen_page)
+0822+  EEE0 D3 71                           OUT     (IO_MEM_1), A
+0823+  EEE2 71                              LD      (HL), C
+0824+  EEE3 3A 31 FF                        LD      A, (console_colour)
+0825+  EEE6 23                              INC     HL
+0826+  EEE7 77                              LD      (HL), A
+0827+  EEE8 3A 3A FF                        LD      A, (page_1_mapping)
+0828+  EEEB D3 71                           OUT     (IO_MEM_1), A
+0829+  EEED             
+0830+  EEED ED 5B 2D FF                     LD      DE, (cursor_row)
+0831+  EEF1 3A 30 FF                        LD      A, (console_width)
+0832+  EEF4 6F                              LD      L, A
+0833+  EEF5 7A                              LD      A, D
+0834+  EEF6 BD                              CP      L
+0835+  EEF7 28 04                           JR      Z, _conout_wrap
+0836+  EEF9 14                              INC     D
+0837+  EEFA C3 20 ED                        JP      _conout_csr_update
+0838+  EEFD             
+0839+  EEFD 16 01       _conout_wrap        LD      D, 1
+0840+  EEFF 1C                              INC     E
+0841+  EF00 C3 20 ED                        JP      _conout_csr_update          ; If we've wrapped, use the new wrap position..
 0842+  EF03             ;
-0843+  EF03             ; Fill the row of the screen buffer with space chars..
-0844+  EF03             ; Enter with A -> row of screen buffer, C -> start column
-0845+  EF03             ;          Uses HL, C
-0846+  EF03             ;
-0847+  EF03 67          clear_screen_row    LD      H, A
-0848+  EF04 3A 2A FF                        LD      A, (screen_offset)
-0849+  EF07 84                              ADD     A, H
-0850+  EF08             
-0851+  EF08 E6 3F                           AND    03Fh
-0852+  EF0A F6 40                           OR     040h
-0853+  EF0C 67                              LD     H, A
-0854+  EF0D 79                              LD     A, C
-0855+  EF0E 81                              ADD    A, C
-0856+  EF0F 6F                              LD     L, A
-0857+  EF10             
-0858+  EF10 3A 31 FF                        LD      A, (console_colour)
-0859+  EF13 4F                              LD      C, A
-0860+  EF14             
-0861+  EF14 3A 29 FF                        LD      A, (screen_page)
-0862+  EF17 D3 71                           OUT     (IO_MEM_1), A
-0863+  EF19             
-0864+  EF19 3E 20       _clear_loop         LD      A, ' '
-0865+  EF1B 77                              LD      (HL), A
-0866+  EF1C 2C                              INC     L
-0867+  EF1D 71                              LD      (HL), C
-0868+  EF1E 2C                              INC     L
-0869+  EF1F 3E FE                           LD      A, 0FEh
-0870+  EF21 BD                              CP      L
-0871+  EF22 20 F5                           JR      NZ, _clear_loop
-0872+  EF24             
-0873+  EF24 3A 3A FF                        LD      A, (page_1_mapping)
-0874+  EF27 D3 71                           OUT     (IO_MEM_1), A
-0875+  EF29 C9                              RET
-0876+  EF2A             ;------------------------------------------------------  
-0877+  EF2A             bios_list     ;  5 List OUTput
-0878+  EF2A AF                              XOR     A
-0879+  EF2B C9                              RET
-0880+  EF2C                                 
-0881+  EF2C             ;------------------------------------------------------  
-0882+  EF2C             bios_punch    ;  6 punch OUTput
-0883+  EF2C AF                              XOR     A
-0884+  EF2D C9                              RET
-0885+  EF2E                                 
-0886+  EF2E             ;------------------------------------------------------  
-0887+  EF2E             bios_reader   ;  7 Reader input
-0888+  EF2E C9                              RET
-0889+  EF2F                                 
-0890+  EF2F             
-0891+  EF2F                                 
-0892+  EF2F             ;------------------------------------------------------  
-0893+  EF2F             bios_seldsk   ;  9 Select disk - Select disc in C, returns HL =  address of DPH, or 0 if error
-0894+  EF2F                                 ; Store C in A, Check drive is in range
-0895+  EF2F 79                              LD      A, C
-0896+  EF30 21 00 00                        LD      HL, 0
-0897+  EF33 FE 02                           CP      MAX_DRIVES
-0898+  EF35 D0                              RET     NC
-0899+  EF36             
-0900+  EF36 06 00                           LD      B, 0
-0901+  EF38 CB 21                           SLA     C
-0902+  EF3A CB 21                           SLA     C
-0903+  EF3C CB 21                           SLA     C
-0904+  EF3E CB 21                           SLA     C
-0905+  EF40 21 33 EA                        LD      HL, dpbase
-0906+  EF43 09                              ADD     HL, BC
-0907+  EF44 32 44 FF                        LD      (sys_seldsk), A
-0908+  EF47 C9                              RET
-0909+  EF48             
-0910+  EF48             ;------------------------------------------------------  
-0911+  EF48             bios_home     ;  8 Home disk
-0912+  EF48 0E 00                           LD      C, 0            
-0913+  EF4A             ;------------------------------------------------------  
-0914+  EF4A             bios_settrk   ; 10 Select track - Move drive to track stored in C - 0 based (0-76)
-0915+  EF4A 79                              LD      A, C
-0916+  EF4B 32 3D FF                        LD      (sys_track), A
-0917+  EF4E C9                              RET
-0918+  EF4F                                 
-0919+  EF4F             ;------------------------------------------------------  
-0920+  EF4F             bios_setsec   ; 11 Select sector - Move drive to sector stored in BC - 1 based (1-26) - TODO: Confirm this, not sure if true..
-0921+  EF4F ED 43 3E FF                     LD      (sys_sector), BC
-0922+  EF53 C9                              RET
-0923+  EF54                                 
-0924+  EF54             ;------------------------------------------------------  
-0925+  EF54             bios_setdma   ; 12 Set DMA ADDress - Set the DMA address to BC - source or destination for disk read/write
-0926+  EF54                           ; Note: CP/M 2.2 appears to only set this to the DIRBUF address defined in the DPF, or the USER DMA address (0x80h)
-0927+  EF54 ED 43 40 FF                     LD      (sys_dmaaddr), BC
-0928+  EF58 C9                              RET
-0929+  EF59                                 
-0930+  EF59             ;------------------------------------------------------  
-0931+  EF59             ;
-0932+  EF59             ; Uses Mem Page 1, 2
-0933+  EF59             ;
-0934+  EF59             bios_read     ; 13 Read 128 bytes
-0935+  EF59 CD C5 EF                        CALL    _get_memdisc_addr
-0936+  EF5C F3                              DI
-0937+  EF5D D3 71                           OUT     (IO_MEM_1), A
-0938+  EF5F CB F0                           SET     6, B            ; Point B into page 1
-0939+  EF61 C5                              PUSH    BC
-0940+  EF62 E1                              POP     HL
-0941+  EF63 0E 80                           LD      C, 128
-0942+  EF65             
-0943+  EF65 ED 5B 40 FF                     LD      DE, (sys_dmaaddr)
-0944+  EF69 7A                              LD      A, D
-0945+  EF6A 07                              RLCA
-0946+  EF6B 07                              RLCA
-0947+  EF6C E6 03                           AND     03h             ; Bottom two bits
-0948+  EF6E F6 20                           OR      RAM_PAGE_0
-0949+  EF70 47                              LD      B, A            ; B is destination page
-0950+  EF71 D3 72       _read_page          OUT     (IO_MEM_2), A
-0951+  EF73             
-0952+  EF73 CB FA                           SET     7, D            ; Point D to second page
-0953+  EF75 CB B2                           RES     6, D
-0954+  EF77             
-0955+  EF77 ED A0       _read_next          LDI
-0956+  EF79 79                              LD      A, C
-0957+  EF7A B7                              OR      A
-0958+  EF7B 28 08                           JR      Z, _read_write_done
-0959+  EF7D             
-0960+  EF7D CB 72                           BIT     6, D
-0961+  EF7F 28 F6                           JR      Z, _read_next
-0962+  EF81             
-0963+  EF81 04                              INC     B
-0964+  EF82 78                              LD      A, B
-0965+  EF83 18 EC                           JR      _read_page
-0966+  EF85             
-0967+  EF85 3A 3A FF    _read_write_done    LD      A, (page_1_mapping)   ; Return page map to normal
-0968+  EF88 D3 71                           OUT     (IO_MEM_1), A
-0969+  EF8A 3A 3B FF                        LD      A, (page_2_mapping)
-0970+  EF8D D3 72                           OUT     (IO_MEM_2), A
-0971+  EF8F FB                              EI
-0972+  EF90 AF                              XOR     A               ; No errors
-0973+  EF91 C9                              RET
-0974+  EF92                                 
-0975+  EF92             ;------------------------------------------------------  
-0976+  EF92             ;
-0977+  EF92             ; Uses Mem Page 1, 2
-0978+  EF92             ;
-0979+  EF92             bios_write    ; 14 Write 128 bytes
-0980+  EF92 3A 44 FF                        LD      A, (sys_seldsk)
-0981+  EF95 B7                              OR      A
-0982+  EF96 20 02                           JR      NZ, _write_ok
-0983+  EF98 3C                              INC     A
-0984+  EF99 C9                              RET
-0985+  EF9A             
-0986+  EF9A CD C5 EF    _write_ok           CALL    _get_memdisc_addr
-0987+  EF9D F3                              DI
-0988+  EF9E D3 71                           OUT     (IO_MEM_1), A
-0989+  EFA0 CB F0                           SET     6, B
-0990+  EFA2 C5                              PUSH    BC
-0991+  EFA3 D1                              POP     DE
-0992+  EFA4 0E 80                           LD      C, 128
-0993+  EFA6             
-0994+  EFA6 2A 40 FF                        LD      HL, (sys_dmaaddr)
-0995+  EFA9 7C                              LD      A, H
-0996+  EFAA 07                              RLCA
-0997+  EFAB 07                              RLCA
-0998+  EFAC E6 03                           AND     03h              ; Bottom two bits
-0999+  EFAE F6 20                           OR      RAM_PAGE_0
-1000+  EFB0 47                              LD      B, A             ; B is source page
-1001+  EFB1 D3 72       _write_page         OUT     (IO_MEM_2), A
-1002+  EFB3             
-1003+  EFB3 CB FC                           SET     7, H
-1004+  EFB5 CB B4                           RES     6, H
-1005+  EFB7             
-1006+  EFB7 ED A0       _write_next         LDI
-1007+  EFB9 79                              LD      A, C
-1008+  EFBA B7                              OR      A
-1009+  EFBB 28 C8                           JR      Z, _read_write_done
-1010+  EFBD             
-1011+  EFBD CB 74                           BIT     6, H
-1012+  EFBF 28 F6                           JR      Z, _write_next
-1013+  EFC1             
-1014+  EFC1 04                              INC     B
-1015+  EFC2 78                              LD      A, B
-1016+  EFC3 18 EC                           JR      _write_page
-1017+  EFC5                                 
-1018+  EFC5             ; IN THIS CASE, WE HAVE SAVED THE DISK NUMBER IN 'DISKNO' (0, 1)
-1019+  EFC5             ;           THE TRACK NUMBER IN 'TRACK' (0-76)
-1020+  EFC5             ;           THE SECTOR NUMBER IN 'SECTOR' (1-26)
-1021+  EFC5             ;           THE DMA ADDRESS IN 'DMAAD' (0-65535)
-1022+  EFC5             ;
-1023+  EFC5             ; Returns BC = address in page for sector
-1024+  EFC5             ;          A = page number (ROM/RAM)
-1025+  EFC5             ;
-1026+  EFC5             ; Note: BC is always aligned to page boundaries, so a sector will never overlap the end of a page.
-1027+  EFC5             ;
-1028+  EFC5 21 00 00    _get_memdisc_addr   LD      HL, 0
-1029+  EFC8 ED 4B 3D FF                     LD      BC, (sys_track)     ; C is track, B is sector (up to 256!)
-1030+  EFCC 68                              LD      L, B
-1031+  EFCD 44                              LD      B, H 
-1032+  EFCE CB 21                           SLA     C                   ; x 2
-1033+  EFD0 CB 10                           RL      B
-1034+  EFD2 09                              ADD     HL, BC
-1035+  EFD3 CB 21                           SLA     C                   ; x 4
-1036+  EFD5 CB 10                           RL      B
-1037+  EFD7 CB 21                           SLA     C                   ; x 8
-1038+  EFD9 CB 10                           RL      B
-1039+  EFDB 09                              ADD     HL, BC
-1040+  EFDC CB 21                           SLA     C                   ; x 16
-1041+  EFDE CB 10                           RL      B
-1042+  EFE0 09                              ADD     HL, BC              ; HL = Sector + BC * (2 + 8 + 16) = sector + track * 26
-1043+  EFE1             
-1044+  EFE1 7D                              LD      A, L
-1045+  EFE2 E6 7F                           AND     07Fh
-1046+  EFE4 47                              LD      B, A
-1047+  EFE5 0E 00                           LD      C, 0
-1048+  EFE7 CB 38                           SRL     B
-1049+  EFE9 CB 19                           RR      C                   ; BC = Address in page of sector
-1050+  EFEB             
-1051+  EFEB CB 25                           SLA     L
-1052+  EFED CB 14                           RL      H                   ; H is now page number 
-1053+  EFEF             
-1054+  EFEF 3A 44 FF                        LD      A, (sys_seldsk)
-1055+  EFF2 B7                              OR      A
-1056+  EFF3 28 05                           JR      Z, _get_memdisk_a
-1057+  EFF5 3A 38 FF                        LD      A, (drive_b_mem_page)
-1058+  EFF8 84                              ADD     A, H
-1059+  EFF9 C9                              RET
-1060+  EFFA 3A 37 FF    _get_memdisk_a      LD      A, (drive_a_mem_page)
-1061+  EFFD 84                              ADD     A, H
-1062+  EFFE C9                              RET
-1063+  EFFF             
+0843+  EF03             ;
+0844+  EF03             ; Fill the row of the screen buffer with space chars..
+0845+  EF03             ; Enter with A -> row of screen buffer, C -> start column
+0846+  EF03             ;          Uses HL, C
+0847+  EF03             ;
+0848+  EF03 67          clear_screen_row    LD      H, A
+0849+  EF04 3A 2A FF                        LD      A, (screen_offset)
+0850+  EF07 84                              ADD     A, H
+0851+  EF08             
+0852+  EF08 E6 3F                           AND    03Fh
+0853+  EF0A F6 40                           OR     040h
+0854+  EF0C 67                              LD     H, A
+0855+  EF0D 79                              LD     A, C
+0856+  EF0E 81                              ADD    A, C
+0857+  EF0F 6F                              LD     L, A
+0858+  EF10             
+0859+  EF10 3A 31 FF                        LD      A, (console_colour)
+0860+  EF13 4F                              LD      C, A
+0861+  EF14             
+0862+  EF14 3A 29 FF                        LD      A, (screen_page)
+0863+  EF17 D3 71                           OUT     (IO_MEM_1), A
+0864+  EF19             
+0865+  EF19 3E 20       _clear_loop         LD      A, ' '
+0866+  EF1B 77                              LD      (HL), A
+0867+  EF1C 2C                              INC     L
+0868+  EF1D 71                              LD      (HL), C
+0869+  EF1E 2C                              INC     L
+0870+  EF1F 3E FE                           LD      A, 0FEh
+0871+  EF21 BD                              CP      L
+0872+  EF22 20 F5                           JR      NZ, _clear_loop
+0873+  EF24             
+0874+  EF24 3A 3A FF                        LD      A, (page_1_mapping)
+0875+  EF27 D3 71                           OUT     (IO_MEM_1), A
+0876+  EF29 C9                              RET
+0877+  EF2A             ;------------------------------------------------------  
+0878+  EF2A             bios_list     ;  5 List OUTput
+0879+  EF2A AF                              XOR     A
+0880+  EF2B C9                              RET
+0881+  EF2C                                 
+0882+  EF2C             ;------------------------------------------------------  
+0883+  EF2C             bios_punch    ;  6 punch OUTput
+0884+  EF2C AF                              XOR     A
+0885+  EF2D C9                              RET
+0886+  EF2E                                 
+0887+  EF2E             ;------------------------------------------------------  
+0888+  EF2E             bios_reader   ;  7 Reader input
+0889+  EF2E C9                              RET
+0890+  EF2F                                 
+0891+  EF2F             
+0892+  EF2F                                 
+0893+  EF2F             ;------------------------------------------------------  
+0894+  EF2F             bios_seldsk   ;  9 Select disk - Select disc in C, returns HL =  address of DPH, or 0 if error
+0895+  EF2F                                 ; Store C in A, Check drive is in range
+0896+  EF2F 79                              LD      A, C
+0897+  EF30 21 00 00                        LD      HL, 0
+0898+  EF33 FE 02                           CP      MAX_DRIVES
+0899+  EF35 D0                              RET     NC
+0900+  EF36             
+0901+  EF36 06 00                           LD      B, 0
+0902+  EF38 CB 21                           SLA     C
+0903+  EF3A CB 21                           SLA     C
+0904+  EF3C CB 21                           SLA     C
+0905+  EF3E CB 21                           SLA     C
+0906+  EF40 21 33 EA                        LD      HL, dpbase
+0907+  EF43 09                              ADD     HL, BC
+0908+  EF44 32 44 FF                        LD      (sys_seldsk), A
+0909+  EF47 C9                              RET
+0910+  EF48             
+0911+  EF48             ;------------------------------------------------------  
+0912+  EF48             bios_home     ;  8 Home disk
+0913+  EF48 0E 00                           LD      C, 0            
+0914+  EF4A             ;------------------------------------------------------  
+0915+  EF4A             bios_settrk   ; 10 Select track - Move drive to track stored in C - 0 based (0-76)
+0916+  EF4A 79                              LD      A, C
+0917+  EF4B 32 3D FF                        LD      (sys_track), A
+0918+  EF4E C9                              RET
+0919+  EF4F                                 
+0920+  EF4F             ;------------------------------------------------------  
+0921+  EF4F             bios_setsec   ; 11 Select sector - Move drive to sector stored in BC - 1 based (1-26) - TODO: Confirm this, not sure if true..
+0922+  EF4F ED 43 3E FF                     LD      (sys_sector), BC
+0923+  EF53 C9                              RET
+0924+  EF54                                 
+0925+  EF54             ;------------------------------------------------------  
+0926+  EF54             bios_setdma   ; 12 Set DMA ADDress - Set the DMA address to BC - source or destination for disk read/write
+0927+  EF54                           ; Note: CP/M 2.2 appears to only set this to the DIRBUF address defined in the DPF, or the USER DMA address (0x80h)
+0928+  EF54 ED 43 40 FF                     LD      (sys_dmaaddr), BC
+0929+  EF58 C9                              RET
+0930+  EF59                                 
+0931+  EF59             ;------------------------------------------------------  
+0932+  EF59             ;
+0933+  EF59             ; Uses Mem Page 1, 2
+0934+  EF59             ;
+0935+  EF59             bios_read     ; 13 Read 128 bytes
+0936+  EF59 CD C5 EF                        CALL    _get_memdisc_addr
+0937+  EF5C F3                              DI
+0938+  EF5D D3 71                           OUT     (IO_MEM_1), A
+0939+  EF5F CB F0                           SET     6, B            ; Point B into page 1
+0940+  EF61 C5                              PUSH    BC
+0941+  EF62 E1                              POP     HL
+0942+  EF63 0E 80                           LD      C, 128
+0943+  EF65             
+0944+  EF65 ED 5B 40 FF                     LD      DE, (sys_dmaaddr)
+0945+  EF69 7A                              LD      A, D
+0946+  EF6A 07                              RLCA
+0947+  EF6B 07                              RLCA
+0948+  EF6C E6 03                           AND     03h             ; Bottom two bits
+0949+  EF6E F6 20                           OR      RAM_PAGE_0
+0950+  EF70 47                              LD      B, A            ; B is destination page
+0951+  EF71 D3 72       _read_page          OUT     (IO_MEM_2), A
+0952+  EF73             
+0953+  EF73 CB FA                           SET     7, D            ; Point D to second page
+0954+  EF75 CB B2                           RES     6, D
+0955+  EF77             
+0956+  EF77 ED A0       _read_next          LDI
+0957+  EF79 79                              LD      A, C
+0958+  EF7A B7                              OR      A
+0959+  EF7B 28 08                           JR      Z, _read_write_done
+0960+  EF7D             
+0961+  EF7D CB 72                           BIT     6, D
+0962+  EF7F 28 F6                           JR      Z, _read_next
+0963+  EF81             
+0964+  EF81 04                              INC     B
+0965+  EF82 78                              LD      A, B
+0966+  EF83 18 EC                           JR      _read_page
+0967+  EF85             
+0968+  EF85 3A 3A FF    _read_write_done    LD      A, (page_1_mapping)   ; Return page map to normal
+0969+  EF88 D3 71                           OUT     (IO_MEM_1), A
+0970+  EF8A 3A 3B FF                        LD      A, (page_2_mapping)
+0971+  EF8D D3 72                           OUT     (IO_MEM_2), A
+0972+  EF8F FB                              EI
+0973+  EF90 AF                              XOR     A               ; No errors
+0974+  EF91 C9                              RET
+0975+  EF92                                 
+0976+  EF92             ;------------------------------------------------------  
+0977+  EF92             ;
+0978+  EF92             ; Uses Mem Page 1, 2
+0979+  EF92             ;
+0980+  EF92             bios_write    ; 14 Write 128 bytes
+0981+  EF92 3A 44 FF                        LD      A, (sys_seldsk)
+0982+  EF95 B7                              OR      A
+0983+  EF96 20 02                           JR      NZ, _write_ok
+0984+  EF98 3C                              INC     A
+0985+  EF99 C9                              RET
+0986+  EF9A             
+0987+  EF9A CD C5 EF    _write_ok           CALL    _get_memdisc_addr
+0988+  EF9D F3                              DI
+0989+  EF9E D3 71                           OUT     (IO_MEM_1), A
+0990+  EFA0 CB F0                           SET     6, B
+0991+  EFA2 C5                              PUSH    BC
+0992+  EFA3 D1                              POP     DE
+0993+  EFA4 0E 80                           LD      C, 128
+0994+  EFA6             
+0995+  EFA6 2A 40 FF                        LD      HL, (sys_dmaaddr)
+0996+  EFA9 7C                              LD      A, H
+0997+  EFAA 07                              RLCA
+0998+  EFAB 07                              RLCA
+0999+  EFAC E6 03                           AND     03h              ; Bottom two bits
+1000+  EFAE F6 20                           OR      RAM_PAGE_0
+1001+  EFB0 47                              LD      B, A             ; B is source page
+1002+  EFB1 D3 72       _write_page         OUT     (IO_MEM_2), A
+1003+  EFB3             
+1004+  EFB3 CB FC                           SET     7, H
+1005+  EFB5 CB B4                           RES     6, H
+1006+  EFB7             
+1007+  EFB7 ED A0       _write_next         LDI
+1008+  EFB9 79                              LD      A, C
+1009+  EFBA B7                              OR      A
+1010+  EFBB 28 C8                           JR      Z, _read_write_done
+1011+  EFBD             
+1012+  EFBD CB 74                           BIT     6, H
+1013+  EFBF 28 F6                           JR      Z, _write_next
+1014+  EFC1             
+1015+  EFC1 04                              INC     B
+1016+  EFC2 78                              LD      A, B
+1017+  EFC3 18 EC                           JR      _write_page
+1018+  EFC5                                 
+1019+  EFC5             ; IN THIS CASE, WE HAVE SAVED THE DISK NUMBER IN 'DISKNO' (0, 1)
+1020+  EFC5             ;           THE TRACK NUMBER IN 'TRACK' (0-76)
+1021+  EFC5             ;           THE SECTOR NUMBER IN 'SECTOR' (1-26)
+1022+  EFC5             ;           THE DMA ADDRESS IN 'DMAAD' (0-65535)
+1023+  EFC5             ;
+1024+  EFC5             ; Returns BC = address in page for sector
+1025+  EFC5             ;          A = page number (ROM/RAM)
+1026+  EFC5             ;
+1027+  EFC5             ; Note: BC is always aligned to page boundaries, so a sector will never overlap the end of a page.
+1028+  EFC5             ;
+1029+  EFC5 21 00 00    _get_memdisc_addr   LD      HL, 0
+1030+  EFC8 ED 4B 3D FF                     LD      BC, (sys_track)     ; C is track, B is sector (up to 256!)
+1031+  EFCC 68                              LD      L, B
+1032+  EFCD 44                              LD      B, H 
+1033+  EFCE CB 21                           SLA     C                   ; x 2
+1034+  EFD0 CB 10                           RL      B
+1035+  EFD2 09                              ADD     HL, BC
+1036+  EFD3 CB 21                           SLA     C                   ; x 4
+1037+  EFD5 CB 10                           RL      B
+1038+  EFD7 CB 21                           SLA     C                   ; x 8
+1039+  EFD9 CB 10                           RL      B
+1040+  EFDB 09                              ADD     HL, BC
+1041+  EFDC CB 21                           SLA     C                   ; x 16
+1042+  EFDE CB 10                           RL      B
+1043+  EFE0 09                              ADD     HL, BC              ; HL = Sector + BC * (2 + 8 + 16) = sector + track * 26
+1044+  EFE1             
+1045+  EFE1 7D                              LD      A, L
+1046+  EFE2 E6 7F                           AND     07Fh
+1047+  EFE4 47                              LD      B, A
+1048+  EFE5 0E 00                           LD      C, 0
+1049+  EFE7 CB 38                           SRL     B
+1050+  EFE9 CB 19                           RR      C                   ; BC = Address in page of sector
+1051+  EFEB             
+1052+  EFEB CB 25                           SLA     L
+1053+  EFED CB 14                           RL      H                   ; H is now page number 
+1054+  EFEF             
+1055+  EFEF 3A 44 FF                        LD      A, (sys_seldsk)
+1056+  EFF2 B7                              OR      A
+1057+  EFF3 28 05                           JR      Z, _get_memdisk_a
+1058+  EFF5 3A 38 FF                        LD      A, (drive_b_mem_page)
+1059+  EFF8 84                              ADD     A, H
+1060+  EFF9 C9                              RET
+1061+  EFFA 3A 37 FF    _get_memdisk_a      LD      A, (drive_a_mem_page)
+1062+  EFFD 84                              ADD     A, H
+1063+  EFFE C9                              RET
 1064+  EFFF             
-1065+  EFFF             ;------------------------------------------------------  
-1066+  EFFF             bios_listst   ; 15 List status
-1067+  EFFF AF                              XOR     A
-1068+  F000 C9                              RET
-1069+  F001                                 
-1070+  F001             ;------------------------------------------------------  
-1071+  F001             bios_sectrn   ; 16 Sector translate - BC = logical sector number (zero based), DE = address of translation table. Return HL as physical sector number
-1072+  F001 69                              LD      L, C                ; No skewing needed, just return BC in HL
-1073+  F002 60                              LD      H, B
-1074+  F003 C9                              RET
-1075+  F004                                 
-1076+  F004             ;------------------------------------------------------
-1077+  F004             ; Inline print. Preserves HL, DE, BC
-1078+  F004             ;
-1079+  F004 E3          m_print_inline      EX      (SP), HL
-1080+  F005 7E          _inline_loop        LD      A, (HL)
-1081+  F006 23                              INC     HL
-1082+  F007 A7                              AND     A
-1083+  F008 28 05                           JR      Z, _inline_done
-1084+  F00A CD 11 F0                        CALL    m_print_a_safe
-1085+  F00D 18 F6                           JR      _inline_loop
-1086+  F00F             
-1087+  F00F E3          _inline_done        EX      (SP), HL
-1088+  F010 C9                              RET
-1089+  F011             
-1090+  F011             ;------------------------------------------------------
-1091+  F011             ; Print character in A. Preserves HL, DE, BC
-1092+  F011             ;
-1093+  F011 E5          m_print_a_safe      PUSH    HL
-1094+  F012 D5                              PUSH    DE
-1095+  F013 C5                              PUSH    BC
-1096+  F014 4F                              LD      C, A
-1097+  F015 CD 00 EC                        CALL    bios_conout
-1098+  F018 C1                              POP     BC
-1099+  F019 D1                              POP     DE
-1100+  F01A E1                              POP     HL
-1101+  F01B C9                              RET
-1102+  F01C             
-1103+  F01C             ;------------------------------------------------------  
-1104+  F01C             
-1105+  F01C F3          configure_hardware  DI     
-1106+  F01D 3E 20                           LD      A, RAM_PAGE_0
-1107+  F01F D3 70                           OUT     (IO_MEM_0), A       ; Page 0 is RAM 0 
-1108+  F021 32 39 FF                        LD      (page_0_mapping), A
-1109+  F024 3C                              INC     A
-1110+  F025 D3 71                           OUT     (IO_MEM_1), A       ; Page 1 is RAM 1
-1111+  F027 32 3A FF                        LD      (page_1_mapping), A
-1112+  F02A 3C                              INC      A
-1113+  F02B D3 72                           OUT     (IO_MEM_2), A       ; Page 2 is RAM 2 
-1114+  F02D 32 3B FF                        LD      (page_2_mapping), A
-1115+  F030 3C                              INC     A                   ; Assume we're in RAM 3
-1116+  F031 32 3C FF                        LD      (page_3_mapping), A
-1117+  F034             
-1118+  F034 21 00 FE                        LD      HL, 0FE00h          ; Set up the IM 2 table
-1119+  F037 06 00                           LD      B, 0
-1120+  F039 36 FD       _fill_vector        LD      (HL), 0FDh
-1121+  F03B 23                              INC     HL
-1122+  F03C 10 FB                           DJNZ    _fill_vector
-1123+  F03E             
-1124+  F03E CD A5 F2                        CALL    keyboard_init       ; Set up the keyboard status tables
-1125+  F041             
-1126+  F041 3E C3                           LD      A, 0C3h             ; JP reset   instruction
-1127+  F043 32 FD FD                        LD      (0FDFDh), A
-1128+  F046 21 42 F1                        LD      HL, interrupt_handler
-1129+  F049 22 FE FD                        LD      (0FDFEh), HL
-1130+  F04C             
-1131+  F04C 21 00 00                        LD      HL, 0
-1132+  F04F 22 CF FF                        LD      (user_interrupt), HL
-1133+  F052             
-1134+  F052 3E 02                           LD      A, 2
-1135+  F054 D3 13                           OUT     (PIO_B_CTRL),A      ; Zero interrupt vector
-1136+  F056             
-1137+  F056 3E B7                           LD      A, 0B7h             ; Enable interrupts on any of the following bits
-1138+  F058 D3 13                           OUT     (PIO_B_CTRL),A
-1139+  F05A 00                              NOP
-1140+  F05B 3E CF                           LD      A, 0CFh             ; Just B5 (RTC interrupt) 
-1141+  F05D D3 13                           OUT     (PIO_B_CTRL),A
-1142+  F05F             
-1143+  F05F 3E FE                           LD      A, 0FEh
-1144+  F061 ED 47                           LD      I, A
-1145+  F063 ED 5E                           IM      2
-1146+  F065             
-1147+  F065 CD BF F0                        CALL    setup_screen
-1148+  F068             
-1149+  F068 3E 04                           LD      A, DRIVE_A_PAGE
-1150+  F06A 32 37 FF                        LD      (drive_a_mem_page), A
-1151+  F06D             
-1152+  F06D FB                              EI
-1153+  F06E             
-1154+  F06E 3E 00                           LD      A, 0
-1155+  F070 CD 09 F5                        CALL    uart_init           ; Reinitialise the UART to make sure we've not missed anything
-1156+  F073             
-1157+  F073 CD D4 F8                        CALL    rtc_init            ; Make sure clock is running and reset time if necesary
-1158+  F076             
-1159+  F076 06 04       _set_ctrl           LD      B, 4                ; Set RTC Coarse mode and Output Pin to Square wave - gives 64 Hz pulse
-1160+  F078 C5          _set_ctrl_loop      PUSH    BC
-1161+  F079 26 6F                           LD      H, RTC_ADDRESS      
-1162+  F07B 2E 07                           LD      L, RTC_REG_CTRL
-1163+  F07D CD DB F5                        CALL    i2c_write_to
-1164+  F080 30 0B                           JR      NC, _rtc_ack_error
-1165+  F082 3E 44                           LD      A, RTC_64HZ_ENABLED
-1166+  F084 CD EF F5                        CALL    i2c_write
-1167+  F087 30 04                           JR      NC, _rtc_ack_error
-1168+  F089 AF                              XOR     A
-1169+  F08A CD EF F5                        CALL    i2c_write
-1170+  F08D CD A3 F5    _rtc_ack_error      CALL    i2c_stop
-1171+  F090             
-1172+  F090 CD 9B F0                        CALL    _pause
-1173+  F093             
-1174+  F093 CD A0 F0                        CALL    _check_ctrl
-1175+  F096 C1                              POP     BC
-1176+  F097 C8                              RET     Z
-1177+  F098 10 DE                           DJNZ    _set_ctrl_loop
-1178+  F09A C9                              RET
-1179+  F09B             
-1180+  F09B 06 00       _pause              LD      B, 0
-1181+  F09D 10 FE                           DJNZ    $
-1182+  F09F C9                              RET
-1183+  F0A0             
-1184+  F0A0             ; Check that the control is set to coarse trim and 0 offset
-1185+  F0A0             ; Returns with Zero flag set if settings are good.
-1186+  F0A0             ;
-1187+  F0A0 26 6F       _check_ctrl         LD      H, RTC_ADDRESS      
-1188+  F0A2 2E 07                           LD      L, RTC_REG_CTRL
-1189+  F0A4 CD BA F5                        CALL    i2c_read_from
-1190+  F0A7 16 02                           LD      D, 2
-1191+  F0A9 30 11                           JR      NC, _ctrl_error
-1192+  F0AB 5F                              LD      E, A
-1193+  F0AC CD 4D F6                        CALL    i2c_ack
-1194+  F0AF CD 3A F6                        CALL    i2c_read
-1195+  F0B2 57                              LD      D, A
-1196+  F0B3 CD A3 F5                        CALL    i2c_stop
-1197+  F0B6 7B                              LD      A, E
-1198+  F0B7 06 04                           LD      B, 4
-1199+  F0B9 FE 44                           CP      RTC_64HZ_ENABLED
-1200+  F0BB C0                              RET     NZ
-1201+  F0BC 7A          _ctrl_error         LD      A, D
-1202+  F0BD A7                              AND     A
-1203+  F0BE C9                              RET 
-1204+  F0BF             
-1205+  F0BF             ; SHOULD NOT BE CALLED WITH INTERRUPTS ENABLED!
-1206+  F0BF             ;
-1207+  F0BF 3E 40       setup_screen        LD      A, VIDEOBEAST_PAGE
-1208+  F0C1 D3 71                           OUT     (IO_MEM_1), A
-1209+  F0C3 21 00 40                        LD      HL, PAGE_1_START
-1210+  F0C6 AF                              XOR     A
-1211+  F0C7 47                              LD      B, A
-1212+  F0C8 77          _videobeast_check   LD      (HL), A
-1213+  F0C9 BE                              CP      (HL)
-1214+  F0CA 20 2E                           JR      NZ, _no_videobeast
-1215+  F0CC C6 0D                           ADD     A, 13
-1216+  F0CE 10 F8                           DJNZ    _videobeast_check
-1217+  F0D0             
-1218+  F0D0 3E 40                           LD      A, VIDEOBEAST_PAGE
-1219+  F0D2 32 28 F1                        LD      (_screen_defaults), A
-1220+  F0D5 21 1E 50                        LD      HL, 0501Eh          ; 80 x 30 screen
-1221+  F0D8 22 2E F1                        LD      (_screen_size), HL
-1222+  F0DB             
-1223+  F0DB 3E F3                           LD      A, VB_UNLOCK
-1224+  F0DD 32 FE 7F                        LD      (VB_REGISTERS_LOCKED), A
-1225+  F0E0 3E 01                           LD      A, MODE_848 | MODE_MAP_16K
-1226+  F0E2 32 FF 7F                        LD      (VB_MODE), A
-1227+  F0E5 AF                              XOR     A
-1228+  F0E6 32 F9 7F                        LD      (VB_PAGE_0), A
-1229+  F0E9 32 D0 7F                        LD      (VB_LAYER_5), A             ; Clear page 'above' our console
-1230+  F0EC             
-1231+  F0EC 21 36 F1                        LD      HL, _videobeast
-1232+  F0EF 11 C0 7F                        LD      DE, VB_LAYER_4
-1233+  F0F2 01 0C 00                        LD      BC, _videobeast_length
-1234+  F0F5 ED B0                           LDIR
-1235+  F0F7 32 FE 7F                        LD      (VB_REGISTERS_LOCKED), A  ; Lock registers
-1236+  F0FA             
-1237+  F0FA 11 29 FF    _no_videobeast      LD      DE, screen_page     ; Copy the startup defaults to the shared_data area
-1238+  F0FD 21 28 F1                        LD      HL, _screen_defaults
-1239+  F100 01 0E 00                        LD      BC, _defaults_length
-1240+  F103 ED B0                           LDIR
-1241+  F105 3A 29 FF                        LD      A, (screen_page)    ; Clear the screen buffer
-1242+  F108 D3 71                           OUT     (IO_MEM_1), A       ; Screen buffer is in PAGE_1
-1243+  F10A 21 00 40                        LD      HL, PAGE_1_START
-1244+  F10D 11 02 40                        LD      DE, PAGE_1_START+2
-1245+  F110 0E 20                           LD      C, ' '
-1246+  F112 3A 31 FF                        LD      A, (console_colour)
-1247+  F115 47                              LD      B, A
-1248+  F116 ED 43 00 40                     LD      (PAGE_1_START), BC
-1249+  F11A 01 FA 3F                        LD      BC, 16378           ; Don't over write last couple of bytes (VideoBeast)
-1250+  F11D ED B0                           LDIR
-1251+  F11F             
-1252+  F11F CD 06 F8                        CALL    disp_clear          ; Clear the LED screen
-1253+  F122             
-1254+  F122 3A 3A FF    restore_page_return LD      A, (page_1_mapping)       ; Return Page 1 to normal RAM
-1255+  F125 D3 71                           OUT     (IO_MEM_1), A
-1256+  F127 C9                              RET
-1257+  F128             
-1258+  F128 24          _screen_defaults    .DB     CONSOLE_PAGE        ; Screen buffer page
-1259+  F129 00                              .DB     0                   ; Row offset in buffer
-1260+  F12A 00 00                           .DB     0,0                 ; Row, column being shown on LED Display
-1261+  F12C 01 01                           .DB     1,1                 ; Row, column of cursor
-1262+  F12E 18 40       _screen_size        .DB     24,64               ; Console height (rows), width (columns)
-1263+  F130 F0                              .DB     0F0h                ; Current colour [7:4] = background, [3:0] = foreground
-1264+  F131 02                              .DB     CFLAGS_TRACK_CURSOR ; Flags
-1265+  F132 00                              .DB     0                   ; Timer
-1266+  F133 00 00                           .DB     0, 0                ; Escape char and first parameter
-1267+  F135 00                              .DB     0                   ; Disable identifier sequence
-1268+  F136             _defaults_length    .EQU    $-_screen_defaults
-1269+  F136             
-1270+  F136 01 01 1E 02 _videobeast         .DB     TYPE_TEXT, 1, 30, 2, 81         ; Text, top, bottom, left, right
-1270+  F13A 51 
-1271+  F13B 00 00 00                        .DB     0, 0, 0                         ; No scroll
-1272+  F13E 00 10                           .DB     0, 010h                         ; Char map in page 0, font 16x2K -> 32K
-1273+  F140 07 00                           .DB     7, 0                            ; Palette 0, no hi-res
-1274+  F142             _videobeast_length  .EQU    $-_videobeast
-1275+  F142             
-1276+  F142 F3          interrupt_handler   DI
-1277+  F143 ED 73 CD FF                     LD      (intr_stack), SP
-1278+  F147 31 CD FF                        LD      SP, intr_stack
-1279+  F14A F5                              PUSH    AF
-1280+  F14B D9                              EXX
-1281+  F14C CD BB F2                        CALL    keyboard_poll
-1282+  F14F             
-1283+  F14F 3A 13 FF                        LD      A,(control_key_pressed)
-1284+  F152 A7                              AND     A
-1285+  F153 C4 A4 F1                        CALL    NZ, handle_screen_shift
-1286+  F156             
-1287+  F156 3A 33 FF                        LD      A, (console_timer)
-1288+  F159 3D                              DEC     A
-1289+  F15A FA 6D F1                        JP      M, _not_moved
-1290+  F15D 32 33 FF                        LD      (console_timer), A
-1291+  F160 20 0B                           JR      NZ, _not_moved
-1292+  F162             
-1293+  F162 3A 32 FF                        LD      A, (console_flags)
-1294+  F165 E6 FB                           AND     ~CFLAGS_SHOW_MOVED
-1295+  F167 32 32 FF                        LD      (console_flags), A
-1296+  F16A CD DB ED                        CALL    unsafe_redraw
-1297+  F16D             
-1298+  F16D 2A 04 FF    _not_moved          LD      HL, (timer)
-1299+  F170 5D                              LD      E, L                ; E is old low byte of timer - used to blink cursor
-1300+  F171 23                              INC     HL
-1301+  F172 22 04 FF                        LD      (timer), HL
-1302+  F175 7C                              LD      A, H
-1303+  F176 B5                              OR      L
-1304+  F177 20 07                           JR      NZ, _timer_done
-1305+  F179 2A 06 FF                        LD      HL, (timer+2)
-1306+  F17C 23                              INC     HL
-1307+  F17D 22 06 FF                        LD      (timer+2),HL   
-1308+  F180             
-1309+  F180 3A 32 FF    _timer_done         LD      A, (console_flags)
-1310+  F183 E6 01                           AND     CFLAGS_SHOW_CURSOR
-1311+  F185 28 0B                           JR      Z, _int_done
-1312+  F187             
-1313+  F187 3A 04 FF                        LD      A, (timer)          ; Blink when timer bit changes
-1314+  F18A AB                              XOR     E
-1315+  F18B E6 20                           AND     020h
-1316+  F18D 28 03                           JR      Z, _int_done
-1317+  F18F CD 3F F2                        CALL    update_cursor
-1318+  F192             
-1319+  F192 2A CF FF    _int_done           LD      HL, (user_interrupt)
-1320+  F195 7C                              LD      A, H
-1321+  F196 B5                              OR      L
-1322+  F197 C4 A3 F1                        CALL    NZ, _do_usr_interrupt
-1323+  F19A             
-1324+  F19A D9                              EXX
-1325+  F19B F1                              POP     AF
-1326+  F19C ED 7B CD FF                     LD      SP, (intr_stack)
-1327+  F1A0 FB                              EI
-1328+  F1A1 ED 4D       _do_reti            RETI
-1329+  F1A3             
-1330+  F1A3 E9          _do_usr_interrupt   JP      (HL)
-1331+  F1A4             
-1332+  F1A4             ; Enter with A containing a special control character
-1333+  F1A4             ;
+1065+  EFFF             
+1066+  EFFF             ;------------------------------------------------------  
+1067+  EFFF             bios_listst   ; 15 List status
+1068+  EFFF AF                              XOR     A
+1069+  F000 C9                              RET
+1070+  F001                                 
+1071+  F001             ;------------------------------------------------------  
+1072+  F001             bios_sectrn   ; 16 Sector translate - BC = logical sector number (zero based), DE = address of translation table. Return HL as physical sector number
+1073+  F001 69                              LD      L, C                ; No skewing needed, just return BC in HL
+1074+  F002 60                              LD      H, B
+1075+  F003 C9                              RET
+1076+  F004                                 
+1077+  F004             ;------------------------------------------------------
+1078+  F004             ; Inline print. Preserves HL, DE, BC
+1079+  F004             ;
+1080+  F004 E3          m_print_inline      EX      (SP), HL
+1081+  F005 7E          _inline_loop        LD      A, (HL)
+1082+  F006 23                              INC     HL
+1083+  F007 A7                              AND     A
+1084+  F008 28 05                           JR      Z, _inline_done
+1085+  F00A CD 11 F0                        CALL    m_print_a_safe
+1086+  F00D 18 F6                           JR      _inline_loop
+1087+  F00F             
+1088+  F00F E3          _inline_done        EX      (SP), HL
+1089+  F010 C9                              RET
+1090+  F011             
+1091+  F011             ;------------------------------------------------------
+1092+  F011             ; Print character in A. Preserves HL, DE, BC
+1093+  F011             ;
+1094+  F011 E5          m_print_a_safe      PUSH    HL
+1095+  F012 D5                              PUSH    DE
+1096+  F013 C5                              PUSH    BC
+1097+  F014 4F                              LD      C, A
+1098+  F015 CD 00 EC                        CALL    bios_conout
+1099+  F018 C1                              POP     BC
+1100+  F019 D1                              POP     DE
+1101+  F01A E1                              POP     HL
+1102+  F01B C9                              RET
+1103+  F01C             
+1104+  F01C             ;------------------------------------------------------  
+1105+  F01C             
+1106+  F01C F3          configure_hardware  DI     
+1107+  F01D 3E 20                           LD      A, RAM_PAGE_0
+1108+  F01F D3 70                           OUT     (IO_MEM_0), A       ; Page 0 is RAM 0 
+1109+  F021 32 39 FF                        LD      (page_0_mapping), A
+1110+  F024 3C                              INC     A
+1111+  F025 D3 71                           OUT     (IO_MEM_1), A       ; Page 1 is RAM 1
+1112+  F027 32 3A FF                        LD      (page_1_mapping), A
+1113+  F02A 3C                              INC      A
+1114+  F02B D3 72                           OUT     (IO_MEM_2), A       ; Page 2 is RAM 2 
+1115+  F02D 32 3B FF                        LD      (page_2_mapping), A
+1116+  F030 3C                              INC     A                   ; Assume we're in RAM 3
+1117+  F031 32 3C FF                        LD      (page_3_mapping), A
+1118+  F034             
+1119+  F034 21 00 FE                        LD      HL, 0FE00h          ; Set up the IM 2 table
+1120+  F037 06 00                           LD      B, 0
+1121+  F039 36 FD       _fill_vector        LD      (HL), 0FDh
+1122+  F03B 23                              INC     HL
+1123+  F03C 10 FB                           DJNZ    _fill_vector
+1124+  F03E             
+1125+  F03E CD A5 F2                        CALL    keyboard_init       ; Set up the keyboard status tables
+1126+  F041             
+1127+  F041 3E C3                           LD      A, 0C3h             ; JP reset   instruction
+1128+  F043 32 FD FD                        LD      (0FDFDh), A
+1129+  F046 21 42 F1                        LD      HL, interrupt_handler
+1130+  F049 22 FE FD                        LD      (0FDFEh), HL
+1131+  F04C             
+1132+  F04C 21 00 00                        LD      HL, 0
+1133+  F04F 22 CF FF                        LD      (user_interrupt), HL
+1134+  F052             
+1135+  F052 3E 02                           LD      A, 2
+1136+  F054 D3 13                           OUT     (PIO_B_CTRL),A      ; Zero interrupt vector
+1137+  F056             
+1138+  F056 3E B7                           LD      A, 0B7h             ; Enable interrupts on any of the following bits
+1139+  F058 D3 13                           OUT     (PIO_B_CTRL),A
+1140+  F05A 00                              NOP
+1141+  F05B 3E CF                           LD      A, 0CFh             ; Just B5 (RTC interrupt) 
+1142+  F05D D3 13                           OUT     (PIO_B_CTRL),A
+1143+  F05F             
+1144+  F05F 3E FE                           LD      A, 0FEh
+1145+  F061 ED 47                           LD      I, A
+1146+  F063 ED 5E                           IM      2
+1147+  F065             
+1148+  F065 CD BF F0                        CALL    setup_screen
+1149+  F068             
+1150+  F068 3E 04                           LD      A, DRIVE_A_PAGE
+1151+  F06A 32 37 FF                        LD      (drive_a_mem_page), A
+1152+  F06D             
+1153+  F06D FB                              EI
+1154+  F06E             
+1155+  F06E 3E 00                           LD      A, 0
+1156+  F070 CD 09 F5                        CALL    uart_init           ; Reinitialise the UART to make sure we've not missed anything
+1157+  F073             
+1158+  F073 CD D4 F8                        CALL    rtc_init            ; Make sure clock is running and reset time if necesary
+1159+  F076             
+1160+  F076 06 04       _set_ctrl           LD      B, 4                ; Set RTC Coarse mode and Output Pin to Square wave - gives 64 Hz pulse
+1161+  F078 C5          _set_ctrl_loop      PUSH    BC
+1162+  F079 26 6F                           LD      H, RTC_ADDRESS      
+1163+  F07B 2E 07                           LD      L, RTC_REG_CTRL
+1164+  F07D CD DB F5                        CALL    i2c_write_to
+1165+  F080 30 0B                           JR      NC, _rtc_ack_error
+1166+  F082 3E 44                           LD      A, RTC_64HZ_ENABLED
+1167+  F084 CD EF F5                        CALL    i2c_write
+1168+  F087 30 04                           JR      NC, _rtc_ack_error
+1169+  F089 AF                              XOR     A
+1170+  F08A CD EF F5                        CALL    i2c_write
+1171+  F08D CD A3 F5    _rtc_ack_error      CALL    i2c_stop
+1172+  F090             
+1173+  F090 CD 9B F0                        CALL    _pause
+1174+  F093             
+1175+  F093 CD A0 F0                        CALL    _check_ctrl
+1176+  F096 C1                              POP     BC
+1177+  F097 C8                              RET     Z
+1178+  F098 10 DE                           DJNZ    _set_ctrl_loop
+1179+  F09A C9                              RET
+1180+  F09B             
+1181+  F09B 06 00       _pause              LD      B, 0
+1182+  F09D 10 FE                           DJNZ    $
+1183+  F09F C9                              RET
+1184+  F0A0             
+1185+  F0A0             ; Check that the control is set to coarse trim and 0 offset
+1186+  F0A0             ; Returns with Zero flag set if settings are good.
+1187+  F0A0             ;
+1188+  F0A0 26 6F       _check_ctrl         LD      H, RTC_ADDRESS      
+1189+  F0A2 2E 07                           LD      L, RTC_REG_CTRL
+1190+  F0A4 CD BA F5                        CALL    i2c_read_from
+1191+  F0A7 16 02                           LD      D, 2
+1192+  F0A9 30 11                           JR      NC, _ctrl_error
+1193+  F0AB 5F                              LD      E, A
+1194+  F0AC CD 4D F6                        CALL    i2c_ack
+1195+  F0AF CD 3A F6                        CALL    i2c_read
+1196+  F0B2 57                              LD      D, A
+1197+  F0B3 CD A3 F5                        CALL    i2c_stop
+1198+  F0B6 7B                              LD      A, E
+1199+  F0B7 06 04                           LD      B, 4
+1200+  F0B9 FE 44                           CP      RTC_64HZ_ENABLED
+1201+  F0BB C0                              RET     NZ
+1202+  F0BC 7A          _ctrl_error         LD      A, D
+1203+  F0BD A7                              AND     A
+1204+  F0BE C9                              RET 
+1205+  F0BF             
+1206+  F0BF             ; SHOULD NOT BE CALLED WITH INTERRUPTS ENABLED!
+1207+  F0BF             ;
+1208+  F0BF 3E 40       setup_screen        LD      A, VIDEOBEAST_PAGE
+1209+  F0C1 D3 71                           OUT     (IO_MEM_1), A
+1210+  F0C3 21 00 40                        LD      HL, PAGE_1_START
+1211+  F0C6 AF                              XOR     A
+1212+  F0C7 47                              LD      B, A
+1213+  F0C8 77          _videobeast_check   LD      (HL), A
+1214+  F0C9 BE                              CP      (HL)
+1215+  F0CA 20 2E                           JR      NZ, _no_videobeast
+1216+  F0CC C6 0D                           ADD     A, 13
+1217+  F0CE 10 F8                           DJNZ    _videobeast_check
+1218+  F0D0             
+1219+  F0D0 3E 40                           LD      A, VIDEOBEAST_PAGE
+1220+  F0D2 32 28 F1                        LD      (_screen_defaults), A
+1221+  F0D5 21 1E 50                        LD      HL, 0501Eh          ; 80 x 30 screen
+1222+  F0D8 22 2E F1                        LD      (_screen_size), HL
+1223+  F0DB             
+1224+  F0DB 3E F3                           LD      A, VB_UNLOCK
+1225+  F0DD 32 FE 7F                        LD      (VB_REGISTERS_LOCKED), A
+1226+  F0E0 3E 01                           LD      A, MODE_848 | MODE_MAP_16K
+1227+  F0E2 32 FF 7F                        LD      (VB_MODE), A
+1228+  F0E5 AF                              XOR     A
+1229+  F0E6 32 F9 7F                        LD      (VB_PAGE_0), A
+1230+  F0E9 32 D0 7F                        LD      (VB_LAYER_5), A             ; Clear page 'above' our console
+1231+  F0EC             
+1232+  F0EC 21 36 F1                        LD      HL, _videobeast
+1233+  F0EF 11 C0 7F                        LD      DE, VB_LAYER_4
+1234+  F0F2 01 0C 00                        LD      BC, _videobeast_length
+1235+  F0F5 ED B0                           LDIR
+1236+  F0F7 32 FE 7F                        LD      (VB_REGISTERS_LOCKED), A  ; Lock registers
+1237+  F0FA             
+1238+  F0FA 11 29 FF    _no_videobeast      LD      DE, screen_page     ; Copy the startup defaults to the shared_data area
+1239+  F0FD 21 28 F1                        LD      HL, _screen_defaults
+1240+  F100 01 0E 00                        LD      BC, _defaults_length
+1241+  F103 ED B0                           LDIR
+1242+  F105 3A 29 FF                        LD      A, (screen_page)    ; Clear the screen buffer
+1243+  F108 D3 71                           OUT     (IO_MEM_1), A       ; Screen buffer is in PAGE_1
+1244+  F10A 21 00 40                        LD      HL, PAGE_1_START
+1245+  F10D 11 02 40                        LD      DE, PAGE_1_START+2
+1246+  F110 0E 20                           LD      C, ' '
+1247+  F112 3A 31 FF                        LD      A, (console_colour)
+1248+  F115 47                              LD      B, A
+1249+  F116 ED 43 00 40                     LD      (PAGE_1_START), BC
+1250+  F11A 01 FA 3F                        LD      BC, 16378           ; Don't over write last couple of bytes (VideoBeast)
+1251+  F11D ED B0                           LDIR
+1252+  F11F             
+1253+  F11F CD 06 F8                        CALL    disp_clear          ; Clear the LED screen
+1254+  F122             
+1255+  F122 3A 3A FF    restore_page_return LD      A, (page_1_mapping)       ; Return Page 1 to normal RAM
+1256+  F125 D3 71                           OUT     (IO_MEM_1), A
+1257+  F127 C9                              RET
+1258+  F128             
+1259+  F128 24          _screen_defaults    .DB     CONSOLE_PAGE        ; Screen buffer page
+1260+  F129 00                              .DB     0                   ; Row offset in buffer
+1261+  F12A 00 00                           .DB     0,0                 ; Row, column being shown on LED Display
+1262+  F12C 01 01                           .DB     1,1                 ; Row, column of cursor
+1263+  F12E 18 40       _screen_size        .DB     24,64               ; Console height (rows), width (columns)
+1264+  F130 F0                              .DB     0F0h                ; Current colour [7:4] = background, [3:0] = foreground
+1265+  F131 02                              .DB     CFLAGS_TRACK_CURSOR ; Flags
+1266+  F132 00                              .DB     0                   ; Timer
+1267+  F133 00 00                           .DB     0, 0                ; Escape char and first parameter
+1268+  F135 00                              .DB     0                   ; Disable identifier sequence
+1269+  F136             _defaults_length    .EQU    $-_screen_defaults
+1270+  F136             
+1271+  F136 01 01 1E 02 _videobeast         .DB     TYPE_TEXT, 1, 30, 2, 81         ; Text, top, bottom, left, right
+1271+  F13A 51 
+1272+  F13B 00 00 00                        .DB     0, 0, 0                         ; No scroll
+1273+  F13E 00 10                           .DB     0, 010h                         ; Char map in page 0, font 16x2K -> 32K
+1274+  F140 07 00                           .DB     7, 0                            ; Palette 0, no hi-res
+1275+  F142             _videobeast_length  .EQU    $-_videobeast
+1276+  F142             
+1277+  F142 F3          interrupt_handler   DI
+1278+  F143 ED 73 CD FF                     LD      (intr_stack), SP
+1279+  F147 31 CD FF                        LD      SP, intr_stack
+1280+  F14A F5                              PUSH    AF
+1281+  F14B D9                              EXX
+1282+  F14C CD BB F2                        CALL    keyboard_poll
+1283+  F14F             
+1284+  F14F 3A 13 FF                        LD      A,(control_key_pressed)
+1285+  F152 A7                              AND     A
+1286+  F153 C4 A4 F1                        CALL    NZ, handle_screen_shift
+1287+  F156             
+1288+  F156 3A 33 FF                        LD      A, (console_timer)
+1289+  F159 3D                              DEC     A
+1290+  F15A FA 6D F1                        JP      M, _not_moved
+1291+  F15D 32 33 FF                        LD      (console_timer), A
+1292+  F160 20 0B                           JR      NZ, _not_moved
+1293+  F162             
+1294+  F162 3A 32 FF                        LD      A, (console_flags)
+1295+  F165 E6 FB                           AND     ~CFLAGS_SHOW_MOVED
+1296+  F167 32 32 FF                        LD      (console_flags), A
+1297+  F16A CD DB ED                        CALL    unsafe_redraw
+1298+  F16D             
+1299+  F16D 2A 04 FF    _not_moved          LD      HL, (timer)
+1300+  F170 5D                              LD      E, L                ; E is old low byte of timer - used to blink cursor
+1301+  F171 23                              INC     HL
+1302+  F172 22 04 FF                        LD      (timer), HL
+1303+  F175 7C                              LD      A, H
+1304+  F176 B5                              OR      L
+1305+  F177 20 07                           JR      NZ, _timer_done
+1306+  F179 2A 06 FF                        LD      HL, (timer+2)
+1307+  F17C 23                              INC     HL
+1308+  F17D 22 06 FF                        LD      (timer+2),HL   
+1309+  F180             
+1310+  F180 3A 32 FF    _timer_done         LD      A, (console_flags)
+1311+  F183 E6 01                           AND     CFLAGS_SHOW_CURSOR
+1312+  F185 28 0B                           JR      Z, _int_done
+1313+  F187             
+1314+  F187 3A 04 FF                        LD      A, (timer)          ; Blink when timer bit changes
+1315+  F18A AB                              XOR     E
+1316+  F18B E6 20                           AND     020h
+1317+  F18D 28 03                           JR      Z, _int_done
+1318+  F18F CD 3F F2                        CALL    update_cursor
+1319+  F192             
+1320+  F192 2A CF FF    _int_done           LD      HL, (user_interrupt)
+1321+  F195 7C                              LD      A, H
+1322+  F196 B5                              OR      L
+1323+  F197 C4 A3 F1                        CALL    NZ, _do_usr_interrupt
+1324+  F19A             
+1325+  F19A D9                              EXX
+1326+  F19B F1                              POP     AF
+1327+  F19C ED 7B CD FF                     LD      SP, (intr_stack)
+1328+  F1A0 FB                              EI
+1329+  F1A1 ED 4D       _do_reti            RETI
+1330+  F1A3             
+1331+  F1A3 E9          _do_usr_interrupt   JP      (HL)
+1332+  F1A4             
+1333+  F1A4             ; Enter with A containing a special control character
 1334+  F1A4             ;
-1335+  F1A4 FE 90       handle_screen_shift CP      KEY_CTRL_UP
-1336+  F1A6 20 25                           JR      NZ, _not_ctrl_up
-1337+  F1A8             
-1338+  F1A8 3A 2B FF                        LD      A, (display_row)
-1339+  F1AB 3D                              DEC     A
-1340+  F1AC FA 3A F2                        JP      M, _shift_done
-1341+  F1AF F5          _shift_row          PUSH    AF
-1342+  F1B0 1E 00                           LD      E, 0
-1343+  F1B2 CD 3F F2                        CALL    update_cursor
-1344+  F1B5 F1                              POP     AF
-1345+  F1B6 32 2B FF                        LD      (display_row), A
-1346+  F1B9             
-1347+  F1B9 3A 32 FF    _shift_complete     LD      A, (console_flags)
-1348+  F1BC E6 FD                           AND     ~CFLAGS_TRACK_CURSOR
-1349+  F1BE F6 04       _flags_and_redraw   OR      CFLAGS_SHOW_MOVED
-1350+  F1C0 32 32 FF                        LD      (console_flags), A
-1351+  F1C3 3E 3C                           LD      A, SHOW_MOVE_DELAY
-1352+  F1C5 32 33 FF                        LD      (console_timer),A
-1353+  F1C8 CD E1 ED                        CALL    unsafe_led_redraw       ; Always redraw regardless of LED status
-1354+  F1CB 18 6D                           JR      _shift_done
-1355+  F1CD             
-1356+  F1CD FE 91       _not_ctrl_up        CP      KEY_CTRL_DOWN
-1357+  F1CF 20 0D                           JR      NZ, _not_ctrl_down
-1358+  F1D1             
-1359+  F1D1 3A 2F FF    _shift_down         LD      A, (console_height)
-1360+  F1D4 4F                              LD      C, A
-1361+  F1D5 3A 2B FF                        LD      A, (display_row)
-1362+  F1D8 3C                              INC     A
-1363+  F1D9 B9                              CP      C
-1364+  F1DA 28 5E                           JR      Z, _shift_done
-1365+  F1DC 18 D1                           JR      _shift_row
-1366+  F1DE             
-1367+  F1DE FE 93       _not_ctrl_down      CP      KEY_CTRL_RIGHT
-1368+  F1E0 20 0F                           JR      NZ, _not_ctrl_right
-1369+  F1E2             
-1370+  F1E2 3A 30 FF                        LD      A, (console_width)
-1371+  F1E5 D6 17                           SUB     DISPLAY_WIDTH-1
-1372+  F1E7 4F                              LD      C, A
-1373+  F1E8 3A 2C FF                        LD      A, (display_col)
-1374+  F1EB 3C                              INC     A
-1375+  F1EC B9                              CP      C
-1376+  F1ED 28 4B                           JR      Z, _shift_done
-1377+  F1EF 18 0B                           JR      _shift_col
-1378+  F1F1             
-1379+  F1F1 FE 92       _not_ctrl_right     CP      KEY_CTRL_LEFT
-1380+  F1F3 20 13                           JR      NZ, _not_ctrl_left
-1381+  F1F5             
-1382+  F1F5 3A 2C FF                        LD      A, (display_col)
-1383+  F1F8 3D                              DEC     A
-1384+  F1F9 FA 3A F2                        JP      M, _shift_done
-1385+  F1FC F5          _shift_col          PUSH    AF
-1386+  F1FD 1E 00                           LD      E, 0
-1387+  F1FF CD 3F F2                        CALL    update_cursor
-1388+  F202 F1                              POP     AF
-1389+  F203 32 2C FF                        LD      (display_col), A
-1390+  F206 18 B1                           JR      _shift_complete
-1391+  F208             
-1392+  F208 FE 94       _not_ctrl_left      CP      KEY_CTRL_ENTER
-1393+  F20A 20 19                           JR      NZ, _not_ctrl_enter
-1394+  F20C 3A 2D FF                        LD      A, (cursor_row)
-1395+  F20F 3D                              DEC     A
-1396+  F210 32 2B FF                        LD      (display_row), A
-1397+  F213 3A 2E FF                        LD      A, (cursor_col)
-1398+  F216 D6 16                           SUB     DISPLAY_WIDTH-2
-1399+  F218 30 01                           JR      NC, _col_ok
-1400+  F21A AF                              XOR     A
-1401+  F21B             
-1402+  F21B 32 2C FF    _col_ok             LD      (display_col), A
-1403+  F21E 3A 32 FF                        LD      A, (console_flags)
-1404+  F221 F6 02                           OR      CFLAGS_TRACK_CURSOR
-1405+  F223 18 99                           JR      _flags_and_redraw
-1406+  F225             
-1407+  F225 FE 95       _not_ctrl_enter     CP      KEY_CTRL_SPACE
-1408+  F227 20 06                           JR      NZ, _not_ctrl_space
-1409+  F229             
-1410+  F229 AF                              XOR     A
-1411+  F22A 32 2C FF                        LD      (display_col), A
-1412+  F22D 18 A2                           JR      _shift_down
-1413+  F22F             
-1414+  F22F FE 96       _not_ctrl_space     CP      KEY_CTRL_D
-1415+  F231 20 07                           JR      NZ, _shift_done
-1416+  F233             
-1417+  F233 3A 32 FF                        LD      A, (console_flags)
-1418+  F236 EE 20                           XOR     CFLAGS_LED_OFF
-1419+  F238 18 84                           JR      _flags_and_redraw
-1420+  F23A             
-1421+  F23A AF          _shift_done         XOR     A
-1422+  F23B 32 13 FF                        LD      (control_key_pressed),A
-1423+  F23E C9                              RET
-1424+  F23F             
-1425+  F23F             ;
-1426+  F23F             ; Blinks the cursor 
-1427+  F23F             ;  Enter with E = timer low byte. 
-1428+  F23F             ;  If CURSOR_BIT is 1, show the cursor at the line, otherwise restore the existing character
-1429+  F23F             ;
-1430+  F23F 3A 2B FF    update_cursor       LD      A, (display_row)    ; Are we on the same row as the cursor?
-1431+  F242 47                              LD      B, A
-1432+  F243 3A 2D FF                        LD      A, (cursor_row)
-1433+  F246 3D                              DEC     A
-1434+  F247 B8                              CP      B
-1435+  F248 C0                              RET     NZ
-1436+  F249             
-1437+  F249 3A 2C FF                        LD      A, (display_col)    ; Check the cursor column is within the display window
-1438+  F24C 47                              LD      B, A
-1439+  F24D 3A 2E FF                        LD      A, (cursor_col)
-1440+  F250 3D                              DEC     A
-1441+  F251 90                              SUB     B
-1442+  F252 F8                              RET     M
-1443+  F253             
-1444+  F253 06 00                           LD      B, 0
-1445+  F255 4F                              LD      C, A
-1446+  F256             
-1447+  F256 3A 29 FF                        LD      A, (screen_page)
-1448+  F259 FE 40                           CP      VIDEOBEAST_PAGE
-1449+  F25B 20 2E                           JR      NZ, _skip_videobeast
-1450+  F25D             
-1451+  F25D D3 71                           OUT     (IO_MEM_1), A
-1452+  F25F             
-1453+  F25F 3A 2A FF                        LD      A, (screen_offset)
-1454+  F262 67                              LD      H, A
-1455+  F263 3A 2D FF                        LD      A, (cursor_row)         ; 1 based
-1456+  F266 3D                              DEC     A
-1457+  F267 84                              ADD     A, H
-1458+  F268 E6 3F                           AND     03Fh
-1459+  F26A F6 40                           OR      040h                    ; Page 1 for videobeast
-1460+  F26C 67                              LD      H, A
-1461+  F26D 3A 2E FF                        LD      A, (cursor_col)
-1462+  F270 3D                              DEC     A
-1463+  F271 87                              ADD     A, A
-1464+  F272 6F                              LD      L, A
-1465+  F273 2C                              INC     L
-1466+  F274             
-1467+  F274 7B                              LD      A, E
-1468+  F275 E6 20                           AND     20h
-1469+  F277 3A 31 FF                        LD      A, (console_colour)
-1470+  F27A 28 08                           JR      Z, _normal
-1471+  F27C CB 0F                           RRC     A 
-1472+  F27E CB 0F                           RRC     A
-1473+  F280 CB 0F                           RRC     A
-1474+  F282 CB 0F                           RRC     A
-1475+  F284 77          _normal             LD      (HL), A
-1476+  F285             
-1477+  F285 2B                              DEC     HL
-1478+  F286 3A 3A FF                        LD      A, (page_1_mapping)
-1479+  F289 D3 71                           OUT     (IO_MEM_1), A
-1480+  F28B             
-1481+  F28B 79          _skip_videobeast    LD      A, C
-1482+  F28C FE 18                           CP      DISPLAY_WIDTH
-1483+  F28E D0                              RET     NC
-1484+  F28F             
-1485+  F28F 3A 32 FF                        LD      A, (console_flags)
-1486+  F292 E6 20                           AND     CFLAGS_LED_OFF
-1487+  F294 C0                              RET     NZ
-1488+  F295             
-1489+  F295                                 ; At this point, BC holds the current display column for the cursor..
-1490+  F295 21 85 FF                        LD      HL, display_buffer
-1491+  F298 09                              ADD     HL, BC
-1492+  F299 09                              ADD     HL, BC
-1493+  F29A             
-1494+  F29A 7B                              LD      A, E
-1495+  F29B E6 20                           AND     20h
-1496+  F29D 7E                              LD      A, (HL)
-1497+  F29E 28 02                           JR      Z, _unblink
-1498+  F2A0 3E 5F                           LD      A, '_'
-1499+  F2A2 C3 A3 F7    _unblink            JP    disp_character
-1500+  F2A5             
-1501+  F2A5                                 .INCLUDE "../ports.asm"
+1335+  F1A4             ;
+1336+  F1A4 FE 90       handle_screen_shift CP      KEY_CTRL_UP
+1337+  F1A6 20 25                           JR      NZ, _not_ctrl_up
+1338+  F1A8             
+1339+  F1A8 3A 2B FF                        LD      A, (display_row)
+1340+  F1AB 3D                              DEC     A
+1341+  F1AC FA 3A F2                        JP      M, _shift_done
+1342+  F1AF F5          _shift_row          PUSH    AF
+1343+  F1B0 1E 00                           LD      E, 0
+1344+  F1B2 CD 3F F2                        CALL    update_cursor
+1345+  F1B5 F1                              POP     AF
+1346+  F1B6 32 2B FF                        LD      (display_row), A
+1347+  F1B9             
+1348+  F1B9 3A 32 FF    _shift_complete     LD      A, (console_flags)
+1349+  F1BC E6 FD                           AND     ~CFLAGS_TRACK_CURSOR
+1350+  F1BE F6 04       _flags_and_redraw   OR      CFLAGS_SHOW_MOVED
+1351+  F1C0 32 32 FF                        LD      (console_flags), A
+1352+  F1C3 3E 3C                           LD      A, SHOW_MOVE_DELAY
+1353+  F1C5 32 33 FF                        LD      (console_timer),A
+1354+  F1C8 CD E1 ED                        CALL    unsafe_led_redraw       ; Always redraw regardless of LED status
+1355+  F1CB 18 6D                           JR      _shift_done
+1356+  F1CD             
+1357+  F1CD FE 91       _not_ctrl_up        CP      KEY_CTRL_DOWN
+1358+  F1CF 20 0D                           JR      NZ, _not_ctrl_down
+1359+  F1D1             
+1360+  F1D1 3A 2F FF    _shift_down         LD      A, (console_height)
+1361+  F1D4 4F                              LD      C, A
+1362+  F1D5 3A 2B FF                        LD      A, (display_row)
+1363+  F1D8 3C                              INC     A
+1364+  F1D9 B9                              CP      C
+1365+  F1DA 28 5E                           JR      Z, _shift_done
+1366+  F1DC 18 D1                           JR      _shift_row
+1367+  F1DE             
+1368+  F1DE FE 93       _not_ctrl_down      CP      KEY_CTRL_RIGHT
+1369+  F1E0 20 0F                           JR      NZ, _not_ctrl_right
+1370+  F1E2             
+1371+  F1E2 3A 30 FF                        LD      A, (console_width)
+1372+  F1E5 D6 17                           SUB     DISPLAY_WIDTH-1
+1373+  F1E7 4F                              LD      C, A
+1374+  F1E8 3A 2C FF                        LD      A, (display_col)
+1375+  F1EB 3C                              INC     A
+1376+  F1EC B9                              CP      C
+1377+  F1ED 28 4B                           JR      Z, _shift_done
+1378+  F1EF 18 0B                           JR      _shift_col
+1379+  F1F1             
+1380+  F1F1 FE 92       _not_ctrl_right     CP      KEY_CTRL_LEFT
+1381+  F1F3 20 13                           JR      NZ, _not_ctrl_left
+1382+  F1F5             
+1383+  F1F5 3A 2C FF                        LD      A, (display_col)
+1384+  F1F8 3D                              DEC     A
+1385+  F1F9 FA 3A F2                        JP      M, _shift_done
+1386+  F1FC F5          _shift_col          PUSH    AF
+1387+  F1FD 1E 00                           LD      E, 0
+1388+  F1FF CD 3F F2                        CALL    update_cursor
+1389+  F202 F1                              POP     AF
+1390+  F203 32 2C FF                        LD      (display_col), A
+1391+  F206 18 B1                           JR      _shift_complete
+1392+  F208             
+1393+  F208 FE 94       _not_ctrl_left      CP      KEY_CTRL_ENTER
+1394+  F20A 20 19                           JR      NZ, _not_ctrl_enter
+1395+  F20C 3A 2D FF                        LD      A, (cursor_row)
+1396+  F20F 3D                              DEC     A
+1397+  F210 32 2B FF                        LD      (display_row), A
+1398+  F213 3A 2E FF                        LD      A, (cursor_col)
+1399+  F216 D6 16                           SUB     DISPLAY_WIDTH-2
+1400+  F218 30 01                           JR      NC, _col_ok
+1401+  F21A AF                              XOR     A
+1402+  F21B             
+1403+  F21B 32 2C FF    _col_ok             LD      (display_col), A
+1404+  F21E 3A 32 FF                        LD      A, (console_flags)
+1405+  F221 F6 02                           OR      CFLAGS_TRACK_CURSOR
+1406+  F223 18 99                           JR      _flags_and_redraw
+1407+  F225             
+1408+  F225 FE 95       _not_ctrl_enter     CP      KEY_CTRL_SPACE
+1409+  F227 20 06                           JR      NZ, _not_ctrl_space
+1410+  F229             
+1411+  F229 AF                              XOR     A
+1412+  F22A 32 2C FF                        LD      (display_col), A
+1413+  F22D 18 A2                           JR      _shift_down
+1414+  F22F             
+1415+  F22F FE 96       _not_ctrl_space     CP      KEY_CTRL_D
+1416+  F231 20 07                           JR      NZ, _shift_done
+1417+  F233             
+1418+  F233 3A 32 FF                        LD      A, (console_flags)
+1419+  F236 EE 20                           XOR     CFLAGS_LED_OFF
+1420+  F238 18 84                           JR      _flags_and_redraw
+1421+  F23A             
+1422+  F23A AF          _shift_done         XOR     A
+1423+  F23B 32 13 FF                        LD      (control_key_pressed),A
+1424+  F23E C9                              RET
+1425+  F23F             
+1426+  F23F             ;
+1427+  F23F             ; Blinks the cursor 
+1428+  F23F             ;  Enter with E = timer low byte. 
+1429+  F23F             ;  If CURSOR_BIT is 1, show the cursor at the line, otherwise restore the existing character
+1430+  F23F             ;
+1431+  F23F 3A 2B FF    update_cursor       LD      A, (display_row)    ; Are we on the same row as the cursor?
+1432+  F242 47                              LD      B, A
+1433+  F243 3A 2D FF                        LD      A, (cursor_row)
+1434+  F246 3D                              DEC     A
+1435+  F247 B8                              CP      B
+1436+  F248 C0                              RET     NZ
+1437+  F249             
+1438+  F249 3A 2C FF                        LD      A, (display_col)    ; Check the cursor column is within the display window
+1439+  F24C 47                              LD      B, A
+1440+  F24D 3A 2E FF                        LD      A, (cursor_col)
+1441+  F250 3D                              DEC     A
+1442+  F251 90                              SUB     B
+1443+  F252 F8                              RET     M
+1444+  F253             
+1445+  F253 06 00                           LD      B, 0
+1446+  F255 4F                              LD      C, A
+1447+  F256             
+1448+  F256 3A 29 FF                        LD      A, (screen_page)
+1449+  F259 FE 40                           CP      VIDEOBEAST_PAGE
+1450+  F25B 20 2E                           JR      NZ, _skip_videobeast
+1451+  F25D             
+1452+  F25D D3 71                           OUT     (IO_MEM_1), A
+1453+  F25F             
+1454+  F25F 3A 2A FF                        LD      A, (screen_offset)
+1455+  F262 67                              LD      H, A
+1456+  F263 3A 2D FF                        LD      A, (cursor_row)         ; 1 based
+1457+  F266 3D                              DEC     A
+1458+  F267 84                              ADD     A, H
+1459+  F268 E6 3F                           AND     03Fh
+1460+  F26A F6 40                           OR      040h                    ; Page 1 for videobeast
+1461+  F26C 67                              LD      H, A
+1462+  F26D 3A 2E FF                        LD      A, (cursor_col)
+1463+  F270 3D                              DEC     A
+1464+  F271 87                              ADD     A, A
+1465+  F272 6F                              LD      L, A
+1466+  F273 2C                              INC     L
+1467+  F274             
+1468+  F274 7B                              LD      A, E
+1469+  F275 E6 20                           AND     20h
+1470+  F277 3A 31 FF                        LD      A, (console_colour)
+1471+  F27A 28 08                           JR      Z, _normal
+1472+  F27C CB 0F                           RRC     A 
+1473+  F27E CB 0F                           RRC     A
+1474+  F280 CB 0F                           RRC     A
+1475+  F282 CB 0F                           RRC     A
+1476+  F284 77          _normal             LD      (HL), A
+1477+  F285             
+1478+  F285 2B                              DEC     HL
+1479+  F286 3A 3A FF                        LD      A, (page_1_mapping)
+1480+  F289 D3 71                           OUT     (IO_MEM_1), A
+1481+  F28B             
+1482+  F28B 79          _skip_videobeast    LD      A, C
+1483+  F28C FE 18                           CP      DISPLAY_WIDTH
+1484+  F28E D0                              RET     NC
+1485+  F28F             
+1486+  F28F 3A 32 FF                        LD      A, (console_flags)
+1487+  F292 E6 20                           AND     CFLAGS_LED_OFF
+1488+  F294 C0                              RET     NZ
+1489+  F295             
+1490+  F295                                 ; At this point, BC holds the current display column for the cursor..
+1491+  F295 21 85 FF                        LD      HL, display_buffer
+1492+  F298 09                              ADD     HL, BC
+1493+  F299 09                              ADD     HL, BC
+1494+  F29A             
+1495+  F29A 7B                              LD      A, E
+1496+  F29B E6 20                           AND     20h
+1497+  F29D 7E                              LD      A, (HL)
+1498+  F29E 28 02                           JR      Z, _unblink
+1499+  F2A0 3E 5F                           LD      A, '_'
+1500+  F2A2 C3 A3 F7    _unblink            JP    disp_character
+1501+  F2A5             
+1502+  F2A5                                 .INCLUDE "../ports.asm"
 0001++ F2A5             ;
 0002++ F2A5             ; Port definintions
 0003++ F2A5             ;
@@ -3992,8 +3993,8 @@
 0148++ F2A5             
 0149++ F2A5             RTC_64HZ_ENABLED        .EQU    044h    ; Value for RTC_REG_CTRL to enable 64Hz interrupt output
 0150++ F2A5             
-0151++ F2A5             RTC_WEEKDAY_RUNNING     .EQU    008h    ; Value for RTC_REG_WKDAY for normall running of clock1502+  F2A5             
-1503+  F2A5                                 .INCLUDE "../io.asm"
+0151++ F2A5             RTC_WEEKDAY_RUNNING     .EQU    008h    ; Value for RTC_REG_WKDAY for normall running of clock1503+  F2A5             
+1504+  F2A5                                 .INCLUDE "../io.asm"
 0001++ F2A5             ;
 0002++ F2A5             ; I/O routines.. specifically keyboard and serial
 0003++ F2A5             ;
@@ -4444,7 +4445,7 @@
 0417++ F501 00 00 
 0418++ F503 00 00 00 00                 .DB    0,0,0,0,0,0
 0418++ F507 00 00 
-1504+  F509                                 .INCLUDE "../uart.asm"
+1505+  F509                                 .INCLUDE "../uart.asm"
 0001++ F509             ;
 0002++ F509             ; UART routines..
 0003++ F509             ;
@@ -4597,7 +4598,7 @@
 0150++ F56D 3F                              CCF
 0151++ F56E C9                              RET
 0152++ F56F             
-0153++ F56F                                 .MODULE main1505+  F56F                                 .INCLUDE "../i2c.asm"
+0153++ F56F                                 .MODULE main1506+  F56F                                 .INCLUDE "../i2c.asm"
 0001++ F56F             ; ============================================ I2C Routines =================================================
 0002++ F56F             ; Software driven I2C for Z80 PIO
 0003++ F56F             ;
@@ -4892,8 +4893,8 @@
 0292++ F6BB C9                              RET
 0293++ F6BC             
 0294++ F6BC                                 .MODULE main
-1506+  F6BC             
-1507+  F6BC                                 .INCLUDE "../disp.asm"
+1507+  F6BC             
+1508+  F6BC                                 .INCLUDE "../disp.asm"
 0001++ F6BC             ; ========================================== Display Routines ===============================================
 0002++ F6BC             ;
 0003++ F6BC             ; Copyright (c) 2023 Andy Toone for Feersum Technology Ltd.
@@ -5139,7 +5140,7 @@
 0243++ F810 C2 0B F8                        JP      NZ, _clear_loop
 0244++ F813 C9                              RET
 0245++ F814             
-0246++ F814                                 .MODULE main1508+  F814                                 .INCLUDE "../font.asm"
+0246++ F814                                 .MODULE main1509+  F814                                 .INCLUDE "../font.asm"
 0001++ F814             ;
 0002++ F814             ; Font definition
 0003++ F814             ;
@@ -5270,7 +5271,7 @@
 0128++ F8CC 00 12                           .dw     1200h   ; |
 0129++ F8CE 89 0C                           .dw     0c89h   ; }
 0130++ F8D0 C0 24                           .dw     24c0h   ; ~
-0131++ F8D2 00 00                           .dw     0000h   ; 1509+  F8D4                                 .INCLUDE "bios_rtc.asm"
+0131++ F8D2 00 00                           .dw     0000h   ; 1510+  F8D4                                 .INCLUDE "bios_rtc.asm"
 0001++ F8D4             ; RTC Routines
 0002++ F8D4             ;
 0003++ F8D4             ;
@@ -5430,7 +5431,7 @@
 0151++ F9AC FF                                  .db  0ffh           ; 0ffh end marker
 0152++ F9AD             
 0153++ F9AD                                     .MODULE main
-1510+  F9AD                                 .INCLUDE "../flash.asm"
+1511+  F9AD                                 .INCLUDE "../flash.asm"
 0001++ F9AD             ;
 0002++ F9AD             ; Flash update routines
 0003++ F9AD             ;
@@ -5669,7 +5670,7 @@
 0236++ FA77 C9                              RET
 0237++ FA78             
 0238++ FA78                                 .MODULE main
-1511+  FA78                                 .INCLUDE "videobeast.asm"
+1512+  FA78                                 .INCLUDE "videobeast.asm"
 0001++ FA78             ;
 0002++ FA78             ; VideoBeast includes for CP/M BIOS
 0003++ FA78             ;
@@ -5747,342 +5748,347 @@
 0075++ FA78             
 0076++ FA78             VB_UNLOCK           .EQU   0F3h           ; Unlock register write
 0077++ FA78             
-0078++ FA78             VIDEOBEAST_PAGE     .EQU   40h 1512+  FA78             ;
-1513+  FA78             ;
-1514+  FA78             ; Page mapping - since the BIOS uses other pages to manage disk and screen, it must also manage the expected page for the user 
-1515+  FA78             ; programs, to prevent them from being unexpectedly changed (eg. after interrupts).
-1516+  FA78             ;
-1517+  FA78             
-1518+  FA78             ; Get the User page mapping. Sets A to the physical (RAM/ROM) page selelcted for logical page C (0-2)
-1519+  FA78             ; Returns 0FFh for invalid page values
-1520+  FA78 79          get_page_mapping    LD      A, C
-1521+  FA79 CD 8D FA                        CALL    _mapping_address
-1522+  FA7C 3E FF                           LD      A, 0FFH
-1523+  FA7E D0                              RET     NC
-1524+  FA7F 7E                              LD      A, (HL)
-1525+  FA80 C9                              RET
-1526+  FA81             
-1527+  FA81             ; Set the User page mapping. Sets page A (0-2) to the physical (RAM/ROM) page in E
-1528+  FA81             ; Returns with carry SET if successful. The given logical page will now point to the physical page in RAM or ROM
-1529+  FA81             ;
-1530+  FA81 CD 8D FA    set_page_mapping    CALL    _mapping_address
-1531+  FA84 D0                              RET     NC
-1532+  FA85 73                              LD      (HL), E 
-1533+  FA86             
-1534+  FA86 C6 70                           ADD     A, IO_MEM_0             ; NOTE: Order is important here. Interrupts may occur after the page is stored (above)
-1535+  FA88 4F                              LD      C, A                    ; This may result in the page being prematurely mapped, but that's OK.
-1536+  FA89 ED 59                           OUT     (C), E                  ; If we tried to set the page before storing the new default we'd have to disable interrupts
-1537+  FA8B 37                              SCF                             ; To avoid a race condition
-1538+  FA8C C9                              RET
-1539+  FA8D             
-1540+  FA8D FE 04       _mapping_address    CP      4
-1541+  FA8F D0                              RET     NC
-1542+  FA90 4F                              LD      C, A
-1543+  FA91 06 00                           LD      B, 0
-1544+  FA93 21 39 FF                        LD      HL, page_0_mapping
-1545+  FA96 09                              ADD     HL, BC
-1546+  FA97 37                              SCF
-1547+  FA98 C9                              RET
-1548+  FA99             
-1549+  FA99             ; Get the page in memory being used as the base for the drive selected by A
-1550+  FA99             ; Returns A = Page in ROM/RAM for the given drive
-1551+  FA99             ;    or   A = 0 if the selected drive is not supported.
-1552+  FA99             ;
-1553+  FA99 FE 02       get_disk_page       CP      MAX_DRIVES
-1554+  FA9B 30 09                           JR      NC, _disk_page_err
-1555+  FA9D 4F                              LD      C, A
-1556+  FA9E 06 00                           LD      B, 0
-1557+  FAA0 21 37 FF                        LD      HL, drive_a_mem_page
-1558+  FAA3 09                              ADD     HL, BC
-1559+  FAA4 7E                              LD      A, (HL)
-1560+  FAA5 C9                              RET
-1561+  FAA6 AF          _disk_page_err      XOR     A
-1562+  FAA7 C9                              RET
-1563+  FAA8             
-1564+  FAA8 3E 16       get_version         LD      A, 016h
-1565+  FAAA C9                              RET
-1566+  FAAB             
-1567+  FAAB             ;
-1568+  FAAB             ; Erase and write flash data. Data is written to 4K sectors, which are erased before writing.
-1569+  FAAB             ; This uses Page 0 to write the data, so the source must be above 3FFFh
-1570+  FAAB             ;
-1571+  FAAB             ;       D -> 7 bit index of 4K sector being written
-1572+  FAAB             ;       HL -> Address of source data
-1573+  FAAB             ;       BC -> bytes to write
-1574+  FAAB             ;
-1575+  FAAB             ; Returns D pointing to last sector written
-1576+  FAAB             ; Note: This means if BC is an exact multiple of sector size, D is returned as the previous sector
-1577+  FAAB             
-1578+  FAAB CD 4C FA    bios_flash_write    CALL    flash_write 
-1579+  FAAE 3A 39 FF                        LD      A, (page_0_mapping)
-1580+  FAB1 D3 70                           OUT     (IO_MEM_0), A
-1581+  FAB3 C9                              RET 
-1582+  FAB4             
-1583+  FAB4             ;
-1584+  FAB4             ; Set or query the user interrupt. The specified routine will be called after keyboard polling, every 60th of a 
-1585+  FAB4             ; second. The shadow register set is selected before the call (EXX), and AF is preserved. The routine should 
-1586+  FAB4             ; RETurn normally. Interrupt routines survive warm reboots, but no special measures are taken to ensure the
-1587+  FAB4             ; memory they occupy is preserved.
-1588+  FAB4             ;
-1589+  FAB4             ;   Parameters: 
-1590+  FAB4             ;       HL = Address of user interrupt routine, or zero to disable. Call with 0FFFFh to query the current value
-1591+  FAB4             ;   Returns:
-1592+  FAB4             ;       The address of the current user interrupt routine, or zero if none is configured.
-1593+  FAB4             ;
+0078++ FA78             VIDEOBEAST_PAGE     .EQU   40h 1513+  FA78             ;
+1514+  FA78             ;
+1515+  FA78             ; Page mapping - since the BIOS uses other pages to manage disk and screen, it must also manage the expected page for the user 
+1516+  FA78             ; programs, to prevent them from being unexpectedly changed (eg. after interrupts).
+1517+  FA78             ;
+1518+  FA78             
+1519+  FA78             ;
+1520+  FA78             ;
+1521+  FA78             ; Page mapping - since the BIOS uses other pages to manage disk and screen, it must also manage the expected page for the user 
+1522+  FA78             ; programs, to prevent them from being unexpectedly changed (eg. after interrupts).
+1523+  FA78             ;
+1524+  FA78             ; Get the User page mapping. Sets A to the physical (RAM/ROM) page selelcted for logical page C (0-2)
+1525+  FA78             ; Returns 0FFh for invalid page values
+1526+  FA78 79          get_page_mapping    LD      A, C
+1527+  FA79 CD 8D FA                        CALL    _mapping_address
+1528+  FA7C 3E FF                           LD      A, 0FFH
+1529+  FA7E D0                              RET     NC
+1530+  FA7F 7E                              LD      A, (HL)
+1531+  FA80 C9                              RET
+1532+  FA81             
+1533+  FA81             ; Set the User page mapping. Sets page A (0-2) to the physical (RAM/ROM) page in E
+1534+  FA81             ; Returns with carry SET if successful. The given logical page will now point to the physical page in RAM or ROM
+1535+  FA81             ;
+1536+  FA81 CD 8D FA    set_page_mapping    CALL    _mapping_address
+1537+  FA84 D0                              RET     NC
+1538+  FA85 73                              LD      (HL), E 
+1539+  FA86             
+1540+  FA86 C6 70                           ADD     A, IO_MEM_0             ; NOTE: Order is important here. Interrupts may occur after the page is stored (above)
+1541+  FA88 4F                              LD      C, A                    ; This may result in the page being prematurely mapped, but that's OK.
+1542+  FA89 ED 59                           OUT     (C), E                  ; If we tried to set the page before storing the new default we'd have to disable interrupts
+1543+  FA8B 37                              SCF                             ; To avoid a race condition
+1544+  FA8C C9                              RET
+1545+  FA8D             
+1546+  FA8D FE 04       _mapping_address    CP      4
+1547+  FA8F D0                              RET     NC
+1548+  FA90 4F                              LD      C, A
+1549+  FA91 06 00                           LD      B, 0
+1550+  FA93 21 39 FF                        LD      HL, page_0_mapping
+1551+  FA96 09                              ADD     HL, BC
+1552+  FA97 37                              SCF
+1553+  FA98 C9                              RET
+1554+  FA99             
+1555+  FA99             ; Get the page in memory being used as the base for the drive selected by A
+1556+  FA99             ; Returns A = Page in ROM/RAM for the given drive
+1557+  FA99             ;    or   A = 0 if the selected drive is not supported.
+1558+  FA99             ;
+1559+  FA99 FE 02       get_disk_page       CP      MAX_DRIVES
+1560+  FA9B 30 09                           JR      NC, _disk_page_err
+1561+  FA9D 4F                              LD      C, A
+1562+  FA9E 06 00                           LD      B, 0
+1563+  FAA0 21 37 FF                        LD      HL, drive_a_mem_page
+1564+  FAA3 09                              ADD     HL, BC
+1565+  FAA4 7E                              LD      A, (HL)
+1566+  FAA5 C9                              RET
+1567+  FAA6 AF          _disk_page_err      XOR     A
+1568+  FAA7 C9                              RET
+1569+  FAA8             
+1570+  FAA8 3E 17       get_version         LD      A, 017h
+1571+  FAAA C9                              RET
+1572+  FAAB             
+1573+  FAAB             ;
+1574+  FAAB             ; Erase and write flash data. Data is written to 4K sectors, which are erased before writing.
+1575+  FAAB             ; This uses Page 0 to write the data, so the source must be above 3FFFh
+1576+  FAAB             ;
+1577+  FAAB             ;       D -> 7 bit index of 4K sector being written
+1578+  FAAB             ;       HL -> Address of source data
+1579+  FAAB             ;       BC -> bytes to write
+1580+  FAAB             ;
+1581+  FAAB             ; Returns D pointing to last sector written
+1582+  FAAB             ; Note: This means if BC is an exact multiple of sector size, D is returned as the previous sector
+1583+  FAAB             
+1584+  FAAB CD 4C FA    bios_flash_write    CALL    flash_write 
+1585+  FAAE 3A 39 FF                        LD      A, (page_0_mapping)
+1586+  FAB1 D3 70                           OUT     (IO_MEM_0), A
+1587+  FAB3 C9                              RET 
+1588+  FAB4             
+1589+  FAB4             ;
+1590+  FAB4             ; Set or query the user interrupt. The specified routine will be called after keyboard polling, every 60th of a 
+1591+  FAB4             ; second. The shadow register set is selected before the call (EXX), and AF is preserved. The routine should 
+1592+  FAB4             ; RETurn normally. Interrupt routines survive warm reboots, but no special measures are taken to ensure the
+1593+  FAB4             ; memory they occupy is preserved.
 1594+  FAB4             ;
-1595+  FAB4 7C          set_usr_interrupt   LD      A, H
-1596+  FAB5 A5                              AND     L
-1597+  FAB6 3C                              INC     A
-1598+  FAB7 28 03                           JR      Z, _return_usr_int
-1599+  FAB9 22 CF FF                        LD      (user_interrupt), HL
-1600+  FABC 2A CF FF    _return_usr_int     LD      HL, (user_interrupt)
-1601+  FABF C9                              RET
-1602+  FAC0             
-1603+  FAC0             JUMP_TABLE_SIZE     .EQU    18
-1604+  FAC0             
-1605+  FAC0~            .IF $ > (BIOS_TOP - (3*JUMP_TABLE_SIZE))
-1606+  FAC0~                .ECHO "BIOS No room for Jump Table ("
-1607+  FAC0~                .ECHO $
-1608+  FAC0~                .ECHO " > "
-1609+  FAC0~                .ECHO (BIOS_TOP-(3*JUMP_TABLE_SIZE))
-1610+  FAC0~                .ECHO ") \n\n"
-1611+  FAC0~                .STOP
-1612+  FAC0             .ENDIF
-1613+  FAC0             
-1614+  FAC0             BIOS_SPARE          .EQU    BIOS_TOP - $ - (3*JUMP_TABLE_SIZE)
-1615+  FAC0 00 00 00 00                     .FILL   BIOS_SPARE, 0
-1615+  FAC4 00 00 00 00 
-1615+  FAC8 00 00 00 00 
-1615+  FACC 00 00 00 00 
-1615+  FAD0 00 00 00 00 
-1615+  FAD4 00 00 00 00 
-1615+  FAD8 00 00 00 00 
-1615+  FADC 00 00 00 00 
-1615+  FAE0 00 00 00 00 
-1615+  FAE4 00 00 00 00 
-1615+  FAE8 00 00 00 00 
-1615+  FAEC 00 00 00 00 
-1615+  FAF0 00 00 00 00 
-1615+  FAF4 00 00 00 00 
-1615+  FAF8 00 00 00 00 
-1615+  FAFC 00 00 00 00 
-1615+  FB00 00 00 00 00 
-1615+  FB04 00 00 00 00 
-1615+  FB08 00 00 00 00 
-1615+  FB0C 00 00 00 00 
-1615+  FB10 00 00 00 00 
-1615+  FB14 00 00 00 00 
-1615+  FB18 00 00 00 00 
-1615+  FB1C 00 00 00 00 
-1615+  FB20 00 00 00 00 
-1615+  FB24 00 00 00 00 
-1615+  FB28 00 00 00 00 
-1615+  FB2C 00 00 00 00 
-1615+  FB30 00 00 00 00 
-1615+  FB34 00 00 00 00 
-1615+  FB38 00 00 00 00 
-1615+  FB3C 00 00 00 00 
-1615+  FB40 00 00 00 00 
-1615+  FB44 00 00 00 00 
-1615+  FB48 00 00 00 00 
-1615+  FB4C 00 00 00 00 
-1615+  FB50 00 00 00 00 
-1615+  FB54 00 00 00 00 
-1615+  FB58 00 00 00 00 
-1615+  FB5C 00 00 00 00 
-1615+  FB60 00 00 00 00 
-1615+  FB64 00 00 00 00 
-1615+  FB68 00 00 00 00 
-1615+  FB6C 00 00 00 00 
-1615+  FB70 00 00 00 00 
-1615+  FB74 00 00 00 00 
-1615+  FB78 00 00 00 00 
-1615+  FB7C 00 00 00 00 
-1615+  FB80 00 00 00 00 
-1615+  FB84 00 00 00 00 
-1615+  FB88 00 00 00 00 
-1615+  FB8C 00 00 00 00 
-1615+  FB90 00 00 00 00 
-1615+  FB94 00 00 00 00 
-1615+  FB98 00 00 00 00 
-1615+  FB9C 00 00 00 00 
-1615+  FBA0 00 00 00 00 
-1615+  FBA4 00 00 00 00 
-1615+  FBA8 00 00 00 00 
-1615+  FBAC 00 00 00 00 
-1615+  FBB0 00 00 00 00 
-1615+  FBB4 00 00 00 00 
-1615+  FBB8 00 00 00 00 
-1615+  FBBC 00 00 00 00 
-1615+  FBC0 00 00 00 00 
-1615+  FBC4 00 00 00 00 
-1615+  FBC8 00 00 00 00 
-1615+  FBCC 00 00 00 00 
-1615+  FBD0 00 00 00 00 
-1615+  FBD4 00 00 00 00 
-1615+  FBD8 00 00 00 00 
-1615+  FBDC 00 00 00 00 
-1615+  FBE0 00 00 00 00 
-1615+  FBE4 00 00 00 00 
-1615+  FBE8 00 00 00 00 
-1615+  FBEC 00 00 00 00 
-1615+  FBF0 00 00 00 00 
-1615+  FBF4 00 00 00 00 
-1615+  FBF8 00 00 00 00 
-1615+  FBFC 00 00 00 00 
-1615+  FC00 00 00 00 00 
-1615+  FC04 00 00 00 00 
-1615+  FC08 00 00 00 00 
-1615+  FC0C 00 00 00 00 
-1615+  FC10 00 00 00 00 
-1615+  FC14 00 00 00 00 
-1615+  FC18 00 00 00 00 
-1615+  FC1C 00 00 00 00 
-1615+  FC20 00 00 00 00 
-1615+  FC24 00 00 00 00 
-1615+  FC28 00 00 00 00 
-1615+  FC2C 00 00 00 00 
-1615+  FC30 00 00 00 00 
-1615+  FC34 00 00 00 00 
-1615+  FC38 00 00 00 00 
-1615+  FC3C 00 00 00 00 
-1615+  FC40 00 00 00 00 
-1615+  FC44 00 00 00 00 
-1615+  FC48 00 00 00 00 
-1615+  FC4C 00 00 00 00 
-1615+  FC50 00 00 00 00 
-1615+  FC54 00 00 00 00 
-1615+  FC58 00 00 00 00 
-1615+  FC5C 00 00 00 00 
-1615+  FC60 00 00 00 00 
-1615+  FC64 00 00 00 00 
-1615+  FC68 00 00 00 00 
-1615+  FC6C 00 00 00 00 
-1615+  FC70 00 00 00 00 
-1615+  FC74 00 00 00 00 
-1615+  FC78 00 00 00 00 
-1615+  FC7C 00 00 00 00 
-1615+  FC80 00 00 00 00 
-1615+  FC84 00 00 00 00 
-1615+  FC88 00 00 00 00 
-1615+  FC8C 00 00 00 00 
-1615+  FC90 00 00 00 00 
-1615+  FC94 00 00 00 00 
-1615+  FC98 00 00 00 00 
-1615+  FC9C 00 00 00 00 
-1615+  FCA0 00 00 00 00 
-1615+  FCA4 00 00 00 00 
-1615+  FCA8 00 00 00 00 
-1615+  FCAC 00 00 00 00 
-1615+  FCB0 00 00 00 00 
-1615+  FCB4 00 00 00 00 
-1615+  FCB8 00 00 00 00 
-1615+  FCBC 00 00 00 00 
-1615+  FCC0 00 00 00 00 
-1615+  FCC4 00 00 00 00 
-1615+  FCC8 00 00 00 00 
-1615+  FCCC 00 00 00 00 
-1615+  FCD0 00 00 00 00 
-1615+  FCD4 00 00 00 00 
-1615+  FCD8 00 00 00 00 
-1615+  FCDC 00 00 00 00 
-1615+  FCE0 00 00 00 00 
-1615+  FCE4 00 00 00 00 
-1615+  FCE8 00 00 00 00 
-1615+  FCEC 00 00 00 00 
-1615+  FCF0 00 00 00 00 
-1615+  FCF4 00 00 00 00 
-1615+  FCF8 00 00 00 00 
-1615+  FCFC 00 00 00 00 
-1615+  FD00 00 00 00 00 
-1615+  FD04 00 00 00 00 
-1615+  FD08 00 00 00 00 
-1615+  FD0C 00 00 00 00 
-1615+  FD10 00 00 00 00 
-1615+  FD14 00 00 00 00 
-1615+  FD18 00 00 00 00 
-1615+  FD1C 00 00 00 00 
-1615+  FD20 00 00 00 00 
-1615+  FD24 00 00 00 00 
-1615+  FD28 00 00 00 00 
-1615+  FD2C 00 00 00 00 
-1615+  FD30 00 00 00 00 
-1615+  FD34 00 00 00 00 
-1615+  FD38 00 00 00 00 
-1615+  FD3C 00 00 00 00 
-1615+  FD40 00 00 00 00 
-1615+  FD44 00 00 00 00 
-1615+  FD48 00 00 00 00 
-1615+  FD4C 00 00 00 00 
-1615+  FD50 00 00 00 00 
-1615+  FD54 00 00 00 00 
-1615+  FD58 00 00 00 00 
-1615+  FD5C 00 00 00 00 
-1615+  FD60 00 00 00 00 
-1615+  FD64 00 00 00 00 
-1615+  FD68 00 00 00 00 
-1615+  FD6C 00 00 00 00 
-1615+  FD70 00 00 00 00 
-1615+  FD74 00 00 00 00 
-1615+  FD78 00 00 00 00 
-1615+  FD7C 00 00 00 00 
-1615+  FD80 00 00 00 00 
-1615+  FD84 00 00 00 00 
-1615+  FD88 00 00 00 00 
-1615+  FD8C 00 00 00 00 
-1615+  FD90 00 00 00 00 
-1615+  FD94 00 00 00 00 
-1615+  FD98 00 00 00 00 
-1615+  FD9C 00 00 00 00 
-1615+  FDA0 00 00 00 00 
-1615+  FDA4 00 00 00 00 
-1615+  FDA8 00 00 00 00 
-1615+  FDAC 00 00 00 00 
-1615+  FDB0 00 00 00 00 
-1615+  FDB4 00 00 00 00 
-1615+  FDB8 00 00 00 00 
-1615+  FDBC 00 00 00 00 
-1615+  FDC0 00 00 00 00 
-1615+  FDC4 00 00 00 
-1616+  FDC7             
-1617+  FDC7 C3 B4 FA                        JP          set_usr_interrupt   ; 18 (0FDC7h) - Set the User interrupt vector. HL = 0 to clear, or address of user routine. HL= 0FFFFh to query.
-1618+  FDCA C3 AB FA                        JP          bios_flash_write    ; 17 (0FDCAh) - Erase and write flash data. Data is written to 4K sectors, which are erased before writing.
-1619+  FDCD C3 99 FA                        JP          get_disk_page       ; 16 (0FDCDh) - Get the page in RAM/ROM being used as the base for the drive selected by A, or zero if error.
-1620+  FDD0 C3 79 F9                        JP          rtc_get_time_hl     ; 15 (0FDD0h) - Get the time to the 7 bytes pointed to by HL. Returns carry set if sucessful
-1621+  FDD3 C3 65 F7                        JP          disp_char_bright    ; 14 (0FDD3h) - Set LED Digit A to brightness C
-1622+  FDD6 C3 C4 F7                        JP          disp_bitmask        ; 13 (0FDD6h) - Directly write bitmask in HL to display column A
-1623+  FDD9 C3 04 F0                        JP          m_print_inline      ; 12 (0FDD9h) - Print the characters following the call instruction
-1624+  FDDC C3 78 FA                        JP          get_page_mapping    ; 11 (0FDDCh) - Return the logical (cpu) page C (0-2) in A
-1625+  FDDF C3 81 FA                        JP          set_page_mapping    ; 10 (0FDDFh) - Set the logical (cpu) page in A (0-2) to the physical (RAM/ROM) page in E
-1626+  FDE2 C3 94 F5                        JP          i2c_start           ; 9  (0FDE2h) - Sends I2C start sequence
-1627+  FDE5 C3 A3 F5                        JP          i2c_stop            ; 8  (0FDE5h) - Sends I2C stop sequence
-1628+  FDE8 C3 EF F5                        JP          i2c_write           ; 7  (0FDE8h) - Write A as a byte to i2c bus. Carry SET if success. i2c_stop is not called.
-1629+  FDEB C3 3A F6                        JP          i2c_read            ; 6  (0FDEBh) - Read byte from i2C into A, without ACK
-1630+  FDEE C3 DB F5                        JP          i2c_write_to        ; 5  (0FDEEh) - Prepare to write to Device address H, Register L. Carry SET if success. i2c_stop is not called.
-1631+  FDF1 C3 BA F5                        JP          i2c_read_from       ; 4  (0FDF1h) - Read a byte int A from Device address H, Register L. Carry SET if success. i2c_stop is not called.
-1632+  FDF4 C3 2F F4                        JP          wait_for_key        ; 3  (0FDF4h) - Waits for until a key is pressed and released
-1633+  FDF7 C3 C4 F3                        JP          play_note           ; 2  (0FDF7h) - Plays the note defined by DE (octave, note) and C (duration, tenths)
-1634+  FDFA C3 A8 FA                        JP          get_version         ; 1  (0FDFAh) - Returns the Bios version in A
-1635+  FDFD             
-1636+  FDFD             
-1637+  FDFD~            .IF $ > BIOS_TOP
-1638+  FDFD~                .ECHO "End of BIOS is too high ("
-1639+  FDFD~                .ECHO $
-1640+  FDFD~                .ECHO " > "
-1641+  FDFD~                .ECHO BIOS_TOP
-1642+  FDFD~                .ECHO ") \n\n"
-1643+  FDFD~                .STOP
-1644+  FDFD             .ENDIF
-1645+  FDFD             
-1646+  FDFD             .ECHO "Bios Size is "
-1647+  FDFD             .ECHO BIOS_TOP-BIOS_START-BIOS_SPARE
-1648+  FDFD             .ECHO ". Limit is "
-1649+  FDFD             .ECHO BIOS_TOP-BIOS_START
-1650+  FDFD             .ECHO ". Spare "
-1651+  FDFD             .ECHO BIOS_SPARE
-1652+  FDFD             .ECHO "\n\n"
-1653+  FDFD             
-1654+  FDFD                                 .INCLUDE shared_data.asm
+1595+  FAB4             ;   Parameters: 
+1596+  FAB4             ;       HL = Address of user interrupt routine, or zero to disable. Call with 0FFFFh to query the current value
+1597+  FAB4             ;   Returns:
+1598+  FAB4             ;       The address of the current user interrupt routine, or zero if none is configured.
+1599+  FAB4             ;
+1600+  FAB4             ;
+1601+  FAB4 7C          set_usr_interrupt   LD      A, H
+1602+  FAB5 A5                              AND     L
+1603+  FAB6 3C                              INC     A
+1604+  FAB7 28 03                           JR      Z, _return_usr_int
+1605+  FAB9 22 CF FF                        LD      (user_interrupt), HL
+1606+  FABC 2A CF FF    _return_usr_int     LD      HL, (user_interrupt)
+1607+  FABF C9                              RET
+1608+  FAC0             
+1609+  FAC0             JUMP_TABLE_SIZE     .EQU    18
+1610+  FAC0             
+1611+  FAC0~            .IF $ > (BIOS_TOP - (3*JUMP_TABLE_SIZE))
+1612+  FAC0~                .ECHO "BIOS No room for Jump Table ("
+1613+  FAC0~                .ECHO $
+1614+  FAC0~                .ECHO " > "
+1615+  FAC0~                .ECHO (BIOS_TOP-(3*JUMP_TABLE_SIZE))
+1616+  FAC0~                .ECHO ") \n\n"
+1617+  FAC0~                .STOP
+1618+  FAC0             .ENDIF
+1619+  FAC0             
+1620+  FAC0             BIOS_SPARE          .EQU    BIOS_TOP - $ - (3*JUMP_TABLE_SIZE)
+1621+  FAC0 00 00 00 00                     .FILL   BIOS_SPARE, 0
+1621+  FAC4 00 00 00 00 
+1621+  FAC8 00 00 00 00 
+1621+  FACC 00 00 00 00 
+1621+  FAD0 00 00 00 00 
+1621+  FAD4 00 00 00 00 
+1621+  FAD8 00 00 00 00 
+1621+  FADC 00 00 00 00 
+1621+  FAE0 00 00 00 00 
+1621+  FAE4 00 00 00 00 
+1621+  FAE8 00 00 00 00 
+1621+  FAEC 00 00 00 00 
+1621+  FAF0 00 00 00 00 
+1621+  FAF4 00 00 00 00 
+1621+  FAF8 00 00 00 00 
+1621+  FAFC 00 00 00 00 
+1621+  FB00 00 00 00 00 
+1621+  FB04 00 00 00 00 
+1621+  FB08 00 00 00 00 
+1621+  FB0C 00 00 00 00 
+1621+  FB10 00 00 00 00 
+1621+  FB14 00 00 00 00 
+1621+  FB18 00 00 00 00 
+1621+  FB1C 00 00 00 00 
+1621+  FB20 00 00 00 00 
+1621+  FB24 00 00 00 00 
+1621+  FB28 00 00 00 00 
+1621+  FB2C 00 00 00 00 
+1621+  FB30 00 00 00 00 
+1621+  FB34 00 00 00 00 
+1621+  FB38 00 00 00 00 
+1621+  FB3C 00 00 00 00 
+1621+  FB40 00 00 00 00 
+1621+  FB44 00 00 00 00 
+1621+  FB48 00 00 00 00 
+1621+  FB4C 00 00 00 00 
+1621+  FB50 00 00 00 00 
+1621+  FB54 00 00 00 00 
+1621+  FB58 00 00 00 00 
+1621+  FB5C 00 00 00 00 
+1621+  FB60 00 00 00 00 
+1621+  FB64 00 00 00 00 
+1621+  FB68 00 00 00 00 
+1621+  FB6C 00 00 00 00 
+1621+  FB70 00 00 00 00 
+1621+  FB74 00 00 00 00 
+1621+  FB78 00 00 00 00 
+1621+  FB7C 00 00 00 00 
+1621+  FB80 00 00 00 00 
+1621+  FB84 00 00 00 00 
+1621+  FB88 00 00 00 00 
+1621+  FB8C 00 00 00 00 
+1621+  FB90 00 00 00 00 
+1621+  FB94 00 00 00 00 
+1621+  FB98 00 00 00 00 
+1621+  FB9C 00 00 00 00 
+1621+  FBA0 00 00 00 00 
+1621+  FBA4 00 00 00 00 
+1621+  FBA8 00 00 00 00 
+1621+  FBAC 00 00 00 00 
+1621+  FBB0 00 00 00 00 
+1621+  FBB4 00 00 00 00 
+1621+  FBB8 00 00 00 00 
+1621+  FBBC 00 00 00 00 
+1621+  FBC0 00 00 00 00 
+1621+  FBC4 00 00 00 00 
+1621+  FBC8 00 00 00 00 
+1621+  FBCC 00 00 00 00 
+1621+  FBD0 00 00 00 00 
+1621+  FBD4 00 00 00 00 
+1621+  FBD8 00 00 00 00 
+1621+  FBDC 00 00 00 00 
+1621+  FBE0 00 00 00 00 
+1621+  FBE4 00 00 00 00 
+1621+  FBE8 00 00 00 00 
+1621+  FBEC 00 00 00 00 
+1621+  FBF0 00 00 00 00 
+1621+  FBF4 00 00 00 00 
+1621+  FBF8 00 00 00 00 
+1621+  FBFC 00 00 00 00 
+1621+  FC00 00 00 00 00 
+1621+  FC04 00 00 00 00 
+1621+  FC08 00 00 00 00 
+1621+  FC0C 00 00 00 00 
+1621+  FC10 00 00 00 00 
+1621+  FC14 00 00 00 00 
+1621+  FC18 00 00 00 00 
+1621+  FC1C 00 00 00 00 
+1621+  FC20 00 00 00 00 
+1621+  FC24 00 00 00 00 
+1621+  FC28 00 00 00 00 
+1621+  FC2C 00 00 00 00 
+1621+  FC30 00 00 00 00 
+1621+  FC34 00 00 00 00 
+1621+  FC38 00 00 00 00 
+1621+  FC3C 00 00 00 00 
+1621+  FC40 00 00 00 00 
+1621+  FC44 00 00 00 00 
+1621+  FC48 00 00 00 00 
+1621+  FC4C 00 00 00 00 
+1621+  FC50 00 00 00 00 
+1621+  FC54 00 00 00 00 
+1621+  FC58 00 00 00 00 
+1621+  FC5C 00 00 00 00 
+1621+  FC60 00 00 00 00 
+1621+  FC64 00 00 00 00 
+1621+  FC68 00 00 00 00 
+1621+  FC6C 00 00 00 00 
+1621+  FC70 00 00 00 00 
+1621+  FC74 00 00 00 00 
+1621+  FC78 00 00 00 00 
+1621+  FC7C 00 00 00 00 
+1621+  FC80 00 00 00 00 
+1621+  FC84 00 00 00 00 
+1621+  FC88 00 00 00 00 
+1621+  FC8C 00 00 00 00 
+1621+  FC90 00 00 00 00 
+1621+  FC94 00 00 00 00 
+1621+  FC98 00 00 00 00 
+1621+  FC9C 00 00 00 00 
+1621+  FCA0 00 00 00 00 
+1621+  FCA4 00 00 00 00 
+1621+  FCA8 00 00 00 00 
+1621+  FCAC 00 00 00 00 
+1621+  FCB0 00 00 00 00 
+1621+  FCB4 00 00 00 00 
+1621+  FCB8 00 00 00 00 
+1621+  FCBC 00 00 00 00 
+1621+  FCC0 00 00 00 00 
+1621+  FCC4 00 00 00 00 
+1621+  FCC8 00 00 00 00 
+1621+  FCCC 00 00 00 00 
+1621+  FCD0 00 00 00 00 
+1621+  FCD4 00 00 00 00 
+1621+  FCD8 00 00 00 00 
+1621+  FCDC 00 00 00 00 
+1621+  FCE0 00 00 00 00 
+1621+  FCE4 00 00 00 00 
+1621+  FCE8 00 00 00 00 
+1621+  FCEC 00 00 00 00 
+1621+  FCF0 00 00 00 00 
+1621+  FCF4 00 00 00 00 
+1621+  FCF8 00 00 00 00 
+1621+  FCFC 00 00 00 00 
+1621+  FD00 00 00 00 00 
+1621+  FD04 00 00 00 00 
+1621+  FD08 00 00 00 00 
+1621+  FD0C 00 00 00 00 
+1621+  FD10 00 00 00 00 
+1621+  FD14 00 00 00 00 
+1621+  FD18 00 00 00 00 
+1621+  FD1C 00 00 00 00 
+1621+  FD20 00 00 00 00 
+1621+  FD24 00 00 00 00 
+1621+  FD28 00 00 00 00 
+1621+  FD2C 00 00 00 00 
+1621+  FD30 00 00 00 00 
+1621+  FD34 00 00 00 00 
+1621+  FD38 00 00 00 00 
+1621+  FD3C 00 00 00 00 
+1621+  FD40 00 00 00 00 
+1621+  FD44 00 00 00 00 
+1621+  FD48 00 00 00 00 
+1621+  FD4C 00 00 00 00 
+1621+  FD50 00 00 00 00 
+1621+  FD54 00 00 00 00 
+1621+  FD58 00 00 00 00 
+1621+  FD5C 00 00 00 00 
+1621+  FD60 00 00 00 00 
+1621+  FD64 00 00 00 00 
+1621+  FD68 00 00 00 00 
+1621+  FD6C 00 00 00 00 
+1621+  FD70 00 00 00 00 
+1621+  FD74 00 00 00 00 
+1621+  FD78 00 00 00 00 
+1621+  FD7C 00 00 00 00 
+1621+  FD80 00 00 00 00 
+1621+  FD84 00 00 00 00 
+1621+  FD88 00 00 00 00 
+1621+  FD8C 00 00 00 00 
+1621+  FD90 00 00 00 00 
+1621+  FD94 00 00 00 00 
+1621+  FD98 00 00 00 00 
+1621+  FD9C 00 00 00 00 
+1621+  FDA0 00 00 00 00 
+1621+  FDA4 00 00 00 00 
+1621+  FDA8 00 00 00 00 
+1621+  FDAC 00 00 00 00 
+1621+  FDB0 00 00 00 00 
+1621+  FDB4 00 00 00 00 
+1621+  FDB8 00 00 00 00 
+1621+  FDBC 00 00 00 00 
+1621+  FDC0 00 00 00 00 
+1621+  FDC4 00 00 00 
+1622+  FDC7             
+1623+  FDC7 C3 B4 FA                        JP          set_usr_interrupt   ; 18 (0FDC7h) - Set the User interrupt vector. HL = 0 to clear, or address of user routine. HL= 0FFFFh to query.
+1624+  FDCA C3 AB FA                        JP          bios_flash_write    ; 17 (0FDCAh) - Erase and write flash data. Data is written to 4K sectors, which are erased before writing.
+1625+  FDCD C3 99 FA                        JP          get_disk_page       ; 16 (0FDCDh) - Get the page in RAM/ROM being used as the base for the drive selected by A, or zero if error.
+1626+  FDD0 C3 79 F9                        JP          rtc_get_time_hl     ; 15 (0FDD0h) - Get the time to the 7 bytes pointed to by HL. Returns carry set if sucessful
+1627+  FDD3 C3 65 F7                        JP          disp_char_bright    ; 14 (0FDD3h) - Set LED Digit A to brightness C
+1628+  FDD6 C3 C4 F7                        JP          disp_bitmask        ; 13 (0FDD6h) - Directly write bitmask in HL to display column A
+1629+  FDD9 C3 04 F0                        JP          m_print_inline      ; 12 (0FDD9h) - Print the characters following the call instruction
+1630+  FDDC C3 78 FA                        JP          get_page_mapping    ; 11 (0FDDCh) - Return the logical (cpu) page C (0-2) in A
+1631+  FDDF C3 81 FA                        JP          set_page_mapping    ; 10 (0FDDFh) - Set the logical (cpu) page in A (0-2) to the physical (RAM/ROM) page in E
+1632+  FDE2 C3 94 F5                        JP          i2c_start           ; 9  (0FDE2h) - Sends I2C start sequence
+1633+  FDE5 C3 A3 F5                        JP          i2c_stop            ; 8  (0FDE5h) - Sends I2C stop sequence
+1634+  FDE8 C3 EF F5                        JP          i2c_write           ; 7  (0FDE8h) - Write A as a byte to i2c bus. Carry SET if success. i2c_stop is not called.
+1635+  FDEB C3 3A F6                        JP          i2c_read            ; 6  (0FDEBh) - Read byte from i2C into A, without ACK
+1636+  FDEE C3 DB F5                        JP          i2c_write_to        ; 5  (0FDEEh) - Prepare to write to Device address H, Register L. Carry SET if success. i2c_stop is not called.
+1637+  FDF1 C3 BA F5                        JP          i2c_read_from       ; 4  (0FDF1h) - Read a byte int A from Device address H, Register L. Carry SET if success. i2c_stop is not called.
+1638+  FDF4 C3 2F F4                        JP          wait_for_key        ; 3  (0FDF4h) - Waits for until a key is pressed and released
+1639+  FDF7 C3 C4 F3                        JP          play_note           ; 2  (0FDF7h) - Plays the note defined by DE (octave, note) and C (duration, tenths)
+1640+  FDFA C3 A8 FA                        JP          get_version         ; 1  (0FDFAh) - Returns the Bios version in A
+1641+  FDFD             
+1642+  FDFD             
+1643+  FDFD~            .IF $ > BIOS_TOP
+1644+  FDFD~                .ECHO "End of BIOS is too high ("
+1645+  FDFD~                .ECHO $
+1646+  FDFD~                .ECHO " > "
+1647+  FDFD~                .ECHO BIOS_TOP
+1648+  FDFD~                .ECHO ") \n\n"
+1649+  FDFD~                .STOP
+1650+  FDFD             .ENDIF
+1651+  FDFD             
+1652+  FDFD             .ECHO "Bios Size is "
+1653+  FDFD             .ECHO BIOS_TOP-BIOS_START-BIOS_SPARE
+1654+  FDFD             .ECHO ". Limit is "
+1655+  FDFD             .ECHO BIOS_TOP-BIOS_START
+1656+  FDFD             .ECHO ". Spare "
+1657+  FDFD             .ECHO BIOS_SPARE
+1658+  FDFD             .ECHO "\n\n"
+1659+  FDFD             
+1660+  FDFD                                 .INCLUDE shared_data.asm
 0001++ FDFD             ;
 0002++ FDFD             ; Shared data - common state data for routines
 0003++ FDFD             ;
@@ -6214,5 +6220,5 @@
 0129++ FFD1             PANIC_0003          .EQU    0F003h
 0130++ FFD1             PANIC_0004          .EQU    0F004h
 0131++ FFD1             
-1655+  FFD1                                 .END1136   FFD1                                 .END
+1661+  FFD1                                 .END1136   FFD1                                 .END
 tasm: Number of errors = 0

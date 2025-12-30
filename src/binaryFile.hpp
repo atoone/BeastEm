@@ -11,9 +11,7 @@ class BinaryFile {
     public:
         enum BINARY_DEST {PHYSICAL, PAGE_OFFSET, LOGICAL, VIDEO_RAM};
 
-
-
-        BinaryFile(std::string filename, uint32_t address, BINARY_DEST destination=BINARY_DEST::PHYSICAL, uint8_t page=0);
+        BinaryFile(std::string filename, uint32_t address, bool watch, BINARY_DEST destination=BINARY_DEST::PHYSICAL, uint8_t page=0);
 
         std::string getFilename();
         std::string getShortname();
@@ -29,8 +27,8 @@ class BinaryFile {
         std::string filename;
         std::string shortname;
         uint32_t    address;
+        bool        watch;
         uint8_t     page;
         BINARY_DEST destination;
-        bool        watch;
         std::filesystem::file_time_type  lastRead;
 };

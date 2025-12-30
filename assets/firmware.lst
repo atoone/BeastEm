@@ -246,11 +246,11 @@
 0033   0000 F3                              DI                              ; Disable Z80 interrupts
 0034   0001 18 17                           JR      _start
 0035   0003             
-0036   0003 46 69 72 6D                     .DB     "Firmware 1.6 23/04/25",0,0
+0036   0003 46 69 72 6D                     .DB     "Firmware 1.7 30/12/25",0,0
 0036   0007 77 61 72 65 
-0036   000B 20 31 2E 36 
-0036   000F 20 32 33 2F 
-0036   0013 30 34 2F 32 
+0036   000B 20 31 2E 37 
+0036   000F 20 33 30 2F 
+0036   0013 31 32 2F 32 
 0036   0017 35 00 00 
 0037   001A             
 0038   001A 31 00 00    _start              LD      SP, 0h                  ; Set SP
@@ -336,7 +336,7 @@
 0078+  0058             ; Now initialise the UART
 0079+  0058             ;
 0080+  0058             ;
-0081+  0058 01 06 22                        LD      BC, UART_19200 | (UART_MODE_AUTO << 8)  ;;; TODO This is sooooo wrong - sets C (divisor) to 38 
+0081+  0058 01 06 00                        LD      BC, UART_19200 | (UART_MODE_NO_FLOW << 8)  ;;; TODO This is sooooo wrong - sets C (divisor) to 38 
 0082+  005B 3E 80                           LD      A, 80h                      ; Divisor Latch Setting Mode
 0083+  005D D3 23                           OUT     (UART_LINE_CTRL), A         ;  - entered by writing 1 to bit 7 of LCR
 0084+  005F 00                              NOP
@@ -769,12 +769,12 @@
 0176   035C 2A 2A 2A 2A 
 0176   0360 2A 2A 2A 2A 
 0176   0364 00 
-0177   0365 2A 20 4D 49 welcome2            .db "* MICRO BEAST  Ver 1_6 *", 0
+0177   0365 2A 20 4D 49 welcome2            .db "* MICRO BEAST  Ver 1_7 *", 0
 0177   0369 43 52 4F 20 
 0177   036D 42 45 41 53 
 0177   0371 54 20 20 56 
 0177   0375 65 72 20 31 
-0177   0379 5F 36 20 2A 
+0177   0379 5F 37 20 2A 
 0177   037D 00 
 0178   037E             
 0179   037E             ;
@@ -2324,11 +2324,11 @@
 0013+  0B4B 11 E5 CD 04 
 0013+  0B4F F0 0A 0D 4D 
 0013+  0B53 69 63 72 6F 
-0014+  0B57 42 65 61 73                      .DB 042h, 065h, 061h, 073h, 074h, 020h, 04Dh, 06Fh, 06Eh, 069h, 074h, 06Fh, 072h, 020h, 031h, 02Eh, 036h, 000h, 001h, 060h, 000h, 0CDh, 011h, 0E5h
+0014+  0B57 42 65 61 73                      .DB 042h, 065h, 061h, 073h, 074h, 020h, 04Dh, 06Fh, 06Eh, 069h, 074h, 06Fh, 072h, 020h, 031h, 02Eh, 037h, 000h, 001h, 060h, 000h, 0CDh, 011h, 0E5h
 0014+  0B5B 74 20 4D 6F 
 0014+  0B5F 6E 69 74 6F 
 0014+  0B63 72 20 31 2E 
-0014+  0B67 36 00 01 60 
+0014+  0B67 37 00 01 60 
 0014+  0B6B 00 CD 11 E5 
 0015+  0B6F 0E 0A CD 00                      .DB 00Eh, 00Ah, 0CDh, 000h, 0ECh, 0CDh, 08Eh, 0E5h, 001h, 040h, 000h, 0CDh, 011h, 0E5h, 0CDh, 071h, 0EBh, 0A7h, 028h, 0F1h, 0CDh, 09Ah, 0EBh, 021h
 0015+  0B73 EC CD 8E E5 
@@ -2804,9 +2804,9 @@
 0093+  12CB 0D 1B 62 2E 
 0093+  12CF 00 ED 5B 72 
 0093+  12D3 E1 CD C9 E4 
-0094+  12D7 0E 20 CD 00                      .DB 00Eh, 020h, 0CDh, 000h, 0ECh, 0CDh, 004h, 0F0h, 01Bh, 062h, 027h, 000h, 02Ah, 072h, 0E1h, 006h, 008h, 07Eh, 0E5h, 0C5h, 0CDh, 0D0h, 0E4h, 0C1h
+0094+  12D7 0E 20 CD 00                      .DB 00Eh, 020h, 0CDh, 000h, 0ECh, 0CDh, 004h, 0F0h, 01Bh, 062h, 026h, 000h, 02Ah, 072h, 0E1h, 006h, 008h, 07Eh, 0E5h, 0C5h, 0CDh, 0D0h, 0E4h, 0C1h
 0094+  12DB EC CD 04 F0 
-0094+  12DF 1B 62 27 00 
+0094+  12DF 1B 62 26 00 
 0094+  12E3 2A 72 E1 06 
 0094+  12E7 08 7E E5 C5 
 0094+  12EB CD D0 E4 C1 
@@ -3506,11 +3506,11 @@
 0210+  1DC3 13 3A 32 FF 
 0210+  1DC7 E6 24 1A 28 
 0210+  1DCB 05 CB 3F CB 
-0211+  1DCF 3F 3C BE 28                      .DB 03Fh, 03Ch, 0BEh, 028h, 012h, 077h, 0C5h, 0E5h, 0D5h, 079h, 04Eh, 0CBh, 021h, 0CBh, 021h, 0CBh, 021h, 0CDh, 065h, 0F7h, 0D1h, 0E1h, 0C1h, 023h
+0211+  1DCF 3F 3C BE 28                      .DB 03Fh, 03Ch, 0BEh, 028h, 012h, 077h, 0C5h, 0E5h, 0D5h, 07Eh, 0CBh, 03Fh, 0E6h, 078h, 047h, 079h, 048h, 0CDh, 065h, 0F7h, 0D1h, 0E1h, 0C1h, 023h
 0211+  1DD3 12 77 C5 E5 
-0211+  1DD7 D5 79 4E CB 
-0211+  1DDB 21 CB 21 CB 
-0211+  1DDF 21 CD 65 F7 
+0211+  1DD7 D5 7E CB 3F 
+0211+  1DDB E6 78 47 79 
+0211+  1DDF 48 CD 65 F7 
 0211+  1DE3 D1 E1 C1 23 
 0212+  1DE7 13 0C 10 C9                      .DB 013h, 00Ch, 010h, 0C9h, 03Ah, 032h, 0FFh, 04Fh, 0E6h, 024h, 028h, 05Dh, 036h, 000h, 023h, 036h, 080h, 079h, 0E6h, 020h, 079h, 028h, 005h, 021h
 0212+  1DEB 3A 32 FF 4F 
@@ -4304,11 +4304,11 @@
 0343+  2A3B C9 FE 04 D0 
 0343+  2A3F 4F 06 00 21 
 0343+  2A43 39 FF 09 37 
-0344+  2A47 C9 FE 02 30                      .DB 0C9h, 0FEh, 002h, 030h, 009h, 04Fh, 006h, 000h, 021h, 037h, 0FFh, 009h, 07Eh, 0C9h, 0AFh, 0C9h, 03Eh, 016h, 0C9h, 0CDh, 04Ch, 0FAh, 03Ah, 039h
+0344+  2A47 C9 FE 02 30                      .DB 0C9h, 0FEh, 002h, 030h, 009h, 04Fh, 006h, 000h, 021h, 037h, 0FFh, 009h, 07Eh, 0C9h, 0AFh, 0C9h, 03Eh, 017h, 0C9h, 0CDh, 04Ch, 0FAh, 03Ah, 039h
 0344+  2A4B 09 4F 06 00 
 0344+  2A4F 21 37 FF 09 
 0344+  2A53 7E C9 AF C9 
-0344+  2A57 3E 16 C9 CD 
+0344+  2A57 3E 17 C9 CD 
 0344+  2A5B 4C FA 3A 39 
 0345+  2A5F FF D3 70 C9                      .DB 0FFh, 0D3h, 070h, 0C9h, 07Ch, 0A5h, 03Ch, 028h, 003h, 022h, 0CFh, 0FFh, 02Ah, 0CFh, 0FFh, 0C9h, 000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h
 0345+  2A63 7C A5 3C 28 

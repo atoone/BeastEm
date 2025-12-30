@@ -76,7 +76,9 @@ int main( int argc, char *argv[] ) {
 
     int index = 1;
     while( index < argc ) {
-        if( strcmp(argv[index], "-f") == 0 ) {
+        if( strcmp(argv[index], "-f") == 0 || strcmp(argv[index], "-fw") == 0 ) {
+            bool isWatched = strcmp(argv[index], "-fw") == 0;
+
             if( index+1 >= argc ) {
                 std::cout << "Read binary file: missing arguments. Expected (optional) address offset and filename " << (index+2) << " >= " << argc << std::endl;
                 printHelp();
@@ -87,7 +89,7 @@ int main( int argc, char *argv[] ) {
             if(isHexNum(first)) {
                 if( index+1 < argc ) {
                     unsigned int offset = std::stoi(first, nullptr, 16);
-                    binaries.push_back(BinaryFile(argv[++index], offset));
+                    binaries.push_back(BinaryFile(argv[++index], offset, isWatched));
                 }
                 else {
                     std::cout << "Read binary file: missing arguments. Expected address offset and filename but just had offset '" << first << "'" << std::endl;
@@ -96,11 +98,13 @@ int main( int argc, char *argv[] ) {
                 }
             }
             else {
-                binaries.push_back(BinaryFile(first, 0));
+                binaries.push_back(BinaryFile(first, 0, isWatched));
             }
                 
         }
-        else if( strcmp(argv[index], "-l") == 0 ) {
+        else if( strcmp(argv[index], "-l") == 0 || strcmp(argv[index], "-lw") == 0) {
+            bool isWatched = strcmp(argv[index], "-lw") == 0;
+
             if( index+1 >= argc ) {
                 std::cout << "Read listing: missing arguments. Expected (optional) page and filename " << std::endl;
                 printHelp();
@@ -112,7 +116,7 @@ int main( int argc, char *argv[] ) {
                 if( index+1 < argc ) {
                     int page = std::stoi(first, nullptr, 16);
                     std::string *filename = new std::string( argv[++index] );
-                    listing.addFile(*filename, page);
+                    listing.addFile(*filename, page, isWatched);
                 }
                 else {
                     std::cout << "Read listing: missing arguments. Expected page and filename but just had page '" << first << "'" << std::endl;
@@ -121,7 +125,7 @@ int main( int argc, char *argv[] ) {
                 }
             }
             else {
-                listing.addFile(first, 0);
+                listing.addFile(first, 0, isWatched);
             }
         }
         else if( strcmp(argv[index], "-d") == 0 || strcmp(argv[index], "-d2") == 0) {
@@ -133,7 +137,7 @@ int main( int argc, char *argv[] ) {
             float zoom = strcmp(argv[index], "-d") == 0 ? 1.0 : 2.0;
 
             videoBeast = new VideoBeast(zoom);
-            binaries.push_back(BinaryFile(argv[++index], 0, BinaryFile::VIDEO_RAM));
+            binaries.push_back(BinaryFile(argv[++index], 0, false, BinaryFile::VIDEO_RAM));
         }
         else if( strcmp(argv[index], "-v") == 0 ) {
             if( index+1 >= argc || !isNum(argv[++index]) ) {
@@ -211,9 +215,9 @@ int main( int argc, char *argv[] ) {
 
     if( (binaries.size() == 0 || (binaries.size() == 1 && binaries[0].getDestination() == BinaryFile::VIDEO_RAM)) && listing.fileCount() == 0 ) {
         std::cout << "No file or listing arguments, loading firmware" << std::endl;
-        listing.addFile("firmware.lst", 0);
-        listing.addFile("monitor.lst", 35);
-        binaries.push_back(BinaryFile("flash_v1.6.bin", 0));
+        listing.addFile("firmware.lst", 0, false);
+        listing.addFile("monitor.lst", 35, false);
+        binaries.push_back(BinaryFile("flash_v1.7.bin", 0, false));
     }
 
     Beast beast = Beast(window, WIDTH, HEIGHT, zoom, listing, binaries);

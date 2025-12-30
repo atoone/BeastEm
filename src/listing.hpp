@@ -35,7 +35,7 @@ class Listing {
         };
 
         bool    isValidFile(std::string filename);
-        int     addFile(std::string filename, int page);
+        int     addFile(std::string filename, int page, bool watch);
         void    loadFile(Source &source);
 
         void    removeFile(unsigned int fileNum);

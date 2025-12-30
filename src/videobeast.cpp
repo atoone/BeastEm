@@ -775,9 +775,11 @@ void VideoBeast::writePalette(int palette, uint16_t address, uint8_t value) {
 
     if( palette == 1 ) {
         paletteReg1[index] = (paletteReg1[index] & mask) | update;
+        palette1[index] = getColour(paletteReg1[index]);
     }
     else {
         paletteReg2[index] = (paletteReg2[index] & mask) | update;
+        palette2[index] = getColour(paletteReg1[index]);
     }
 }
 

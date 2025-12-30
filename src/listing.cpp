@@ -42,7 +42,7 @@ void Listing::removeFile(unsigned int fileNum) {
     }
 }
 
-int Listing::addFile(std::string filename, int page) {
+int Listing::addFile(std::string filename, int page, bool watch) {
     std::ifstream myfile(filename);
     if(!myfile) {
         std::cout << "Listing file does not exist: " << filename << std::endl;
@@ -61,7 +61,7 @@ int Listing::addFile(std::string filename, int page) {
     if( pos != std::string::npos && ((pos+2) < filename.length()) ) {
         shortname = filename.substr(pos+1);
     }
-    Source source = {shortname, filename, fileNum, page, {}};
+    Source source = {shortname, filename, fileNum, page, {}, watch};
 
     sources.push_back(source);
     return sources.size()-1;
