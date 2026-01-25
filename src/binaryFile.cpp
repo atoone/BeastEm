@@ -128,9 +128,8 @@ size_t BinaryFile::load(uint8_t *rom, uint8_t *ram, bool pagingEnabled, uint8_t 
 
             std::cout << "Loading " << loadLength << " bytes to page " << (int)loadPage << std::endl;
             if( loadPage >= 0x40 ) {
-                char buffer[0x4000];
-                ifs.read(buffer, loadLength);
-                
+                // Skip data for unmapped pages
+                ifs.seekg(loadLength, std::ios::cur);
             }
             else if( isRom ) {
                 ifs.read((char *)rom+loadAddress, loadLength);

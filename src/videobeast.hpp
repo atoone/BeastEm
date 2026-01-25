@@ -135,7 +135,7 @@ class VideoBeast {
 
         uint64_t next_action_time_ps;
         uint64_t next_line_time_ps;
-        uint64_t next_multiply_available_ps;
+        uint64_t next_multiply_available_ps = 0;
 
         uint64_t frameCount = 0;
         uint16_t currentLine = 0;
@@ -160,9 +160,9 @@ class VideoBeast {
             VideoMode{ 848, 480, 1088, 517, 29767ULL}  // 33.594Mhz pixel clock
         };
 
-        SDL_Window *window;
-        SDL_Surface *surface;
-        SDL_PixelFormat *pixel_format;
+        SDL_Window *window = nullptr;
+        SDL_Surface *surface = nullptr;
+        SDL_PixelFormat *pixel_format = nullptr;
         float requestedZoom = 1.0;
         float zoom = 2.0;
         uint32_t windowID;

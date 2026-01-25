@@ -25,18 +25,18 @@ class I2c {
 
         uint64_t clockMask, dataMask;
 
-        uint8_t counter;
-        uint8_t address;
-        uint8_t ioByte;
+        uint8_t counter = 0;
+        uint8_t address = 0;
+        uint8_t ioByte = 0;
 
-        bool sendAck;
+        bool sendAck = false;
 
         uint64_t outputState;
 
         std::vector<I2cDevice*> devices;
 
         I2cDevice *currentDevice = NULL;
-        uint64_t  clockDbg, dataDbg;
+        uint64_t  clockDbg = 0, dataDbg = 0;
 
         bool debug = false;
         int  debugLength;
