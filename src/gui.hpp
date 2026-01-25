@@ -140,7 +140,7 @@ class GUI {
         char       promptBuffer[200] = {};
         bool       promptStarted = false;
         bool       promptCompleted = false;
-        bool       promptOK;
+        bool       promptOK = false;
         
         std::vector<std::string> promptChoices;
 

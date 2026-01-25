@@ -167,10 +167,10 @@ class Beast {
         uint32_t   memVideoAddress[3][5] = {0};
         VideoView  memVideoView[3] = {VV_RAM, VV_RAM, VV_RAM};
 
-        uint32_t   memoryEditAddress;
-        uint32_t   memoryEditAddressMask;
-        int        memoryEditPage;
-        int        memoryEditView;
+        uint32_t   memoryEditAddress = 0;
+        uint32_t   memoryEditAddressMask = 0;
+        int        memoryEditPage = 0;
+        int        memoryEditView = 0;
 
         uint64_t              listAddress = NOT_SET;
         std::vector<uint16_t> decodedAddresses;         // Addresses decoded on screen
@@ -187,10 +187,10 @@ class Beast {
         const char* audioFilename = "audio.raw";
         FILE*       audioFile = nullptr;
 
-        std::string *listingPath;
+        std::string *listingPath = nullptr;
 
-        int         writeDataLength;
-        int         writeDataAddress;
+        int         writeDataLength = 0;
+        int         writeDataAddress = 0;
 
         SDL_Renderer* createRenderer(SDL_Window *window);
         void          initVideoBeast();
@@ -231,7 +231,7 @@ class Beast {
         void binaryFilePrompt(int promptId);
         void checkWatchedFiles();
 
-        uint8_t loadBinaryPage;
+        uint8_t loadBinaryPage = 0;
 
         void onFile();
         void onDebug();
