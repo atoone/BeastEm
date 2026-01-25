@@ -8,6 +8,7 @@
 #include "src/z80.h"
 #include "src/z80pio.h"
 #include "src/uart16c550.h"
+#include "src/assets.hpp"
 #include "src/beast.hpp"
 #include "src/binaryFile.hpp"
 #include "src/videobeast.hpp"
@@ -57,7 +58,8 @@ void printHelp() {
     std::cout << "   -k <CPU speed>                   : Integer KHz (default 8000)" << std::endl;
     std::cout << "   -b <breakpoint>                  : Stop at address (hex)" << std::endl;
     std::cout << "   -z <zoom-level>                  : Zoom the user interface by the given value" << std::endl;
-    std::cout << "   -d <filename> | -d2 <filename>   : Start VideoBeast with the given file in video ram" << std::endl;              
+    std::cout << "   -d <filename> | -d2 <filename>   : Start VideoBeast with the given file in video ram" << std::endl;
+    std::cout << "   -A <asset-path>                  : Path to asset files (default: BEASTEM_ASSETS env or cwd)" << std::endl;
 }
 
 int main( int argc, char *argv[] ) {
@@ -67,7 +69,8 @@ int main( int argc, char *argv[] ) {
     int sampleRate = Beast::AUDIO_FREQ;
     int volume = 4;
     float zoom = 1.0;
-    
+    std::string assetPathArg;
+
     uint64_t breakpoint = Beast::NOT_SET;
     Listing listing;
     VideoBeast *videoBeast = nullptr;
@@ -187,6 +190,14 @@ int main( int argc, char *argv[] ) {
             }
             zoom = std::stof(argv[index], nullptr);
         }
+        else if( strcmp(argv[index], "-A") == 0 ) {
+            if( index+1 >= argc ) {
+                std::cout << "Asset path: expected directory path" << std::endl;
+                printHelp();
+                exit(1);
+            }
+            assetPathArg = argv[++index];
+        }
         else if( strcmp(argv[index], "-h") == 0 ) {
             printHelp();
             exit(1);
@@ -198,6 +209,8 @@ int main( int argc, char *argv[] ) {
         }
         index++;
     }
+
+    initAssetPath(assetPathArg);
 
     NFD_Init();
     SDL_Init( SDL_INIT_EVERYTHING );

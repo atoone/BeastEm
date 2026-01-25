@@ -47,8 +47,9 @@ find_package(SDL2_gfx REQUIRED)
 find_package(SDL2_ttf REQUIRED)
 find_package(SDL2_image REQUIRED)
 
-add_executable(beastem 
-    beastem.cpp 
+add_executable(beastem
+    beastem.cpp
+    src/assets.cpp
     src/beast.cpp
     src/digit.cpp
     src/i2c.cpp
