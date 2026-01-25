@@ -228,9 +228,9 @@ int main( int argc, char *argv[] ) {
 
     if( (binaries.size() == 0 || (binaries.size() == 1 && binaries[0].getDestination() == BinaryFile::VIDEO_RAM)) && listing.fileCount() == 0 ) {
         std::cout << "No file or listing arguments, loading firmware" << std::endl;
-        listing.addFile("firmware.lst", 0, false);
-        listing.addFile("monitor.lst", 35, false);
-        binaries.push_back(BinaryFile("flash_v1.7.bin", 0, false));
+        listing.addFile(assetPath("firmware.lst"), 0, false);
+        listing.addFile(assetPath("monitor.lst"), 35, false);
+        binaries.push_back(BinaryFile(assetPath("flash_v1.7.bin"), 0, false));
     }
 
     Beast beast = Beast(window, WIDTH, HEIGHT, zoom, listing, binaries);
