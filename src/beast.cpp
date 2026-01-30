@@ -83,6 +83,11 @@ SDL_Renderer* Beast::createRenderer(SDL_Window *window) {
     sdlRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
     if( !sdlRenderer) {
+        std::cerr << "Hardware renderer failed: " << SDL_GetError() << ", trying software..." << std::endl;
+        sdlRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    }
+
+    if( !sdlRenderer) {
         std::cout << "Could not create renderer: " << SDL_GetError() << std::endl;
         exit(1);
     }
@@ -121,7 +126,10 @@ void Beast::init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, i
     std::cout << "Clock cycle time ps = " << clock_cycle_ps << ", speed = " << std::setprecision(2) << std::fixed << speed << "MHz" << std::endl;
     clock_time_ps  = 0;
 
-    this->breakpoint = breakpoint;
+    // Set command-line breakpoint as system breakpoint 0
+    if (breakpoint != NOT_SET) {
+        debugManager->setSystemBreakpoint(0, (uint32_t)breakpoint, false);
+    }
 
     portB = 0xFF;
 
@@ -385,7 +393,7 @@ void Beast::mainLoop() {
                 uint16_t breakPoint = cpu.pc+length;
                 uint64_t tickCount = 0;
 
-                std::cout << "Breakpoint for OVER is " << breakpoint << " PC " << cpu.pc << " Length " << length << std::endl;
+                std::cout << "Breakpoint for OVER is " << breakPoint << " PC " << cpu.pc << " Length " << length << std::endl;
 
                 do {
                     tickCount = run(false, tickCount);
@@ -408,14 +416,17 @@ void Beast::mainLoop() {
             mode = DEBUG;
         }
 
-        if( (mode == DEBUG) || (mode == FILES) ) {
+        if( (mode == DEBUG) || (mode == FILES) || (mode == BREAKPOINTS) ) {
             drawBeast();
-            
+
             if( mode == DEBUG ) {
                 onDebug();
             }
-            else {
+            else if( mode == FILES ) {
                 onFile();
+            }
+            else if( mode == BREAKPOINTS ) {
+                drawBreakpoints();
             }
 
             gui.drawPrompt(false);
@@ -461,6 +472,10 @@ void Beast::mainLoop() {
                         updatePrompt();
                     }
                 }
+                else if( mode == BREAKPOINTS ) {
+                    // BREAKPOINTS mode handles its own editing
+                    breakpointsMenu(windowEvent);
+                }
                 else if( gui.isEditing() ) {
                     if( gui.handleKey(windowEvent.key.keysym.sym) ) {
                         if( gui.isEditOK() ) {
@@ -479,7 +494,7 @@ void Beast::mainLoop() {
                 else if( mode == DEBUG ) {
                     debugMenu(windowEvent);
                 }
-                else {
+                else if( mode == FILES ) {
                     fileMenu(windowEvent);
                 }
             }
@@ -488,7 +503,7 @@ void Beast::mainLoop() {
 }
 
 void Beast::debugMenu(SDL_Event windowEvent) {
-    int maxSelection = (breakpoint == NOT_SET) ? static_cast<int>(SEL_BREAKPOINT) : static_cast<int>(SEL_END_MARKER);
+    int maxSelection = static_cast<int>(SEL_BREAKPOINT);
 
     switch( windowEvent.key.keysym.sym ) {
         case SDLK_UP       : updateSelection(-1, maxSelection); break;
@@ -520,18 +535,7 @@ void Beast::debugMenu(SDL_Event windowEvent) {
             if( SEL_MEM1 <= selection && selection <= SEL_VIEWADDR1 ) startMemoryEdit(1);
             if( SEL_MEM2 <= selection && selection <= SEL_VIEWADDR2 ) startMemoryEdit(2);
             break;
-        case SDLK_b    : 
-            if( breakpoint != NOT_SET ) {
-                lastBreakpoint = breakpoint;
-                breakpoint = NOT_SET;
-                selection = SEL_PC;
-            }
-            else {
-                selection = SEL_BREAKPOINT;
-                gui.startEdit( lastBreakpoint, 440, GUI::END_ROW, 16, 4);
-                breakpoint = lastBreakpoint;
-            }
-            break;
+        case SDLK_b    : mode = BREAKPOINTS; breakpointSelection = 0; break;
         case SDLK_q    : mode = QUIT;   break;
         case SDLK_r    : mode = RUN;    break;
         case SDLK_e    : reset();                // Fall through into step
@@ -553,6 +557,182 @@ void Beast::debugMenu(SDL_Event windowEvent) {
             break;
 
     }
+}
+
+void Beast::breakpointsMenu(SDL_Event windowEvent) {
+    int bpCount = debugManager->getBreakpointCount();
+
+    if( breakpointEditMode ) {
+        // In edit mode - handle hex entry
+        if( gui.handleKey(windowEvent.key.keysym.sym) ) {
+            if( gui.isEditOK() ) {
+                uint32_t address = gui.getEditValue();
+                bool isPhysical = (address > 0xFFFF);
+
+                // Check if we're editing an existing breakpoint or adding new
+                const Breakpoint* existingBp = debugManager->getBreakpoint(breakpointSelection);
+                if( existingBp ) {
+                    // Editing existing - remove old and add new with same enabled state
+                    bool wasEnabled = existingBp->enabled;
+                    debugManager->removeBreakpoint(breakpointSelection);
+                    int newIndex = debugManager->addBreakpoint(address, isPhysical);
+                    if( newIndex >= 0 && !wasEnabled ) {
+                        debugManager->setBreakpointEnabled(newIndex, false);
+                    }
+                    if( newIndex >= 0 ) {
+                        breakpointSelection = newIndex;
+                    }
+                }
+                else {
+                    // Adding new breakpoint
+                    int newIndex = debugManager->addBreakpoint(address, isPhysical);
+                    if( newIndex >= 0 ) {
+                        breakpointSelection = newIndex;
+                    }
+                }
+                gui.endEdit(true);
+                breakpointEditMode = false;
+            }
+        }
+        else if( windowEvent.key.keysym.sym == SDLK_ESCAPE ) {
+            gui.endEdit(false);
+            breakpointEditMode = false;
+        }
+        return;
+    }
+
+    switch( windowEvent.key.keysym.sym ) {
+        case SDLK_UP:
+            if( breakpointSelection > 0 ) {
+                breakpointSelection--;
+            }
+            else {
+                breakpointSelection = 7; // Wrap to bottom
+            }
+            break;
+
+        case SDLK_DOWN:
+            if( breakpointSelection < 7 ) {
+                breakpointSelection++;
+            }
+            else {
+                breakpointSelection = 0; // Wrap to top
+            }
+            break;
+
+        case SDLK_a:
+            // Add new breakpoint if list not full
+            if( bpCount < 8 ) {
+                breakpointEditMode = true;
+                // Position edit after " %d   0x" prefix
+                gui.startEdit(0, GUI::COL1 + 66, GUI::ROW3 + (bpCount * GUI::ROW_HEIGHT), 0, 5, false, GUI::ET_HEX);
+                breakpointSelection = bpCount;
+            }
+            break;
+
+        case SDLK_d:
+            // Delete selected breakpoint
+            if( breakpointSelection < bpCount ) {
+                debugManager->removeBreakpoint(breakpointSelection);
+                bpCount = debugManager->getBreakpointCount();
+                // Move selection to next valid item, or previous if deleted last
+                if( breakpointSelection >= bpCount && bpCount > 0 ) {
+                    breakpointSelection = bpCount - 1;
+                }
+                else if( bpCount == 0 ) {
+                    breakpointSelection = 0;
+                }
+            }
+            break;
+
+        case SDLK_SPACE:
+            // Toggle enable/disable on selected populated slot
+            if( breakpointSelection < bpCount ) {
+                const Breakpoint* bp = debugManager->getBreakpoint(breakpointSelection);
+                if( bp ) {
+                    debugManager->setBreakpointEnabled(breakpointSelection, !bp->enabled);
+                }
+            }
+            break;
+
+        case SDLK_RETURN:
+            // Edit selected breakpoint address
+            if( breakpointSelection < bpCount ) {
+                const Breakpoint* bp = debugManager->getBreakpoint(breakpointSelection);
+                if( bp ) {
+                    breakpointEditMode = true;
+                    int digits = bp->isPhysical ? 5 : 4;
+                    // Position edit after " %d   0x" prefix
+                    gui.startEdit(bp->address, GUI::COL1 + 66, GUI::ROW3 + (breakpointSelection * GUI::ROW_HEIGHT), 0, digits, false, GUI::ET_HEX);
+                }
+            }
+            break;
+
+        case SDLK_ESCAPE:
+            mode = DEBUG;
+            selection = 0;
+            break;
+    }
+}
+
+void Beast::drawBreakpoints() {
+    boxRGBA(sdlRenderer, 32*zoom, 32*zoom, (screenWidth-24)*zoom, (screenHeight-24)*zoom, 0xF0, 0xF0, 0xE0, 0xE8);
+
+    SDL_Color textColor = {0, 0x30, 0x30, 255};
+    SDL_Color dimColor = {0x80, 0x80, 0x80, 255};
+    SDL_Color menuColor = {0x30, 0x30, 0xA0, 255};
+    SDL_Color bright = {0xD0, 0xFF, 0xD0, 255};
+
+    int bpCount = debugManager->getBreakpointCount();
+
+    // Title and navigation hint
+    gui.print(GUI::COL1, 34, menuColor, "BREAKPOINTS");
+    gui.print(GUI::COL5, 34, menuColor, "[W]:Watchpoints");
+
+    // Column headers
+    gui.print(GUI::COL1, GUI::ROW2, textColor, " #   Address   Enabled");
+
+    // Render 8 fixed rows
+    for( int i = 0; i < 8; i++ ) {
+        int row = GUI::ROW3 + (i * GUI::ROW_HEIGHT);
+        bool isSelected = (i == breakpointSelection);
+
+        // If editing this row, show the prefix and let gui.drawEdit() handle the value
+        if( breakpointEditMode && isSelected ) {
+            gui.print(GUI::COL1, row, textColor, 0, bright, " %d   0x", i + 1);
+        }
+        else if( i < bpCount ) {
+            const Breakpoint* bp = debugManager->getBreakpoint(i);
+            if( bp ) {
+                SDL_Color rowColor = bp->enabled ? textColor : dimColor;
+                const char* enabledStr = bp->enabled ? "[*]" : "[ ]";
+
+                if( bp->isPhysical ) {
+                    gui.print(GUI::COL1, row, rowColor, isSelected ? 17 : 0, bright, " %d   0x%05X  %s", i + 1, bp->address, enabledStr);
+                }
+                else {
+                    gui.print(GUI::COL1, row, rowColor, isSelected ? 17 : 0, bright, " %d   0x%04X   %s", i + 1, bp->address, enabledStr);
+                }
+            }
+        }
+        else {
+            // Empty slot - show dashes
+            SDL_Color veryDimColor = {0x60, 0x60, 0x60, 255};
+            gui.print(GUI::COL1, row, veryDimColor, isSelected ? 17 : 0, bright, " %d   ----     ---", i + 1);
+        }
+    }
+
+    // Footer with key hints
+    if( bpCount >= 8 ) {
+        gui.print(GUI::COL1, GUI::END_ROW, menuColor, "Full");
+    }
+    else {
+        gui.print(GUI::COL1, GUI::END_ROW, menuColor, "A:Add");
+    }
+    gui.print(GUI::COL2 - 40, GUI::END_ROW, menuColor, "D:Delete");
+    gui.print(GUI::COL3 - 40, GUI::END_ROW, menuColor, "Space:Toggle");
+    gui.print(GUI::COL4, GUI::END_ROW, menuColor, "Enter:Edit");
+    gui.print(GUI::COL5, GUI::END_ROW, menuColor, "ESC:Exit");
 }
 
 void Beast::fileMenu(SDL_Event windowEvent) {
@@ -1115,12 +1295,7 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
         }
         tickCount++;
         if( z80_opdone(&cpu)) {
-            // Check legacy single breakpoint
-            if( (uint64_t)(cpu.pc-1) == breakpoint ) {
-                mode = DEBUG;
-                run = false;
-            }
-            // Check multi-breakpoint DebugManager
+            // Check all breakpoints (user + system) via DebugManager
             if( debugManager->hasActiveBreakpoints() &&
                 debugManager->checkBreakpoint(cpu.pc-1, memoryPage)) {
                 mode = DEBUG;
@@ -1289,7 +1464,6 @@ bool Beast::itemEdit() {
         case SEL_DE2: gui.startEdit( cpu.de2, GUI::COL4, GUI::ROW5, 9, 4); break;
 
         case SEL_LISTING: gui.startEdit( listAddress, GUI::COL1, GUI::END_ROW, 10, 4); break;
-        case SEL_BREAKPOINT:  gui.startEdit( breakpoint, 440, GUI::END_ROW, 16, 4); break;
     }
 
     return gui.isEditing();
@@ -1352,7 +1526,6 @@ void Beast::editComplete() {
         case SEL_DE2: cpu.de2 = editValue; break;
 
         case SEL_LISTING: listAddress = editValue; break;
-        case SEL_BREAKPOINT: breakpoint = editValue; break;
     }
     gui.endEdit(false);
 }
@@ -1569,13 +1742,7 @@ void Beast::onDebug() {
     gui.print( GUI::COL2, GUI::END_ROW, menuColor, "R[E]set");
     gui.print( GUI::COL3, GUI::END_ROW, menuColor, "[F]iles");
 
-    if( breakpoint == NOT_SET ) {
-        gui.print(440, GUI::END_ROW, menuColor, "[B]reakpoint");
-    }
-    else {
-        gui.print(440, GUI::END_ROW, menuColor, id--?0:-4, bright, "[B]reakpoint 0x%04X", breakpoint);
-       
-    }
+    gui.print(440, GUI::END_ROW, menuColor, "[B]reakpoints");
     
     gui.print(GUI::COL5, GUI::END_ROW, menuColor, "[Q]uit");
 }

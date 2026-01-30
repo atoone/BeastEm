@@ -55,36 +55,81 @@ int DebugManager::findBreakpointByAddress(uint32_t address, bool isPhysical) con
     return -1;
 }
 
+// System breakpoint methods
+void DebugManager::setSystemBreakpoint(int index, uint32_t address, bool isPhysical) {
+    if (index >= 0 && index < MAX_SYSTEM_BREAKPOINTS) {
+        systemBreakpoints[index].address = address;
+        systemBreakpoints[index].isPhysical = isPhysical;
+        systemBreakpoints[index].enabled = true;
+    }
+}
+
+void DebugManager::clearSystemBreakpoint(int index) {
+    if (index >= 0 && index < MAX_SYSTEM_BREAKPOINTS) {
+        systemBreakpoints[index].enabled = false;
+        systemBreakpoints[index].address = 0;
+    }
+}
+
+void DebugManager::clearAllSystemBreakpoints() {
+    for (int i = 0; i < MAX_SYSTEM_BREAKPOINTS; i++) {
+        systemBreakpoints[i].enabled = false;
+        systemBreakpoints[i].address = 0;
+    }
+}
+
+const Breakpoint* DebugManager::getSystemBreakpoint(int index) const {
+    if (index < 0 || index >= MAX_SYSTEM_BREAKPOINTS) {
+        return nullptr;
+    }
+    return &systemBreakpoints[index];
+}
+
 bool DebugManager::hasActiveBreakpoints() const {
+    // Check user breakpoints
     for (int i = 0; i < breakpointCount; i++) {
         if (breakpoints[i].enabled) {
+            return true;
+        }
+    }
+    // Check system breakpoints
+    for (int i = 0; i < MAX_SYSTEM_BREAKPOINTS; i++) {
+        if (systemBreakpoints[i].enabled) {
             return true;
         }
     }
     return false;
 }
 
+// Helper to check a single breakpoint against PC
+static bool checkSingleBreakpoint(const Breakpoint& bp, uint16_t pc, uint8_t* memoryPage) {
+    if (!bp.enabled) {
+        return false;
+    }
+
+    if (bp.isPhysical) {
+        // Physical address matching (20-bit with page resolution)
+        int pageIndex = (pc >> 14) & 0x03;
+        uint8_t page = memoryPage[pageIndex];
+        uint32_t physicalAddr = (pc & 0x3FFF) | ((uint32_t)(page & 0x1F) << 14);
+        return physicalAddr == bp.address;
+    } else {
+        // Logical address matching (16-bit comparison)
+        return (uint16_t)bp.address == pc;
+    }
+}
+
 bool DebugManager::checkBreakpoint(uint16_t pc, uint8_t* memoryPage) const {
+    // Check user breakpoints
     for (int i = 0; i < breakpointCount; i++) {
-        if (!breakpoints[i].enabled) {
-            continue;
+        if (checkSingleBreakpoint(breakpoints[i], pc, memoryPage)) {
+            return true;
         }
-
-        if (breakpoints[i].isPhysical) {
-            // Physical address matching (20-bit with page resolution)
-            // Calculate physical address from PC and current memory page
-            int pageIndex = (pc >> 14) & 0x03;
-            uint8_t page = memoryPage[pageIndex];
-            uint32_t physicalAddr = (pc & 0x3FFF) | ((uint32_t)(page & 0x1F) << 14);
-
-            if (physicalAddr == breakpoints[i].address) {
-                return true;
-            }
-        } else {
-            // Logical address matching (16-bit comparison)
-            if ((uint16_t)breakpoints[i].address == pc) {
-                return true;
-            }
+    }
+    // Check system breakpoints
+    for (int i = 0; i < MAX_SYSTEM_BREAKPOINTS; i++) {
+        if (checkSingleBreakpoint(systemBreakpoints[i], pc, memoryPage)) {
+            return true;
         }
     }
     return false;

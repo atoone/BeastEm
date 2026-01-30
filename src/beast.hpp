@@ -30,15 +30,16 @@ class Beast {
 
     enum Modifier {NONE, CTRL, SHIFT, CTRL_SHIFT, SHIFT_SWAP};
 
-    enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, QUIT};
+    enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, BREAKPOINTS, QUIT};
 
-    enum Selection {SEL_PC, SEL_A, SEL_HL, SEL_BC, SEL_DE, SEL_FLAGS, SEL_SP, SEL_IX, SEL_IY, 
-        SEL_PAGING, SEL_PAGE0, SEL_PAGE1, SEL_PAGE2, SEL_PAGE3, 
-        SEL_A2, SEL_HL2, SEL_BC2, SEL_DE2, 
-        SEL_MEM0, SEL_VIEWPAGE0, SEL_VIDEOVIEW0, SEL_VIEWADDR0, SEL_MEM1, SEL_VIEWPAGE1, SEL_VIDEOVIEW1, SEL_VIEWADDR1, SEL_MEM2, SEL_VIEWPAGE2, SEL_VIDEOVIEW2, SEL_VIEWADDR2, 
+    enum Selection {SEL_PC, SEL_A, SEL_HL, SEL_BC, SEL_DE, SEL_FLAGS, SEL_SP, SEL_IX, SEL_IY,
+        SEL_PAGING, SEL_PAGE0, SEL_PAGE1, SEL_PAGE2, SEL_PAGE3,
+        SEL_A2, SEL_HL2, SEL_BC2, SEL_DE2,
+        SEL_MEM0, SEL_VIEWPAGE0, SEL_VIDEOVIEW0, SEL_VIEWADDR0, SEL_MEM1, SEL_VIEWPAGE1, SEL_VIDEOVIEW1, SEL_VIEWADDR1, SEL_MEM2, SEL_VIEWPAGE2, SEL_VIDEOVIEW2, SEL_VIEWADDR2,
         SEL_VOLUME,
         SEL_LISTING,
         SEL_BREAKPOINT,
+        SEL_BP_LIST, SEL_BP_ADDRESS,
         SEL_END_MARKER };
 
     enum MemView {MV_PC, MV_SP, MV_HL, MV_BC, MV_DE, MV_IX, MV_IY, MV_Z80, MV_MEM, MV_VIDEO};
@@ -124,6 +125,8 @@ class Beast {
         Mode    mode = DEBUG;
         int     selection = 0;
         int     fileActionIndex = -1;
+        int     breakpointSelection = 0;
+        bool    breakpointEditMode = false;
 
         z80_t    cpu;
         z80pio_t pio;
@@ -145,8 +148,6 @@ class Beast {
         uint64_t clock_cycle_ps;
         uint64_t clock_time_ps  = 0;
         uint64_t targetSpeedHz;
-        uint64_t breakpoint = NOT_SET;
-        uint64_t lastBreakpoint = 0;
 
         bool     romOperation = false;
         uint8_t  romSequence = 0;
@@ -229,6 +230,8 @@ class Beast {
 
         void fileMenu(SDL_Event windowEvent);
         void debugMenu(SDL_Event windowEvent);
+        void breakpointsMenu(SDL_Event windowEvent);
+        void drawBreakpoints();
         void filePrompt(unsigned int index);
         void sourceFilePrompt();
         void binaryFilePrompt(int promptId);
