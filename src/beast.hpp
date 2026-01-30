@@ -17,6 +17,7 @@
 #include "binaryFile.hpp"
 #include "instructions.hpp"
 #include "videobeast.hpp"
+#include "debugmanager.hpp"
 
 #define BEAST_IO_MASK (Z80_M1|Z80_IORQ|Z80_A7|Z80_A6|Z80_A5|Z80_A4)
 
@@ -136,7 +137,9 @@ class Beast {
 
         VideoBeast *videoBeast;
         uint64_t   nextVideoBeastTickPs;
-        
+
+        DebugManager *debugManager;
+
         uint64_t pins;
         uint8_t portB;
         uint64_t clock_cycle_ps;

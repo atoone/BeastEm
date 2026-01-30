@@ -26,6 +26,7 @@ Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, 
     gui.init(this->zoom);
 
     instr = new Instructions();
+    debugManager = new DebugManager();
 
     i2c = new I2c(Z80PIO_PB6, Z80PIO_PB7);
     display1 = new I2cDisplay(0x50);
@@ -234,6 +235,7 @@ Beast::~Beast() {
         fclose(audioFile);
         audioFile = nullptr;
     }
+    delete debugManager;
 }
 
 uint8_t *Beast::getRom() {
@@ -1112,9 +1114,18 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
             checkWatchedFiles();
         }
         tickCount++;
-        if( (uint64_t)(cpu.pc-1) == breakpoint && z80_opdone(&cpu)) {
-            mode = DEBUG;
-            run = false;
+        if( z80_opdone(&cpu)) {
+            // Check legacy single breakpoint
+            if( (uint64_t)(cpu.pc-1) == breakpoint ) {
+                mode = DEBUG;
+                run = false;
+            }
+            // Check multi-breakpoint DebugManager
+            if( debugManager->hasActiveBreakpoints() &&
+                debugManager->checkBreakpoint(cpu.pc-1, memoryPage)) {
+                mode = DEBUG;
+                run = false;
+            }
         }
     }
     while( run );

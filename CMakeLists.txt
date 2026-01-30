@@ -51,6 +51,7 @@ add_executable(beastem
     beastem.cpp
     src/assets.cpp
     src/beast.cpp
+    src/debugmanager.cpp
     src/digit.cpp
     src/i2c.cpp
     src/listing.cpp
@@ -81,11 +82,20 @@ if(TARGET SDL2::SDL2main)
 endif()
 
 target_link_libraries(beastem PRIVATE
-    nfd 
+    nfd
     SDL2::SDL2
     SDL2_net::SDL2_net
     SDL2_image::SDL2_image
     SDL2_ttf::SDL2_ttf
     ${SDL2_GFX_LIBRARIES}
 )
+
+# Test executable for DebugManager
+add_executable(test_debugmanager
+    tests/test_debugmanager.cpp
+    src/debugmanager.cpp
+)
+
+enable_testing()
+add_test(NAME DebugManagerTests COMMAND test_debugmanager)
 
