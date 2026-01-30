@@ -7,6 +7,15 @@ struct Breakpoint {
     bool     enabled;
 };
 
+struct Watchpoint {
+    uint32_t address;      // 16-bit logical or 20-bit physical
+    uint16_t length;       // Number of bytes to monitor
+    bool     isPhysical;   // true = physical, false = logical
+    bool     enabled;
+    bool     onRead;       // Trigger on reads
+    bool     onWrite;      // Trigger on writes
+};
+
 class DebugManager {
 public:
     // User breakpoint CRUD (8 slots)
@@ -28,10 +37,26 @@ public:
     bool checkBreakpoint(uint16_t pc, uint8_t* memoryPage) const;
     bool hasActiveBreakpoints() const;
 
+    // User watchpoint CRUD (8 slots)
+    int  addWatchpoint(uint32_t address, uint16_t length, bool isPhysical, bool onRead, bool onWrite);
+    bool removeWatchpoint(int index);
+    void setWatchpointEnabled(int index, bool enabled);
+    const Watchpoint* getWatchpoint(int index) const;
+    int  getWatchpointCount() const;
+    void clearAllWatchpoints();
+    int  findWatchpointByStartAddress(uint32_t address, bool isPhysical) const;
+
+    // Watchpoint emulation integration
+    bool hasActiveWatchpoints() const;
+    bool checkWatchpoint(uint16_t logicalAddress, uint32_t physicalAddress, bool isRead) const;
+
 private:
     static const int MAX_BREAKPOINTS = 8;
     static const int MAX_SYSTEM_BREAKPOINTS = 2;
+    static const int MAX_WATCHPOINTS = 8;
     Breakpoint breakpoints[MAX_BREAKPOINTS] = {};
     Breakpoint systemBreakpoints[MAX_SYSTEM_BREAKPOINTS] = {};
+    Watchpoint watchpoints[MAX_WATCHPOINTS] = {};
     int breakpointCount = 0;
+    int watchpointCount = 0;
 };

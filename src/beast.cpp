@@ -1094,6 +1094,24 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                 isVb  = (page & 0xE0) == 0x40;
                 mappedAddr |= (page & 0x1F) << 14;
             }
+            else {
+                // When paging disabled, physical address equals logical address
+                // (flat 64K ROM address space)
+                mappedAddr = addr;
+            }
+
+            // Check watchpoints for memory read/write operations
+            // Pass both logical (addr) and physical (mappedAddr) addresses:
+            // - Logical watchpoints trigger on Z80 address regardless of banking
+            // - Physical watchpoints trigger only when specific memory location is accessed
+            if ((pins & (Z80_RD | Z80_WR)) && debugManager->hasActiveWatchpoints()) {
+                bool isRead = (pins & Z80_RD) != 0;
+                if (debugManager->checkWatchpoint(addr, mappedAddr, isRead)) {
+                    mode = DEBUG;
+                    run = false;
+                }
+            }
+
             if (pins & Z80_RD) {
                 if( isRam ) {
                     uint8_t data = ram[mappedAddr];

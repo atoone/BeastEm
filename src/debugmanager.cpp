@@ -134,3 +134,106 @@ bool DebugManager::checkBreakpoint(uint16_t pc, uint8_t* memoryPage) const {
     }
     return false;
 }
+
+// Watchpoint CRUD methods
+int DebugManager::addWatchpoint(uint32_t address, uint16_t length, bool isPhysical, bool onRead, bool onWrite) {
+    if (watchpointCount >= MAX_WATCHPOINTS) {
+        return -1;
+    }
+
+    // Reject useless watchpoints: must have non-zero length and at least one trigger type
+    if (length == 0 || (!onRead && !onWrite)) {
+        return -1;
+    }
+
+    watchpoints[watchpointCount].address = address;
+    watchpoints[watchpointCount].length = length;
+    watchpoints[watchpointCount].isPhysical = isPhysical;
+    watchpoints[watchpointCount].enabled = true;
+    watchpoints[watchpointCount].onRead = onRead;
+    watchpoints[watchpointCount].onWrite = onWrite;
+
+    return watchpointCount++;
+}
+
+bool DebugManager::removeWatchpoint(int index) {
+    if (index < 0 || index >= watchpointCount) {
+        return false;
+    }
+
+    // Shift remaining watchpoints down
+    for (int i = index; i < watchpointCount - 1; i++) {
+        watchpoints[i] = watchpoints[i + 1];
+    }
+    watchpointCount--;
+    return true;
+}
+
+void DebugManager::setWatchpointEnabled(int index, bool enabled) {
+    if (index >= 0 && index < watchpointCount) {
+        watchpoints[index].enabled = enabled;
+    }
+}
+
+const Watchpoint* DebugManager::getWatchpoint(int index) const {
+    if (index < 0 || index >= watchpointCount) {
+        return nullptr;
+    }
+    return &watchpoints[index];
+}
+
+int DebugManager::getWatchpointCount() const {
+    return watchpointCount;
+}
+
+void DebugManager::clearAllWatchpoints() {
+    watchpointCount = 0;
+}
+
+int DebugManager::findWatchpointByStartAddress(uint32_t address, bool isPhysical) const {
+    for (int i = 0; i < watchpointCount; i++) {
+        if (watchpoints[i].address == address && watchpoints[i].isPhysical == isPhysical) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool DebugManager::hasActiveWatchpoints() const {
+    for (int i = 0; i < watchpointCount; i++) {
+        if (watchpoints[i].enabled) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool DebugManager::checkWatchpoint(uint16_t logicalAddress, uint32_t physicalAddress, bool isRead) const {
+    for (int i = 0; i < watchpointCount; i++) {
+        const Watchpoint& wp = watchpoints[i];
+
+        if (!wp.enabled) {
+            continue;
+        }
+
+        // Check read/write filter
+        if (isRead && !wp.onRead) {
+            continue;
+        }
+        if (!isRead && !wp.onWrite) {
+            continue;
+        }
+
+        // Choose address based on watchpoint type:
+        // - Logical (isPhysical=false): matches regardless of bank settings
+        // - Physical (isPhysical=true): honours bank settings
+        uint32_t addressToCheck = wp.isPhysical ? physicalAddress : logicalAddress;
+
+        // Range check: [address, address + length)
+        // Use subtraction to avoid overflow: addressToCheck - wp.address < length
+        if (addressToCheck >= wp.address && (addressToCheck - wp.address) < wp.length) {
+            return true;
+        }
+    }
+    return false;
+}

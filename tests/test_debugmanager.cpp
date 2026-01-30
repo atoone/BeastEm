@@ -248,6 +248,324 @@ TEST(find_breakpoint_by_address) {
     ASSERT_EQ(-1, dm.findBreakpointByAddress(0x9999, true));
 }
 
+// ==============================================================
+// Watchpoint Tests - AC#1 through AC#9
+// ==============================================================
+
+// AC#1: Given the DebugManager class
+//       When `addWatchpoint(0x8000, 32, false, false, true)` is called
+//       Then a write-only watchpoint monitoring $8000-$801F is stored and index returned
+TEST(add_watchpoint_write_only) {
+    DebugManager dm;
+    int index = dm.addWatchpoint(0x8000, 32, false, false, true);
+
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(1, dm.getWatchpointCount());
+
+    const Watchpoint* wp = dm.getWatchpoint(index);
+    ASSERT_NOT_NULL(wp);
+    ASSERT_EQ((uint32_t)0x8000, wp->address);
+    ASSERT_EQ((uint16_t)32, wp->length);
+    ASSERT_FALSE(wp->isPhysical);
+    ASSERT_FALSE(wp->onRead);
+    ASSERT_TRUE(wp->onWrite);
+    ASSERT_TRUE(wp->enabled);
+}
+
+// AC#8: Given 8 user watchpoints already exist
+//       When `addWatchpoint()` is called
+//       Then it returns -1 indicating the list is full
+TEST(add_watchpoint_returns_minus_one_when_full) {
+    DebugManager dm;
+
+    // Add 8 watchpoints (maximum)
+    for (int i = 0; i < 8; i++) {
+        int index = dm.addWatchpoint(0x1000 + i * 0x100, 16, false, true, true);
+        ASSERT_EQ(i, index);
+    }
+
+    ASSERT_EQ(8, dm.getWatchpointCount());
+
+    // 9th should fail
+    int index = dm.addWatchpoint(0x9000, 16, false, true, true);
+    ASSERT_EQ(-1, index);
+    ASSERT_EQ(8, dm.getWatchpointCount());  // Count unchanged
+}
+
+// Test removeWatchpoint compacts array correctly
+TEST(remove_watchpoint) {
+    DebugManager dm;
+    dm.addWatchpoint(0x1000, 16, false, true, true);
+    dm.addWatchpoint(0x2000, 32, false, true, true);
+    dm.addWatchpoint(0x3000, 64, false, true, true);
+
+    ASSERT_EQ(3, dm.getWatchpointCount());
+
+    // Remove middle watchpoint
+    ASSERT_TRUE(dm.removeWatchpoint(1));
+    ASSERT_EQ(2, dm.getWatchpointCount());
+
+    // Verify remaining watchpoints
+    const Watchpoint* wp0 = dm.getWatchpoint(0);
+    const Watchpoint* wp1 = dm.getWatchpoint(1);
+    ASSERT_NOT_NULL(wp0);
+    ASSERT_NOT_NULL(wp1);
+    ASSERT_EQ((uint32_t)0x1000, wp0->address);
+    ASSERT_EQ((uint32_t)0x3000, wp1->address);  // 0x3000 shifted down
+
+    // Remove invalid index
+    ASSERT_FALSE(dm.removeWatchpoint(-1));
+    ASSERT_FALSE(dm.removeWatchpoint(10));
+}
+
+// Test clearAllWatchpoints
+TEST(clear_all_watchpoints) {
+    DebugManager dm;
+    dm.addWatchpoint(0x1000, 16, false, true, true);
+    dm.addWatchpoint(0x2000, 32, false, true, false);
+    dm.addWatchpoint(0x3000, 64, true, false, true);
+
+    ASSERT_EQ(3, dm.getWatchpointCount());
+    ASSERT_TRUE(dm.hasActiveWatchpoints());
+
+    dm.clearAllWatchpoints();
+
+    ASSERT_EQ(0, dm.getWatchpointCount());
+    ASSERT_FALSE(dm.hasActiveWatchpoints());
+}
+
+// Test findWatchpointByStartAddress (renamed for clarity - only matches start address)
+TEST(find_watchpoint_by_start_address) {
+    DebugManager dm;
+    dm.addWatchpoint(0x1000, 16, false, true, true);  // index 0
+    dm.addWatchpoint(0x2000, 32, true, true, true);   // index 1
+    dm.addWatchpoint(0x3000, 64, false, true, true);  // index 2
+
+    // Find existing watchpoints by their start address
+    ASSERT_EQ(0, dm.findWatchpointByStartAddress(0x1000, false));
+    ASSERT_EQ(1, dm.findWatchpointByStartAddress(0x2000, true));
+    ASSERT_EQ(2, dm.findWatchpointByStartAddress(0x3000, false));
+
+    // Address exists but wrong type
+    ASSERT_EQ(-1, dm.findWatchpointByStartAddress(0x1000, true));
+    ASSERT_EQ(-1, dm.findWatchpointByStartAddress(0x2000, false));
+
+    // Non-existent address
+    ASSERT_EQ(-1, dm.findWatchpointByStartAddress(0x9999, false));
+    ASSERT_EQ(-1, dm.findWatchpointByStartAddress(0x9999, true));
+
+    // Address within range but not start address - should NOT find
+    ASSERT_EQ(-1, dm.findWatchpointByStartAddress(0x1008, false));  // inside 0x1000-0x100F
+}
+
+// Test getWatchpoint with invalid index
+TEST(get_watchpoint_invalid_index) {
+    DebugManager dm;
+    dm.addWatchpoint(0x1000, 16, false, true, true);
+
+    ASSERT_NULL(dm.getWatchpoint(-1));
+    ASSERT_NULL(dm.getWatchpoint(1));
+    ASSERT_NULL(dm.getWatchpoint(100));
+}
+
+// Test setWatchpointEnabled with invalid index
+TEST(set_watchpoint_enabled_invalid_index) {
+    DebugManager dm;
+    dm.addWatchpoint(0x1000, 16, false, true, true);
+
+    // These should not crash - just no-op for invalid indexes
+    dm.setWatchpointEnabled(-1, false);
+    dm.setWatchpointEnabled(10, false);
+
+    // Original watchpoint should still be enabled
+    ASSERT_TRUE(dm.getWatchpoint(0)->enabled);
+}
+
+// AC#2: Given a write watchpoint on $8000-$801F
+//       When code writes to address $8010
+//       Then `checkWatchpoint()` returns true
+TEST(check_watchpoint_triggers_on_write) {
+    DebugManager dm;
+    dm.addWatchpoint(0x8000, 32, false, false, true);  // write-only, logical
+
+    // Write to address within range - should trigger (logical address matches)
+    // Use 0xDEADBEEF for physical address to show it's ignored for logical watchpoints
+    ASSERT_TRUE(dm.checkWatchpoint(0x8010, 0xDEADBEEF, false));
+
+    // Write to addresses at boundaries
+    ASSERT_TRUE(dm.checkWatchpoint(0x8000, 0xDEADBEEF, false));  // start of range
+    ASSERT_TRUE(dm.checkWatchpoint(0x801F, 0xDEADBEEF, false));  // end of range (inclusive)
+
+    // Write outside range - should NOT trigger
+    ASSERT_FALSE(dm.checkWatchpoint(0x7FFF, 0xDEADBEEF, false));  // before range
+    ASSERT_FALSE(dm.checkWatchpoint(0x8020, 0xDEADBEEF, false));  // after range
+}
+
+// AC#3: Given a read watchpoint on $C000-$C0FF
+//       When code reads from $C050
+//       Then the watchpoint triggers
+TEST(check_watchpoint_triggers_on_read) {
+    DebugManager dm;
+    dm.addWatchpoint(0xC000, 256, false, true, false);  // read-only, logical
+
+    // Read from address within range - should trigger
+    // Use 0xDEADBEEF for physical address to show it's ignored for logical watchpoints
+    ASSERT_TRUE(dm.checkWatchpoint(0xC050, 0xDEADBEEF, true));
+
+    // Read at boundaries
+    ASSERT_TRUE(dm.checkWatchpoint(0xC000, 0xDEADBEEF, true));  // start of range
+    ASSERT_TRUE(dm.checkWatchpoint(0xC0FF, 0xDEADBEEF, true));  // end of range (inclusive)
+
+    // Read outside range - should NOT trigger
+    ASSERT_FALSE(dm.checkWatchpoint(0xBFFF, 0xDEADBEEF, true));  // before range
+    ASSERT_FALSE(dm.checkWatchpoint(0xC100, 0xDEADBEEF, true));  // after range
+}
+
+// AC#4: Given a read/write watchpoint on $8000-$800F
+//       When code either reads or writes within that range
+//       Then the watchpoint triggers
+TEST(check_watchpoint_read_write_both_trigger) {
+    DebugManager dm;
+    dm.addWatchpoint(0x8000, 16, false, true, true);  // both read and write, logical
+
+    // Both read and write should trigger (0xDEADBEEF shows physical is ignored)
+    ASSERT_TRUE(dm.checkWatchpoint(0x8008, 0xDEADBEEF, true));   // read
+    ASSERT_TRUE(dm.checkWatchpoint(0x8008, 0xDEADBEEF, false));  // write
+}
+
+// AC#5: Given a write watchpoint on $8000-$801F
+//       When code reads from $8010 (but doesn't write)
+//       Then the watchpoint does NOT trigger
+TEST(check_watchpoint_write_only_ignores_reads) {
+    DebugManager dm;
+    dm.addWatchpoint(0x8000, 32, false, false, true);  // write-only, logical
+
+    // Read should NOT trigger (0xDEADBEEF shows physical is ignored)
+    ASSERT_FALSE(dm.checkWatchpoint(0x8010, 0xDEADBEEF, true));  // isRead=true means read
+
+    // Write should trigger
+    ASSERT_TRUE(dm.checkWatchpoint(0x8010, 0xDEADBEEF, false));  // isRead=false means write
+}
+
+// Converse: read-only watchpoint ignores writes
+TEST(check_watchpoint_read_only_ignores_writes) {
+    DebugManager dm;
+    dm.addWatchpoint(0x8000, 32, false, true, false);  // read-only, logical
+
+    // Write should NOT trigger (0xDEADBEEF shows physical is ignored)
+    ASSERT_FALSE(dm.checkWatchpoint(0x8010, 0xDEADBEEF, false));  // isRead=false means write
+
+    // Read should trigger
+    ASSERT_TRUE(dm.checkWatchpoint(0x8010, 0xDEADBEEF, true));  // isRead=true means read
+}
+
+// AC#6: Given a disabled watchpoint
+//       When memory in its range is accessed
+//       Then `checkWatchpoint()` returns false and execution continues
+TEST(check_watchpoint_disabled_does_not_trigger) {
+    DebugManager dm;
+    int index = dm.addWatchpoint(0x8000, 32, false, true, true);
+    dm.setWatchpointEnabled(index, false);
+
+    // Should NOT trigger when disabled (0xDEADBEEF shows physical is ignored)
+    ASSERT_FALSE(dm.checkWatchpoint(0x8010, 0xDEADBEEF, true));
+    ASSERT_FALSE(dm.checkWatchpoint(0x8010, 0xDEADBEEF, false));
+
+    // Re-enable and verify it triggers again
+    dm.setWatchpointEnabled(index, true);
+    ASSERT_TRUE(dm.checkWatchpoint(0x8010, 0xDEADBEEF, true));
+    ASSERT_TRUE(dm.checkWatchpoint(0x8010, 0xDEADBEEF, false));
+}
+
+// Test: Logical watchpoint triggers regardless of physical address (bank setting)
+TEST(check_watchpoint_logical_ignores_banking) {
+    DebugManager dm;
+    dm.addWatchpoint(0x8010, 16, false, true, true);  // logical watchpoint at $8010
+
+    // Logical address matches - should trigger regardless of physical address
+    // Same logical address, different physical addresses (different banks)
+    ASSERT_TRUE(dm.checkWatchpoint(0x8010, 0x00010, true));   // bank 0
+    ASSERT_TRUE(dm.checkWatchpoint(0x8010, 0x04010, true));   // bank 1
+    ASSERT_TRUE(dm.checkWatchpoint(0x8010, 0x08010, true));   // bank 2
+    ASSERT_TRUE(dm.checkWatchpoint(0x8010, 0x20010, true));   // RAM bank
+
+    // Different logical address - should NOT trigger even if physical matches
+    ASSERT_FALSE(dm.checkWatchpoint(0x4010, 0x00010, true));  // different logical
+}
+
+// Test: Physical watchpoint only triggers when physical address matches
+TEST(check_watchpoint_physical_honours_banking) {
+    DebugManager dm;
+    // Physical watchpoint at $08010 (bank 2, offset $0010)
+    dm.addWatchpoint(0x08010, 16, true, true, true);  // physical watchpoint
+
+    // Only triggers when physical address matches
+    ASSERT_TRUE(dm.checkWatchpoint(0x8010, 0x08010, true));   // physical matches
+    ASSERT_TRUE(dm.checkWatchpoint(0x4010, 0x08010, true));   // different logical, same physical
+
+    // Should NOT trigger for different physical addresses
+    ASSERT_FALSE(dm.checkWatchpoint(0x8010, 0x00010, true));  // bank 0 - wrong physical
+    ASSERT_FALSE(dm.checkWatchpoint(0x8010, 0x04010, true));  // bank 1 - wrong physical
+    ASSERT_FALSE(dm.checkWatchpoint(0x8010, 0x20010, true));  // RAM - wrong physical
+}
+
+// Test checkWatchpoint returns false when no watchpoints exist
+TEST(check_watchpoint_empty_list) {
+    DebugManager dm;
+    // Should return false and not crash when no watchpoints
+    ASSERT_FALSE(dm.checkWatchpoint(0x8000, 0x08000, true));
+    ASSERT_FALSE(dm.checkWatchpoint(0x8000, 0x08000, false));
+}
+
+// Test addWatchpoint rejects invalid parameters
+TEST(add_watchpoint_rejects_invalid) {
+    DebugManager dm;
+
+    // Reject length=0
+    ASSERT_EQ(-1, dm.addWatchpoint(0x8000, 0, false, true, true));
+    ASSERT_EQ(0, dm.getWatchpointCount());  // Not added
+
+    // Reject onRead=false AND onWrite=false (useless watchpoint)
+    ASSERT_EQ(-1, dm.addWatchpoint(0x8000, 16, false, false, false));
+    ASSERT_EQ(0, dm.getWatchpointCount());  // Not added
+
+    // Valid watchpoint should still work
+    ASSERT_EQ(0, dm.addWatchpoint(0x8000, 16, false, true, false));  // read-only OK
+    ASSERT_EQ(1, dm.addWatchpoint(0x9000, 16, false, false, true));  // write-only OK
+    ASSERT_EQ(2, dm.getWatchpointCount());
+}
+
+// AC#7: Given no watchpoints are enabled
+//       When `hasActiveWatchpoints()` is called
+//       Then it returns false (allowing fast-path skip in memory access functions)
+TEST(has_active_watchpoints_empty) {
+    DebugManager dm;
+    ASSERT_FALSE(dm.hasActiveWatchpoints());
+}
+
+TEST(has_active_watchpoints_disabled) {
+    DebugManager dm;
+    int index = dm.addWatchpoint(0x8000, 32, false, true, true);
+    ASSERT_TRUE(dm.hasActiveWatchpoints());
+
+    dm.setWatchpointEnabled(index, false);
+    ASSERT_FALSE(dm.hasActiveWatchpoints());
+}
+
+TEST(has_active_watchpoints_multiple) {
+    DebugManager dm;
+    int idx1 = dm.addWatchpoint(0x1000, 16, false, true, true);
+    int idx2 = dm.addWatchpoint(0x2000, 16, false, true, true);
+
+    ASSERT_TRUE(dm.hasActiveWatchpoints());
+
+    dm.setWatchpointEnabled(idx1, false);
+    ASSERT_TRUE(dm.hasActiveWatchpoints());  // Still has idx2 active
+
+    dm.setWatchpointEnabled(idx2, false);
+    ASSERT_FALSE(dm.hasActiveWatchpoints());  // All disabled
+}
+
 int main() {
     std::cout << "=== DebugManager Tests ===" << std::endl;
 
@@ -280,6 +598,36 @@ int main() {
     // Code review additions
     RUN_TEST(clear_all_breakpoints);
     RUN_TEST(find_breakpoint_by_address);
+
+    std::cout << "\n=== Watchpoint Tests ===" << std::endl;
+
+    // AC#1, #8
+    RUN_TEST(add_watchpoint_write_only);
+    RUN_TEST(add_watchpoint_returns_minus_one_when_full);
+
+    // CRUD tests
+    RUN_TEST(remove_watchpoint);
+    RUN_TEST(clear_all_watchpoints);
+    RUN_TEST(find_watchpoint_by_start_address);
+    RUN_TEST(get_watchpoint_invalid_index);
+    RUN_TEST(set_watchpoint_enabled_invalid_index);
+
+    // AC#2, #3, #4, #5, #6, #7 - checkWatchpoint tests
+    RUN_TEST(check_watchpoint_empty_list);
+    RUN_TEST(add_watchpoint_rejects_invalid);
+    RUN_TEST(check_watchpoint_triggers_on_write);
+    RUN_TEST(check_watchpoint_triggers_on_read);
+    RUN_TEST(check_watchpoint_read_write_both_trigger);
+    RUN_TEST(check_watchpoint_write_only_ignores_reads);
+    RUN_TEST(check_watchpoint_read_only_ignores_writes);
+    RUN_TEST(check_watchpoint_disabled_does_not_trigger);
+    RUN_TEST(has_active_watchpoints_empty);
+    RUN_TEST(has_active_watchpoints_disabled);
+    RUN_TEST(has_active_watchpoints_multiple);
+
+    // Logical vs Physical address tests
+    RUN_TEST(check_watchpoint_logical_ignores_banking);
+    RUN_TEST(check_watchpoint_physical_honours_banking);
 
     std::cout << "\n=== All tests PASSED ===" << std::endl;
     return 0;
