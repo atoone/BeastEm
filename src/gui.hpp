@@ -48,7 +48,7 @@ class GUI {
         static const int ROW22 = ROW20+28;
         static const int END_ROW = ROW22+(13*14);
 
-        enum EditType {ET_HEX, ET_BASE_10};
+        enum EditType {ET_HEX, ET_BASE_10, ET_ADDRESS};
 
         GUI(SDL_Renderer *sdlRenderer, int screenWidth, int screenHeight):
             sdlRenderer (sdlRenderer),
@@ -60,9 +60,11 @@ class GUI {
         void      init(float zoom);
 
         void      startEdit(uint32_t value, int x, int y, int offset, int digits, bool isContinue = false, EditType editType = ET_HEX);
+        void      startAddressEdit(uint32_t value, bool isPhysical, int x, int y, int offset);
         bool      isEditing();
         bool      isContinuousEdit();
         bool      isEditOK();
+        bool      isLogicalAddress();  // For ET_ADDRESS: true if first nibble is "don't care"
         void      endEdit(bool editOK);
         void      drawEdit();
         bool      handleKey(SDL_Keycode key);
@@ -145,6 +147,8 @@ class GUI {
         bool       editContinue = false;
         bool       editOK = false;
         EditType   editType;
+        bool       editAddressDontCare = false;     // For ET_ADDRESS: first nibble is "don't care" (logical address)
+        bool       editAddressDontCareOld = false;  // Original state for backspace restore
 
         int        promptId;
         PromptType promptType;

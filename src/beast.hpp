@@ -138,6 +138,7 @@ class Beast {
         uint16_t watchpointEditRange = 1;
         bool     watchpointEditOnRead = false;
         bool     watchpointEditOnWrite = true;
+        bool     watchpointEditIsPhysical = false;
 
         z80_t    cpu;
         z80pio_t pio;
