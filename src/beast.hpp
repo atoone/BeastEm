@@ -30,7 +30,7 @@ class Beast {
 
     enum Modifier {NONE, CTRL, SHIFT, CTRL_SHIFT, SHIFT_SWAP};
 
-    enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, BREAKPOINTS, QUIT};
+    enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, BREAKPOINTS, WATCHPOINTS, QUIT};
 
     enum Selection {SEL_PC, SEL_A, SEL_HL, SEL_BC, SEL_DE, SEL_FLAGS, SEL_SP, SEL_IX, SEL_IY,
         SEL_PAGING, SEL_PAGE0, SEL_PAGE1, SEL_PAGE2, SEL_PAGE3,
@@ -40,6 +40,7 @@ class Beast {
         SEL_LISTING,
         SEL_BREAKPOINT,
         SEL_BP_LIST, SEL_BP_ADDRESS,
+        SEL_WP_LIST, SEL_WP_ADDRESS, SEL_WP_RANGE, SEL_WP_TYPE,
         SEL_END_MARKER };
 
     enum MemView {MV_PC, MV_SP, MV_HL, MV_BC, MV_DE, MV_IX, MV_IY, MV_Z80, MV_MEM, MV_VIDEO};
@@ -127,6 +128,14 @@ class Beast {
         int     fileActionIndex = -1;
         int     breakpointSelection = 0;
         bool    breakpointEditMode = false;
+        int     watchpointSelection = 0;
+        bool    watchpointEditMode = false;
+        int     watchpointEditField = 0;  // 0=address, 1=range, 2=type
+        bool    watchpointAddMode = false;  // true when adding new, false when editing existing
+        uint32_t watchpointEditAddress = 0;
+        uint16_t watchpointEditRange = 1;
+        bool     watchpointEditOnRead = false;
+        bool     watchpointEditOnWrite = true;
 
         z80_t    cpu;
         z80pio_t pio;
@@ -232,6 +241,8 @@ class Beast {
         void debugMenu(SDL_Event windowEvent);
         void breakpointsMenu(SDL_Event windowEvent);
         void drawBreakpoints();
+        void watchpointsMenu(SDL_Event windowEvent);
+        void drawWatchpoints();
         void filePrompt(unsigned int index);
         void sourceFilePrompt();
         void binaryFilePrompt(int promptId);

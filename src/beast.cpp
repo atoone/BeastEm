@@ -416,7 +416,7 @@ void Beast::mainLoop() {
             mode = DEBUG;
         }
 
-        if( (mode == DEBUG) || (mode == FILES) || (mode == BREAKPOINTS) ) {
+        if( (mode == DEBUG) || (mode == FILES) || (mode == BREAKPOINTS) || (mode == WATCHPOINTS) ) {
             drawBeast();
 
             if( mode == DEBUG ) {
@@ -427,6 +427,9 @@ void Beast::mainLoop() {
             }
             else if( mode == BREAKPOINTS ) {
                 drawBreakpoints();
+            }
+            else if( mode == WATCHPOINTS ) {
+                drawWatchpoints();
             }
 
             gui.drawPrompt(false);
@@ -475,6 +478,10 @@ void Beast::mainLoop() {
                 else if( mode == BREAKPOINTS ) {
                     // BREAKPOINTS mode handles its own editing
                     breakpointsMenu(windowEvent);
+                }
+                else if( mode == WATCHPOINTS ) {
+                    // WATCHPOINTS mode handles its own editing
+                    watchpointsMenu(windowEvent);
                 }
                 else if( gui.isEditing() ) {
                     if( gui.handleKey(windowEvent.key.keysym.sym) ) {
@@ -536,6 +543,7 @@ void Beast::debugMenu(SDL_Event windowEvent) {
             if( SEL_MEM2 <= selection && selection <= SEL_VIEWADDR2 ) startMemoryEdit(2);
             break;
         case SDLK_b    : mode = BREAKPOINTS; breakpointSelection = 0; break;
+        case SDLK_w    : mode = WATCHPOINTS; watchpointSelection = 0; watchpointEditMode = false; watchpointEditField = 0; break;
         case SDLK_q    : mode = QUIT;   break;
         case SDLK_r    : mode = RUN;    break;
         case SDLK_e    : reset();                // Fall through into step
@@ -625,7 +633,7 @@ void Beast::breakpointsMenu(SDL_Event windowEvent) {
             if( bpCount < 8 ) {
                 breakpointEditMode = true;
                 // Position edit after " %d   0x" prefix
-                gui.startEdit(0, GUI::COL1 + 66, GUI::ROW3 + (bpCount * GUI::ROW_HEIGHT), 0, 5, false, GUI::ET_HEX);
+                gui.startEdit(0, GUI::COL1 + 74, GUI::ROW3 + (bpCount * GUI::ROW_HEIGHT), 0, 5, false, GUI::ET_HEX);
                 breakpointSelection = bpCount;
             }
             break;
@@ -663,7 +671,7 @@ void Beast::breakpointsMenu(SDL_Event windowEvent) {
                     breakpointEditMode = true;
                     int digits = bp->isPhysical ? 5 : 4;
                     // Position edit after " %d   0x" prefix
-                    gui.startEdit(bp->address, GUI::COL1 + 66, GUI::ROW3 + (breakpointSelection * GUI::ROW_HEIGHT), 0, digits, false, GUI::ET_HEX);
+                    gui.startEdit(bp->address, GUI::COL1 + 74, GUI::ROW3 + (breakpointSelection * GUI::ROW_HEIGHT), 0, digits, false, GUI::ET_HEX);
                 }
             }
             break;
@@ -671,6 +679,13 @@ void Beast::breakpointsMenu(SDL_Event windowEvent) {
         case SDLK_ESCAPE:
             mode = DEBUG;
             selection = 0;
+            break;
+
+        case SDLK_w:
+            mode = WATCHPOINTS;
+            watchpointSelection = 0;
+            watchpointEditMode = false;
+            watchpointEditField = 0;
             break;
     }
 }
@@ -687,10 +702,10 @@ void Beast::drawBreakpoints() {
 
     // Title and navigation hint
     gui.print(GUI::COL1, 34, menuColor, "BREAKPOINTS");
-    gui.print(GUI::COL5, 34, menuColor, "[W]:Watchpoints");
+    gui.print(GUI::COL5, 34, menuColor, "[W]atchpoints");
 
-    // Column headers
-    gui.print(GUI::COL1, GUI::ROW2, textColor, " #   Address   Enabled");
+    // Column headers - aligned with data columns
+    gui.print(GUI::COL1, GUI::ROW2, textColor, " #    Address   Enabled");
 
     // Render 8 fixed rows
     for( int i = 0; i < 8; i++ ) {
@@ -699,7 +714,7 @@ void Beast::drawBreakpoints() {
 
         // If editing this row, show the prefix and let gui.drawEdit() handle the value
         if( breakpointEditMode && isSelected ) {
-            gui.print(GUI::COL1, row, textColor, 0, bright, " %d   0x", i + 1);
+            gui.print(GUI::COL1, row, textColor, 0, bright, " %d    0x", i + 1);
         }
         else if( i < bpCount ) {
             const Breakpoint* bp = debugManager->getBreakpoint(i);
@@ -708,17 +723,17 @@ void Beast::drawBreakpoints() {
                 const char* enabledStr = bp->enabled ? "[*]" : "[ ]";
 
                 if( bp->isPhysical ) {
-                    gui.print(GUI::COL1, row, rowColor, isSelected ? 17 : 0, bright, " %d   0x%05X  %s", i + 1, bp->address, enabledStr);
+                    gui.print(GUI::COL1, row, rowColor, isSelected ? 18 : 0, bright, " %d    0x%05X   %s", i + 1, bp->address, enabledStr);
                 }
                 else {
-                    gui.print(GUI::COL1, row, rowColor, isSelected ? 17 : 0, bright, " %d   0x%04X   %s", i + 1, bp->address, enabledStr);
+                    gui.print(GUI::COL1, row, rowColor, isSelected ? 18 : 0, bright, " %d    0x%04X    %s", i + 1, bp->address, enabledStr);
                 }
             }
         }
         else {
-            // Empty slot - show dashes
+            // Empty slot - show dashes matching address width
             SDL_Color veryDimColor = {0x60, 0x60, 0x60, 255};
-            gui.print(GUI::COL1, row, veryDimColor, isSelected ? 17 : 0, bright, " %d   ----     ---", i + 1);
+            gui.print(GUI::COL1, row, veryDimColor, isSelected ? 18 : 0, bright, " %d    -------   ---", i + 1);
         }
     }
 
@@ -727,12 +742,302 @@ void Beast::drawBreakpoints() {
         gui.print(GUI::COL1, GUI::END_ROW, menuColor, "Full");
     }
     else {
-        gui.print(GUI::COL1, GUI::END_ROW, menuColor, "A:Add");
+        gui.print(GUI::COL1, GUI::END_ROW, menuColor, "[A]dd");
     }
-    gui.print(GUI::COL2 - 40, GUI::END_ROW, menuColor, "D:Delete");
-    gui.print(GUI::COL3 - 40, GUI::END_ROW, menuColor, "Space:Toggle");
-    gui.print(GUI::COL4, GUI::END_ROW, menuColor, "Enter:Edit");
-    gui.print(GUI::COL5, GUI::END_ROW, menuColor, "ESC:Exit");
+    gui.print(GUI::COL2 - 40, GUI::END_ROW, menuColor, "[D]elete");
+    gui.print(GUI::COL3 - 40, GUI::END_ROW, menuColor, "[Space]:Toggle");
+    gui.print(GUI::COL4, GUI::END_ROW, menuColor, "[Enter]:Edit");
+    gui.print(GUI::COL5, GUI::END_ROW, menuColor, "[ESC]:Exit");
+}
+
+void Beast::drawWatchpoints() {
+    boxRGBA(sdlRenderer, 32*zoom, 32*zoom, (screenWidth-24)*zoom, (screenHeight-24)*zoom, 0xF0, 0xF0, 0xE0, 0xE8);
+
+    SDL_Color textColor = {0, 0x30, 0x30, 255};
+    SDL_Color dimColor = {0x80, 0x80, 0x80, 255};
+    SDL_Color menuColor = {0x30, 0x30, 0xA0, 255};
+    SDL_Color bright = {0xD0, 0xFF, 0xD0, 255};
+
+    int wpCount = debugManager->getWatchpointCount();
+
+    // Title and navigation hint
+    gui.print(GUI::COL1, 34, menuColor, "WATCHPOINTS");
+    gui.print(GUI::COL5, 34, menuColor, "[B]reakpoints");
+
+    // Column headers - aligned with data columns
+    gui.print(GUI::COL1, GUI::ROW2, textColor, " #    Address   Range    Type  Enabled");
+
+    // Render 8 fixed rows
+    for( int i = 0; i < 8; i++ ) {
+        int row = GUI::ROW3 + (i * GUI::ROW_HEIGHT);
+        bool isSelected = (i == watchpointSelection);
+
+        if( watchpointEditMode && isSelected ) {
+            // Editing this row - show edit state with temporary values
+            bool isPhys = (watchpointEditAddress > 0xFFFF);
+            const char* typeStr = (watchpointEditOnRead && watchpointEditOnWrite) ? "RW" : (watchpointEditOnRead ? "R " : "W ");
+
+            if( watchpointEditField == 0 ) {
+                // Editing address field - show prefix and let gui.drawEdit() handle value
+                gui.print(GUI::COL1, row, textColor, 0, bright, " %d    0x", i + 1);
+            }
+            else if( watchpointEditField == 1 ) {
+                // Editing range field - show address and prefix for range
+                if( isPhys ) {
+                    gui.print(GUI::COL1, row, textColor, 0, bright, " %d    0x%05X  0x", i + 1, watchpointEditAddress);
+                }
+                else {
+                    gui.print(GUI::COL1, row, textColor, 0, bright, " %d    0x%04X   0x", i + 1, watchpointEditAddress);
+                }
+            }
+            else if( watchpointEditField == 2 ) {
+                // Editing type field - show full row with brackets around type
+                if( isPhys ) {
+                    gui.print(GUI::COL1, row, textColor, 32, bright, " %d    0x%05X  0x%04X   [%s]   [*]", i + 1, watchpointEditAddress, watchpointEditRange, typeStr);
+                }
+                else {
+                    gui.print(GUI::COL1, row, textColor, 32, bright, " %d    0x%04X   0x%04X   [%s]   [*]", i + 1, watchpointEditAddress, watchpointEditRange, typeStr);
+                }
+            }
+        }
+        else if( i < wpCount ) {
+            const Watchpoint* wp = debugManager->getWatchpoint(i);
+            if( wp ) {
+                SDL_Color rowColor = wp->enabled ? textColor : dimColor;
+                const char* enabledStr = wp->enabled ? "[*]" : "[ ]";
+                const char* typeStr = (wp->onRead && wp->onWrite) ? "RW" : (wp->onRead ? "R " : "W ");
+
+                if( wp->isPhysical ) {
+                    gui.print(GUI::COL1, row, rowColor, isSelected ? 32 : 0, bright, " %d    0x%05X  0x%04X    %s    %s", i + 1, wp->address, wp->length, typeStr, enabledStr);
+                }
+                else {
+                    gui.print(GUI::COL1, row, rowColor, isSelected ? 32 : 0, bright, " %d    0x%04X   0x%04X    %s    %s", i + 1, wp->address, wp->length, typeStr, enabledStr);
+                }
+            }
+        }
+        else {
+            // Empty slot - dashes matching column widths
+            SDL_Color veryDimColor = {0x60, 0x60, 0x60, 255};
+            gui.print(GUI::COL1, row, veryDimColor, isSelected ? 32 : 0, bright, " %d    -------  ------    --    ---", i + 1);
+        }
+    }
+
+    // Footer with key hints
+    if( wpCount >= 8 && !watchpointEditMode ) {
+        gui.print(GUI::COL1, GUI::END_ROW, menuColor, "Full");
+    }
+    else {
+        gui.print(GUI::COL1, GUI::END_ROW, menuColor, "[A]dd");
+    }
+    gui.print(GUI::COL2 - 40, GUI::END_ROW, menuColor, "[D]elete");
+    gui.print(GUI::COL3 - 40, GUI::END_ROW, menuColor, "[Space]:Toggle");
+    gui.print(GUI::COL4, GUI::END_ROW, menuColor, "[Enter]:Edit");
+    gui.print(GUI::COL5, GUI::END_ROW, menuColor, "[ESC]:Exit");
+}
+
+void Beast::watchpointsMenu(SDL_Event windowEvent) {
+    int wpCount = debugManager->getWatchpointCount();
+
+    if( watchpointEditMode ) {
+        // Handle edit mode based on current field
+        if( watchpointEditField == 0 || watchpointEditField == 1 ) {
+            // Address or Range field - use hex entry
+            if( gui.handleKey(windowEvent.key.keysym.sym) ) {
+                if( gui.isEditOK() ) {
+                    uint32_t value = gui.getEditValue();
+                    gui.endEdit(true);
+
+                    if( watchpointEditField == 0 ) {
+                        // Address field complete - store and advance to range field
+                        watchpointEditAddress = value;
+                        watchpointEditField = 1;
+                        // Start editing range with default or existing value
+                        int rangeX = GUI::COL1 + 146;
+                        gui.startEdit(watchpointEditRange, rangeX, GUI::ROW3 + (watchpointSelection * GUI::ROW_HEIGHT), 0, 4, false, GUI::ET_HEX);
+                    }
+                    else {
+                        // Range field complete - store and advance to type field
+                        watchpointEditRange = (value == 0) ? 1 : value;  // Default to 1 if empty
+                        watchpointEditField = 2;
+                        // Type field uses arrow keys, no gui.startEdit needed
+                    }
+                }
+            }
+            else if( windowEvent.key.keysym.sym == SDLK_TAB ) {
+                // Tab advances to next field
+                uint32_t value = gui.getEditValue();
+                gui.endEdit(true);
+
+                if( watchpointEditField == 0 ) {
+                    watchpointEditAddress = value;
+                    watchpointEditField = 1;
+                    int rangeX = GUI::COL1 + 146;
+                    gui.startEdit(watchpointEditRange, rangeX, GUI::ROW3 + (watchpointSelection * GUI::ROW_HEIGHT), 0, 4, false, GUI::ET_HEX);
+                }
+                else {
+                    watchpointEditRange = (value == 0) ? 1 : value;
+                    watchpointEditField = 2;
+                }
+            }
+            else if( windowEvent.key.keysym.sym == SDLK_ESCAPE ) {
+                // Cancel edit - if adding new, don't add; if editing existing, revert
+                gui.endEdit(false);
+                watchpointEditMode = false;
+                watchpointEditField = 0;
+                watchpointAddMode = false;
+            }
+        }
+        else if( watchpointEditField == 2 ) {
+            // Type field - use arrow keys to cycle through R, W, RW
+            switch( windowEvent.key.keysym.sym ) {
+                case SDLK_LEFT:
+                case SDLK_RIGHT:
+                    // Cycle through R -> W -> RW -> R...
+                    if( watchpointEditOnRead && watchpointEditOnWrite ) {
+                        // RW -> R
+                        watchpointEditOnRead = true; watchpointEditOnWrite = false;
+                    }
+                    else if( watchpointEditOnRead && !watchpointEditOnWrite ) {
+                        // R -> W
+                        watchpointEditOnRead = false; watchpointEditOnWrite = true;
+                    }
+                    else {
+                        // W -> RW
+                        watchpointEditOnRead = true; watchpointEditOnWrite = true;
+                    }
+                    break;
+
+                case SDLK_RETURN:
+                    // Confirm - commit the watchpoint
+                    {
+                        bool isPhys = (watchpointEditAddress > 0xFFFF);
+
+                        if( watchpointAddMode ) {
+                            // Adding new watchpoint
+                            int newIndex = debugManager->addWatchpoint(watchpointEditAddress, watchpointEditRange, isPhys, watchpointEditOnRead, watchpointEditOnWrite);
+                            if( newIndex >= 0 ) {
+                                watchpointSelection = newIndex;
+                            }
+                        }
+                        else {
+                            // Editing existing - remove old and add new with same enabled state
+                            const Watchpoint* oldWp = debugManager->getWatchpoint(watchpointSelection);
+                            bool wasEnabled = oldWp ? oldWp->enabled : true;
+                            debugManager->removeWatchpoint(watchpointSelection);
+                            int newIndex = debugManager->addWatchpoint(watchpointEditAddress, watchpointEditRange, isPhys, watchpointEditOnRead, watchpointEditOnWrite);
+                            if( newIndex >= 0 ) {
+                                if( !wasEnabled ) {
+                                    debugManager->setWatchpointEnabled(newIndex, false);
+                                }
+                                watchpointSelection = newIndex;
+                            }
+                        }
+                    }
+                    watchpointEditMode = false;
+                    watchpointEditField = 0;
+                    watchpointAddMode = false;
+                    break;
+
+                case SDLK_ESCAPE:
+                    // Cancel without saving
+                    watchpointEditMode = false;
+                    watchpointEditField = 0;
+                    watchpointAddMode = false;
+                    break;
+            }
+        }
+        return;
+    }
+
+    switch( windowEvent.key.keysym.sym ) {
+        case SDLK_UP:
+            if( watchpointSelection > 0 ) {
+                watchpointSelection--;
+            }
+            else {
+                watchpointSelection = 7; // Wrap to bottom
+            }
+            break;
+
+        case SDLK_DOWN:
+            if( watchpointSelection < 7 ) {
+                watchpointSelection++;
+            }
+            else {
+                watchpointSelection = 0; // Wrap to top
+            }
+            break;
+
+        case SDLK_a:
+            // Add new watchpoint if list not full
+            if( wpCount < 8 ) {
+                watchpointAddMode = true;
+                watchpointEditMode = true;
+                watchpointEditField = 0;
+                watchpointEditAddress = 0;
+                watchpointEditRange = 1;
+                watchpointEditOnRead = false;
+                watchpointEditOnWrite = true;  // Default to write-only
+                watchpointSelection = wpCount;  // Select the slot where new one will go
+                // Start editing address field
+                gui.startEdit(0, GUI::COL1 + 74, GUI::ROW3 + (wpCount * GUI::ROW_HEIGHT), 0, 5, false, GUI::ET_HEX);
+            }
+            break;
+
+        case SDLK_d:
+            // Delete selected watchpoint
+            if( watchpointSelection < wpCount ) {
+                debugManager->removeWatchpoint(watchpointSelection);
+                wpCount = debugManager->getWatchpointCount();
+                // Move selection to next valid item, or previous if deleted last
+                if( watchpointSelection >= wpCount && wpCount > 0 ) {
+                    watchpointSelection = wpCount - 1;
+                }
+                else if( wpCount == 0 ) {
+                    watchpointSelection = 0;
+                }
+            }
+            break;
+
+        case SDLK_SPACE:
+            // Toggle enable/disable on selected populated slot
+            if( watchpointSelection < wpCount ) {
+                const Watchpoint* wp = debugManager->getWatchpoint(watchpointSelection);
+                if( wp ) {
+                    debugManager->setWatchpointEnabled(watchpointSelection, !wp->enabled);
+                }
+            }
+            break;
+
+        case SDLK_RETURN:
+            // Edit selected watchpoint
+            if( watchpointSelection < wpCount ) {
+                const Watchpoint* wp = debugManager->getWatchpoint(watchpointSelection);
+                if( wp ) {
+                    watchpointAddMode = false;
+                    watchpointEditMode = true;
+                    watchpointEditField = 0;
+                    watchpointEditAddress = wp->address;
+                    watchpointEditRange = wp->length;
+                    watchpointEditOnRead = wp->onRead;
+                    watchpointEditOnWrite = wp->onWrite;
+                    int digits = wp->isPhysical ? 5 : 4;
+                    gui.startEdit(wp->address, GUI::COL1 + 74, GUI::ROW3 + (watchpointSelection * GUI::ROW_HEIGHT), 0, digits, false, GUI::ET_HEX);
+                }
+            }
+            break;
+
+        case SDLK_b:
+            // Switch to Breakpoints screen
+            mode = BREAKPOINTS;
+            breakpointSelection = 0;
+            break;
+
+        case SDLK_ESCAPE:
+            mode = DEBUG;
+            selection = 0;
+            break;
+    }
 }
 
 void Beast::fileMenu(SDL_Event windowEvent) {
