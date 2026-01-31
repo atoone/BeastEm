@@ -54,6 +54,11 @@ Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, 
         std::cout << "Couldn't load font "<< fontPath << std::endl;
         exit(1);
     }
+    indicatorFont = TTF_OpenFont(fontPath.c_str(), 12*zoom);
+    if( !indicatorFont) {
+        std::cout << "Couldn't load font "<< fontPath << std::endl;
+        exit(1);
+    }
 
     gui.startPrompt(0, "Loading...");
     gui.drawPrompt(true);
@@ -242,6 +247,9 @@ Beast::~Beast() {
     if( audioFile ) {
         fclose(audioFile);
         audioFile = nullptr;
+    }
+    if( indicatorFont ) {
+        TTF_CloseFont(indicatorFont);
     }
     delete debugManager;
 }
@@ -545,17 +553,20 @@ void Beast::debugMenu(SDL_Event windowEvent) {
         case SDLK_b    : mode = BREAKPOINTS; breakpointSelection = 0; break;
         case SDLK_w    : mode = WATCHPOINTS; watchpointSelection = 0; watchpointEditMode = false; watchpointEditField = 0; break;
         case SDLK_q    : mode = QUIT;   break;
-        case SDLK_r    : mode = RUN;    break;
+        case SDLK_r    : mode = RUN; stopReason = STOP_NONE; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
         case SDLK_e    : reset();                // Fall through into step
-        case SDLK_s    : mode = STEP;   break;
-        case SDLK_u    : mode = OUT;    break;
-        case SDLK_o    : mode = OVER;   break;
+        case SDLK_s    : mode = STEP; stopReason = STOP_STEP; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
+        case SDLK_u    : mode = OUT; stopReason = STOP_STEP; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
+        case SDLK_o    : mode = OVER; stopReason = STOP_STEP; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
         case SDLK_f    : mode = FILES;   selection = 0; break;
         case SDLK_l    : if( listAddress == NOT_SET ) listAddress = (cpu.pc-1) & 0x0FFFF; else listAddress = NOT_SET; break;
 
         case SDLK_d    : uart_connect(&uart, false); break;
 
-        case SDLK_t    : 
+        case SDLK_t    :
+            stopReason = STOP_STEP;
+            watchpointTriggerIndex = -1;
+            breakpointTriggerIndex = -1;
             if( instr->isConditional(readMem(cpu.pc-1), readMem(cpu.pc))) {
                 mode = TAKE;
             }
@@ -598,13 +609,12 @@ void Beast::breakpointsMenu(SDL_Event windowEvent) {
                         breakpointSelection = newIndex;
                     }
                 }
-                gui.endEdit(true);
                 breakpointEditMode = false;
             }
-        }
-        else if( windowEvent.key.keysym.sym == SDLK_ESCAPE ) {
-            gui.endEdit(false);
-            breakpointEditMode = false;
+            // Check if edit was canceled (e.g., by ESCAPE handled internally by GUI)
+            if( !gui.isEditing() ) {
+                breakpointEditMode = false;
+            }
         }
         return;
     }
@@ -633,7 +643,7 @@ void Beast::breakpointsMenu(SDL_Event windowEvent) {
             if( bpCount < 8 ) {
                 breakpointEditMode = true;
                 // Position edit after " %d   0x" prefix
-                gui.startEdit(0, GUI::COL1 + 74, GUI::ROW3 + (bpCount * GUI::ROW_HEIGHT), 0, 5, false, GUI::ET_HEX);
+                gui.startEdit(0, GUI::COL1 + 78, GUI::ROW3 + (bpCount * GUI::ROW_HEIGHT), 0, 5, false, GUI::ET_HEX);
                 breakpointSelection = bpCount;
             }
             break;
@@ -669,9 +679,8 @@ void Beast::breakpointsMenu(SDL_Event windowEvent) {
                 const Breakpoint* bp = debugManager->getBreakpoint(breakpointSelection);
                 if( bp ) {
                     breakpointEditMode = true;
-                    int digits = bp->isPhysical ? 5 : 4;
-                    // Position edit after " %d   0x" prefix
-                    gui.startEdit(bp->address, GUI::COL1 + 74, GUI::ROW3 + (breakpointSelection * GUI::ROW_HEIGHT), 0, digits, false, GUI::ET_HEX);
+                    // Always allow 5 digits so user can change logical to physical
+                    gui.startEdit(bp->address, GUI::COL1 + 78, GUI::ROW3 + (breakpointSelection * GUI::ROW_HEIGHT), 0, 5, false, GUI::ET_HEX);
                 }
             }
             break;
@@ -723,17 +732,17 @@ void Beast::drawBreakpoints() {
                 const char* enabledStr = bp->enabled ? "[*]" : "[ ]";
 
                 if( bp->isPhysical ) {
-                    gui.print(GUI::COL1, row, rowColor, isSelected ? 18 : 0, bright, " %d    0x%05X   %s", i + 1, bp->address, enabledStr);
+                    gui.print(GUI::COL1, row, rowColor, isSelected ? 22 : 0, bright, " %d    0x%05X   %s", i + 1, bp->address, enabledStr);
                 }
                 else {
-                    gui.print(GUI::COL1, row, rowColor, isSelected ? 18 : 0, bright, " %d    0x%04X    %s", i + 1, bp->address, enabledStr);
+                    gui.print(GUI::COL1, row, rowColor, isSelected ? 22 : 0, bright, " %d    0x%04X    %s", i + 1, bp->address, enabledStr);
                 }
             }
         }
         else {
             // Empty slot - show dashes matching address width
             SDL_Color veryDimColor = {0x60, 0x60, 0x60, 255};
-            gui.print(GUI::COL1, row, veryDimColor, isSelected ? 18 : 0, bright, " %d    -------   ---", i + 1);
+            gui.print(GUI::COL1, row, veryDimColor, isSelected ? 22 : 0, bright, " %d    -------   ---", i + 1);
         }
     }
 
@@ -791,12 +800,19 @@ void Beast::drawWatchpoints() {
                 }
             }
             else if( watchpointEditField == 2 ) {
-                // Editing type field - show full row with brackets around type
+                // Editing type field - highlight just the type with yellow background
+                // Only show row highlight when editing existing (not when adding new)
+                int highlight = watchpointAddMode ? 0 : 40;
+                SDL_Color yellow = {0xFF, 0xFF, 0x80, 255};
                 if( isPhys ) {
-                    gui.print(GUI::COL1, row, textColor, 32, bright, " %d    0x%05X  0x%04X   [%s]   [*]", i + 1, watchpointEditAddress, watchpointEditRange, typeStr);
+                    gui.print(GUI::COL1, row, textColor, highlight, bright, " %d    0x%05X  0x%04X   ", i + 1, watchpointEditAddress, watchpointEditRange);
+                    gui.print(GUI::COL1 + 198, row, textColor, 4, yellow, "[%s]", typeStr);
+                    gui.print(GUI::COL1 + 234, row, textColor, 0, bright, "  [*]");
                 }
                 else {
-                    gui.print(GUI::COL1, row, textColor, 32, bright, " %d    0x%04X   0x%04X   [%s]   [*]", i + 1, watchpointEditAddress, watchpointEditRange, typeStr);
+                    gui.print(GUI::COL1, row, textColor, highlight, bright, " %d    0x%04X   0x%04X   ", i + 1, watchpointEditAddress, watchpointEditRange);
+                    gui.print(GUI::COL1 + 198, row, textColor, 4, yellow, "[%s]", typeStr);
+                    gui.print(GUI::COL1 + 234, row, textColor, 0, bright, "  [*]");
                 }
             }
         }
@@ -808,17 +824,17 @@ void Beast::drawWatchpoints() {
                 const char* typeStr = (wp->onRead && wp->onWrite) ? "RW" : (wp->onRead ? "R " : "W ");
 
                 if( wp->isPhysical ) {
-                    gui.print(GUI::COL1, row, rowColor, isSelected ? 32 : 0, bright, " %d    0x%05X  0x%04X    %s    %s", i + 1, wp->address, wp->length, typeStr, enabledStr);
+                    gui.print(GUI::COL1, row, rowColor, isSelected ? 40 : 0, bright, " %d    0x%05X  0x%04X    %s    %s", i + 1, wp->address, wp->length, typeStr, enabledStr);
                 }
                 else {
-                    gui.print(GUI::COL1, row, rowColor, isSelected ? 32 : 0, bright, " %d    0x%04X   0x%04X    %s    %s", i + 1, wp->address, wp->length, typeStr, enabledStr);
+                    gui.print(GUI::COL1, row, rowColor, isSelected ? 40 : 0, bright, " %d    0x%04X   0x%04X    %s    %s", i + 1, wp->address, wp->length, typeStr, enabledStr);
                 }
             }
         }
         else {
             // Empty slot - dashes matching column widths
             SDL_Color veryDimColor = {0x60, 0x60, 0x60, 255};
-            gui.print(GUI::COL1, row, veryDimColor, isSelected ? 32 : 0, bright, " %d    -------  ------    --    ---", i + 1);
+            gui.print(GUI::COL1, row, veryDimColor, isSelected ? 40 : 0, bright, " %d    -------  ------    --    ---", i + 1);
         }
     }
 
@@ -845,14 +861,13 @@ void Beast::watchpointsMenu(SDL_Event windowEvent) {
             if( gui.handleKey(windowEvent.key.keysym.sym) ) {
                 if( gui.isEditOK() ) {
                     uint32_t value = gui.getEditValue();
-                    gui.endEdit(true);
 
                     if( watchpointEditField == 0 ) {
                         // Address field complete - store and advance to range field
                         watchpointEditAddress = value;
                         watchpointEditField = 1;
                         // Start editing range with default or existing value
-                        int rangeX = GUI::COL1 + 146;
+                        int rangeX = GUI::COL1 + 152;
                         gui.startEdit(watchpointEditRange, rangeX, GUI::ROW3 + (watchpointSelection * GUI::ROW_HEIGHT), 0, 4, false, GUI::ET_HEX);
                     }
                     else {
@@ -861,6 +876,12 @@ void Beast::watchpointsMenu(SDL_Event windowEvent) {
                         watchpointEditField = 2;
                         // Type field uses arrow keys, no gui.startEdit needed
                     }
+                }
+                // Check if edit was canceled (e.g., by ESCAPE handled internally by GUI)
+                if( !gui.isEditing() && !gui.isEditOK() ) {
+                    watchpointEditMode = false;
+                    watchpointEditField = 0;
+                    watchpointAddMode = false;
                 }
             }
             else if( windowEvent.key.keysym.sym == SDLK_TAB ) {
@@ -871,20 +892,13 @@ void Beast::watchpointsMenu(SDL_Event windowEvent) {
                 if( watchpointEditField == 0 ) {
                     watchpointEditAddress = value;
                     watchpointEditField = 1;
-                    int rangeX = GUI::COL1 + 146;
+                    int rangeX = GUI::COL1 + 152;
                     gui.startEdit(watchpointEditRange, rangeX, GUI::ROW3 + (watchpointSelection * GUI::ROW_HEIGHT), 0, 4, false, GUI::ET_HEX);
                 }
                 else {
                     watchpointEditRange = (value == 0) ? 1 : value;
                     watchpointEditField = 2;
                 }
-            }
-            else if( windowEvent.key.keysym.sym == SDLK_ESCAPE ) {
-                // Cancel edit - if adding new, don't add; if editing existing, revert
-                gui.endEdit(false);
-                watchpointEditMode = false;
-                watchpointEditField = 0;
-                watchpointAddMode = false;
             }
         }
         else if( watchpointEditField == 2 ) {
@@ -980,7 +994,7 @@ void Beast::watchpointsMenu(SDL_Event windowEvent) {
                 watchpointEditOnWrite = true;  // Default to write-only
                 watchpointSelection = wpCount;  // Select the slot where new one will go
                 // Start editing address field
-                gui.startEdit(0, GUI::COL1 + 74, GUI::ROW3 + (wpCount * GUI::ROW_HEIGHT), 0, 5, false, GUI::ET_HEX);
+                gui.startEdit(0, GUI::COL1 + 78, GUI::ROW3 + (wpCount * GUI::ROW_HEIGHT), 0, 5, false, GUI::ET_HEX);
             }
             break;
 
@@ -1021,8 +1035,8 @@ void Beast::watchpointsMenu(SDL_Event windowEvent) {
                     watchpointEditRange = wp->length;
                     watchpointEditOnRead = wp->onRead;
                     watchpointEditOnWrite = wp->onWrite;
-                    int digits = wp->isPhysical ? 5 : 4;
-                    gui.startEdit(wp->address, GUI::COL1 + 74, GUI::ROW3 + (watchpointSelection * GUI::ROW_HEIGHT), 0, digits, false, GUI::ET_HEX);
+                    // Always allow 5 digits so user can change logical to physical
+                    gui.startEdit(wp->address, GUI::COL1 + 78, GUI::ROW3 + (watchpointSelection * GUI::ROW_HEIGHT), 0, 5, false, GUI::ET_HEX);
                 }
             }
             break;
@@ -1053,7 +1067,7 @@ void Beast::fileMenu(SDL_Event windowEvent) {
             if( index < listing.fileCount() + binaryFiles.size() ) filePrompt(index); 
             break;
         } 
-        case SDLK_r    : mode = RUN;    break;
+        case SDLK_r    : mode = RUN; stopReason = STOP_NONE; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
         case SDLK_s    : sourceFilePrompt(); break;
         case SDLK_c    : binaryFilePrompt(PROMPT_BINARY_CPU); break;
         case SDLK_p    : binaryFilePrompt(PROMPT_BINARY_PAGE); break;
@@ -1411,7 +1425,12 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
             // - Physical watchpoints trigger only when specific memory location is accessed
             if ((pins & (Z80_RD | Z80_WR)) && debugManager->hasActiveWatchpoints()) {
                 bool isRead = (pins & Z80_RD) != 0;
-                if (debugManager->checkWatchpoint(addr, mappedAddr, isRead)) {
+                int wpIndex = debugManager->checkWatchpoint(addr, mappedAddr, isRead);
+                if (wpIndex >= 0) {
+                    stopReason = STOP_WATCHPOINT;
+                    // Use tracked instruction start PC for accurate trigger address
+                    watchpointTriggerAddress = currentInstructionPC;
+                    watchpointTriggerIndex = wpIndex;
                     mode = DEBUG;
                     run = false;
                 }
@@ -1600,10 +1619,13 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
                 }
                 else if( SDL_KEYDOWN == windowEvent.type ) {
                     if( windowEvent.key.keysym.sym == SDLK_ESCAPE ) {
+                        stopReason = STOP_ESCAPE;
+                        watchpointTriggerIndex = -1;
+                        breakpointTriggerIndex = -1;
                         mode = DEBUG;
                         run = false;
                     }
-                    else 
+                    else
                         keyDown(windowEvent.key.keysym.sym);
                 }
                 else if( SDL_KEYUP == windowEvent.type ) {
@@ -1618,11 +1640,18 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
         }
         tickCount++;
         if( z80_opdone(&cpu)) {
+            // Track the PC for the next instruction (used for accurate watchpoint trigger address)
+            currentInstructionPC = cpu.pc - 1;
+
             // Check all breakpoints (user + system) via DebugManager
-            if( debugManager->hasActiveBreakpoints() &&
-                debugManager->checkBreakpoint(cpu.pc-1, memoryPage)) {
-                mode = DEBUG;
-                run = false;
+            if( debugManager->hasActiveBreakpoints()) {
+                int bpIndex = debugManager->checkBreakpoint(cpu.pc-1, memoryPage);
+                if (bpIndex >= 0) {
+                    stopReason = STOP_BREAKPOINT;
+                    breakpointTriggerIndex = bpIndex;
+                    mode = DEBUG;
+                    run = false;
+                }
             }
         }
     }
@@ -2221,6 +2250,24 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
 
     int matchedLine = -1;
 
+    // Verify the listing's bytes match memory before using it for navigation
+    // This prevents a listing file (e.g. firmware.lst) from interfering with
+    // code at the same address from a different source
+    if( currentLoc.valid ) {
+        std::pair<Listing::Line, bool> checkLine = listing.getLine(currentLoc);
+        if( checkLine.second && checkLine.first.byteCount > 0 ) {
+            for( int j=0; j<checkLine.first.byteCount; j++ ) {
+                if( readMem(address+j) != checkLine.first.bytes[j] ) {
+                    currentLoc.valid = false;
+                    break;
+                }
+            }
+        } else if( !checkLine.second || checkLine.first.byteCount == 0 ) {
+            // Can't verify bytes (label-only line or invalid), don't trust for navigation
+            currentLoc.valid = false;
+        }
+    }
+
     if( currentLoc.valid ) {
         currentLoc.lineNum = currentLoc.lineNum < 4 ? 0 : currentLoc.lineNum - 4;
 
@@ -2229,7 +2276,8 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
             address = line.first.address;
         }
     }
-    else {
+
+    if( !currentLoc.valid ) {
         for( size_t i=0; i<decodedAddresses.size(); i++) {
             if( decodedAddresses[i] == address ) {
                 matchedLine = i;
@@ -2246,23 +2294,32 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
 
     int length;
     auto f = [this](uint16_t address) { return this->readMem(address); };
-    
+
+    // Track addresses and opcode presence for each line to draw indicators afterward
+    uint16_t lineAddresses[12];
+    bool lineHasOpcodes[12] = {false};
+    int lineCount = 0;
+
     for( size_t i=0; i<12; i++ ) {
         std::pair<Listing::Line, bool> line;
 
-        if( currentLoc.valid ) { 
+        // Store the address for this line before processing
+        lineAddresses[i] = address;
+        lineCount = i + 1;
+
+        if( currentLoc.valid ) {
             line = listing.getLine(currentLoc);
 
             while( line.second && line.first.address < address ) {
                 currentLoc.lineNum++;
                 line = listing.getLine(currentLoc);
-            } 
+            }
 
             bool valid = line.second;
 
             if( line.second && line.first.address == address ) {
-                for( int i=0; i<line.first.byteCount; i++ ) {
-                    if( readMem(address+i) != line.first.bytes[i] ) {
+                for( int j=0; j<line.first.byteCount; j++ ) {
+                    if( readMem(address+j) != line.first.bytes[j] ) {
                         valid = false;
                         break;
                     }
@@ -2274,6 +2331,7 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
                 // Ignore listing lines where they are interpreting current execution address as data
                 if( valid && line.first.address == address ) {
                     gui.print(GUI::COL1, GUI::ROW22+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.first.text.c_str()));
+                    lineHasOpcodes[i] = (line.first.byteCount > 0);
                     address += line.first.byteCount;
                     continue;
                 }
@@ -2291,6 +2349,7 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
                         }
                     }
                     gui.print(GUI::COL1, GUI::ROW22+(14*i), (address == cpu.pc-1) ? highColor: disassColor, "----   %04X %s", address, const_cast<char*>(byteString.c_str()));
+                    lineHasOpcodes[i] = (line.first.byteCount > 0);
                     address += line.first.byteCount;
                     continue;
                 }
@@ -2319,7 +2378,92 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
         }
 
         gui.print(GUI::COL1, GUI::ROW22+(14*i), (address == cpu.pc-1) ? highColor: disassColor, "----   %04X %s", address, const_cast<char*>(decoded.c_str()));
+        lineHasOpcodes[i] = true;  // Disassembled lines always have opcodes
         address += length;
+    }
+
+    // Draw breakpoint and watchpoint indicators (only in DEBUG mode)
+    if (mode == DEBUG) {
+        const int indicatorRadius = 6 * zoom;  // Radius for BP/WP circles
+        const SDL_Color indicatorTextColor = {255, 255, 255, 255};
+
+        for (int i = 0; i < lineCount; i++) {
+            // Only show indicators on lines that have actual opcodes
+            if (!lineHasOpcodes[i]) continue;
+
+            uint16_t lineAddr = lineAddresses[i];
+            int rowY = GUI::ROW22 + (14 * i);
+            int circleX = (GUI::COL1 - 9) * zoom;
+            int circleY = (rowY + 10) * zoom;
+
+            // Check for breakpoint at this address (includes both logical and physical BPs)
+            auto bpInfo = debugManager->getBreakpointAtAddress(lineAddr, memoryPage, pagingEnabled);
+            bool hasBreakpoint = bpInfo.has_value();
+
+            // Check for watchpoint trigger at this address
+            bool hasWatchpointTrigger = (stopReason == STOP_WATCHPOINT &&
+                                         watchpointTriggerIndex >= 0 &&
+                                         lineAddr == watchpointTriggerAddress);
+
+            // If both BP and WP trigger on same line, offset them horizontally
+            int bpCircleX = circleX;
+            int wpCircleX = circleX;
+            if (hasBreakpoint && hasWatchpointTrigger) {
+                bpCircleX = circleX - indicatorRadius;  // BP on left
+                wpCircleX = circleX + indicatorRadius;  // WP on right
+            }
+
+            // Draw breakpoint indicator
+            if (hasBreakpoint) {
+                uint8_t alpha = bpInfo->enabled ? BP_ALPHA_ENABLED : BP_ALPHA_DISABLED;
+                filledCircleRGBA(sdlRenderer, bpCircleX, circleY, indicatorRadius,
+                                 BP_COLOR_R, BP_COLOR_G, BP_COLOR_B, alpha);
+
+                // Draw the breakpoint number (1-8) centered in the circle
+                char numStr[4];
+                snprintf(numStr, sizeof(numStr), "%d", bpInfo->index + 1);
+                SDL_Surface *textSurface = TTF_RenderText_Blended(indicatorFont, numStr, indicatorTextColor);
+                if (textSurface) {
+                    SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
+                    if (textTexture) {
+                        SDL_Rect destRect = {
+                            bpCircleX - textSurface->w / 2,
+                            circleY - textSurface->h / 2,
+                            textSurface->w,
+                            textSurface->h
+                        };
+                        SDL_RenderCopy(sdlRenderer, textTexture, nullptr, &destRect);
+                        SDL_DestroyTexture(textTexture);
+                    }
+                    SDL_FreeSurface(textSurface);
+                }
+            }
+
+            // Draw watchpoint trigger indicator
+            if (hasWatchpointTrigger) {
+                filledCircleRGBA(sdlRenderer, wpCircleX, circleY, indicatorRadius,
+                                 WP_COLOR_R, WP_COLOR_G, WP_COLOR_B, 255);
+
+                // Draw the watchpoint number (1-8) centered in the circle
+                char numStr[4];
+                snprintf(numStr, sizeof(numStr), "%d", watchpointTriggerIndex + 1);
+                SDL_Surface *textSurface = TTF_RenderText_Blended(indicatorFont, numStr, indicatorTextColor);
+                if (textSurface) {
+                    SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
+                    if (textTexture) {
+                        SDL_Rect destRect = {
+                            wpCircleX - textSurface->w / 2,
+                            circleY - textSurface->h / 2,
+                            textSurface->w,
+                            textSurface->h
+                        };
+                        SDL_RenderCopy(sdlRenderer, textTexture, nullptr, &destRect);
+                        SDL_DestroyTexture(textTexture);
+                    }
+                    SDL_FreeSurface(textSurface);
+                }
+            }
+        }
     }
 }
 uint8_t Beast::readVideoMemory(VideoView view, uint32_t address) {

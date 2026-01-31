@@ -32,6 +32,8 @@ class Beast {
 
     enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, BREAKPOINTS, WATCHPOINTS, QUIT};
 
+    enum StopReason {STOP_NONE, STOP_STEP, STOP_BREAKPOINT, STOP_WATCHPOINT, STOP_ESCAPE};
+
     enum Selection {SEL_PC, SEL_A, SEL_HL, SEL_BC, SEL_DE, SEL_FLAGS, SEL_SP, SEL_IX, SEL_IY,
         SEL_PAGING, SEL_PAGE0, SEL_PAGE1, SEL_PAGE2, SEL_PAGE3,
         SEL_A2, SEL_HL2, SEL_BC2, SEL_DE2,
@@ -119,7 +121,7 @@ class Beast {
         const char* PCB_IMAGE="layout_2d.png";
         const char* DEFAULT_VIDEO_FILE="videobeast.dat";
 
-        TTF_Font *font, *smallFont, *midFont;
+        TTF_Font *font, *smallFont, *midFont, *indicatorFont;
         int screenWidth, screenHeight;
         float zoom = 1.0f;
 
@@ -151,6 +153,13 @@ class Beast {
         uint64_t   nextVideoBeastTickPs;
 
         DebugManager *debugManager;
+
+        // Stop reason tracking for debug display
+        StopReason stopReason = STOP_NONE;
+        uint16_t   watchpointTriggerAddress = 0;  // Address of instruction that caused WP trigger
+        int        watchpointTriggerIndex = -1;   // Which WP (0-7) was triggered
+        int        breakpointTriggerIndex = -1;   // Which BP (0-7) was triggered
+        uint16_t   currentInstructionPC = 0;      // PC at start of current instruction (for accurate WP trigger address)
 
         uint64_t pins;
         uint8_t portB;
@@ -278,6 +287,16 @@ class Beast {
         const int FONT_SIZE = 28;
         const int SMALL_FONT_SIZE = 14;
         const int MID_FONT_SIZE = 14;
+
+        // Indicator colors for breakpoints and watchpoints (RGB + Alpha)
+        static constexpr uint8_t BP_COLOR_R = 220;
+        static constexpr uint8_t BP_COLOR_G = 50;
+        static constexpr uint8_t BP_COLOR_B = 50;
+        static constexpr uint8_t BP_ALPHA_ENABLED = 255;
+        static constexpr uint8_t BP_ALPHA_DISABLED = 100;
+        static constexpr uint8_t WP_COLOR_R = 255;
+        static constexpr uint8_t WP_COLOR_G = 160;
+        static constexpr uint8_t WP_COLOR_B = 0;
 
         const int MAX_KEYS = 48;
         const char* KEY_CAPS[48] = {"Up", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Del",

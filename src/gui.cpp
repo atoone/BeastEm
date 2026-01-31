@@ -46,6 +46,10 @@ bool GUI::isEditOK() {
 }
 
 void GUI::endEdit(bool isOK) {
+    // Right-justify value if not all digits were entered (early RETURN)
+    if (isOK && editIndex >= 0) {
+        editValue >>= (editIndex + 1) * 4;
+    }
     editOK = isOK;
     editContinue = false;
     editIndex = -1;

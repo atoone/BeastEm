@@ -119,20 +119,57 @@ static bool checkSingleBreakpoint(const Breakpoint& bp, uint16_t pc, uint8_t* me
     }
 }
 
-bool DebugManager::checkBreakpoint(uint16_t pc, uint8_t* memoryPage) const {
+int DebugManager::checkBreakpoint(uint16_t pc, uint8_t* memoryPage) const {
     // Check user breakpoints
     for (int i = 0; i < breakpointCount; i++) {
         if (checkSingleBreakpoint(breakpoints[i], pc, memoryPage)) {
-            return true;
+            return i;
         }
     }
     // Check system breakpoints
     for (int i = 0; i < MAX_SYSTEM_BREAKPOINTS; i++) {
         if (checkSingleBreakpoint(systemBreakpoints[i], pc, memoryPage)) {
-            return true;
+            return MAX_BREAKPOINTS + i;  // Return 8-9 for system breakpoints
         }
     }
-    return false;
+    return -1;
+}
+
+std::optional<BreakpointInfo> DebugManager::getBreakpointAtAddress(uint16_t addr) const {
+    for (int i = 0; i < breakpointCount; i++) {
+        // Only check logical breakpoints for display purposes
+        if (!breakpoints[i].isPhysical && (uint16_t)breakpoints[i].address == addr) {
+            return BreakpointInfo{i, breakpoints[i].enabled};
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<BreakpointInfo> DebugManager::getBreakpointAtAddress(uint16_t addr, uint8_t* memoryPage, bool pagingEnabled) const {
+    // Calculate physical address for the given logical address
+    uint32_t physicalAddr;
+    if (pagingEnabled) {
+        int pageIndex = (addr >> 14) & 0x03;
+        uint8_t page = memoryPage[pageIndex];
+        physicalAddr = (addr & 0x3FFF) | ((uint32_t)(page & 0x1F) << 14);
+    } else {
+        physicalAddr = addr;
+    }
+
+    for (int i = 0; i < breakpointCount; i++) {
+        if (breakpoints[i].isPhysical) {
+            // Physical breakpoint: compare against calculated physical address
+            if (breakpoints[i].address == physicalAddr) {
+                return BreakpointInfo{i, breakpoints[i].enabled};
+            }
+        } else {
+            // Logical breakpoint: compare against logical address
+            if ((uint16_t)breakpoints[i].address == addr) {
+                return BreakpointInfo{i, breakpoints[i].enabled};
+            }
+        }
+    }
+    return std::nullopt;
 }
 
 // Watchpoint CRUD methods
@@ -208,7 +245,7 @@ bool DebugManager::hasActiveWatchpoints() const {
     return false;
 }
 
-bool DebugManager::checkWatchpoint(uint16_t logicalAddress, uint32_t physicalAddress, bool isRead) const {
+int DebugManager::checkWatchpoint(uint16_t logicalAddress, uint32_t physicalAddress, bool isRead) const {
     for (int i = 0; i < watchpointCount; i++) {
         const Watchpoint& wp = watchpoints[i];
 
@@ -232,8 +269,8 @@ bool DebugManager::checkWatchpoint(uint16_t logicalAddress, uint32_t physicalAdd
         // Range check: [address, address + length)
         // Use subtraction to avoid overflow: addressToCheck - wp.address < length
         if (addressToCheck >= wp.address && (addressToCheck - wp.address) < wp.length) {
-            return true;
+            return i;
         }
     }
-    return false;
+    return -1;
 }
