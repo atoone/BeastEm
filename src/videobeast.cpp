@@ -619,7 +619,7 @@ void VideoBeast::write(uint16_t addr, uint8_t data, uint64_t clock_time_ps) {
                     default:
                         std::cout << "VideoBeast 4K low page write error";
                 }
-                
+                break;
             case 3 :
                 switch ((addr >> 12) & 0x03 ) {
                     case 0 : mem[ 0x80000 | ((registers[REG_PAGE_0] << 11 ) + (addr & 0x0FFF))] = data; break;
@@ -629,6 +629,7 @@ void VideoBeast::write(uint16_t addr, uint8_t data, uint64_t clock_time_ps) {
                     default:
                         std::cout << "VideoBeast 4K high page write error";
                 }
+                break;
             case 4:
                 mem[getSinclairAddress(addr)] = data;
                 break;

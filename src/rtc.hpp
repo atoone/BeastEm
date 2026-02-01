@@ -19,14 +19,14 @@ class I2cRTC: public I2cDevice {
         virtual void    stop();
     private:
         uint8_t address;
-        uint16_t byteCount;
-        uint8_t currentAddress;
+        uint16_t byteCount = 0;
+        uint8_t currentAddress = 0;
         uint64_t intMask;
 
         tm clock = {0};
         uint64_t startTime = 0;
         int weekOffset = 0;
-        bool setTime;
+        bool setTime = false;
 
         bool squareWave = true;
         uint64_t squareWaveTime = 0;

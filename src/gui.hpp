@@ -81,18 +81,26 @@ class GUI {
         bool      promptChanged();
 
         template<typename... Args> void print(int x, int y, SDL_Color color, const char *fmt, Args... args) {
-            char buffer[200]; 
-
-            int c = snprintf(buffer, sizeof(buffer), fmt, args...);
+            char buffer[200];
+            int c;
+            if constexpr (sizeof...(Args) == 0) {
+                c = snprintf(buffer, sizeof(buffer), "%s", fmt);
+            } else {
+                c = snprintf(buffer, sizeof(buffer), fmt, args...);
+            }
             if( c > 0 && c<(int)sizeof(buffer)) {
                 printb(x,y, color, 0, {0}, buffer);
             }
         }
 
         template<typename... Args> void print(int x, int y, SDL_Color color, int highlight, SDL_Color background, const char *fmt, Args... args) {
-            char buffer[200]; 
-
-            int c = snprintf(buffer, sizeof(buffer), fmt, args...);
+            char buffer[200];
+            int c;
+            if constexpr (sizeof...(Args) == 0) {
+                c = snprintf(buffer, sizeof(buffer), "%s", fmt);
+            } else {
+                c = snprintf(buffer, sizeof(buffer), fmt, args...);
+            }
             if( c > 0 && c<(int)sizeof(buffer)) {
                 printb(x,y, color, highlight, background, buffer);
             }
@@ -100,7 +108,12 @@ class GUI {
 
         template<typename... Args> void startPrompt(int id, const char *fmt, Args... args) {
             promptId = id;
-            int c = snprintf(promptBuffer, sizeof(promptBuffer), fmt, args...);
+            int c;
+            if constexpr (sizeof...(Args) == 0) {
+                c = snprintf(promptBuffer, sizeof(promptBuffer), "%s", fmt);
+            } else {
+                c = snprintf(promptBuffer, sizeof(promptBuffer), fmt, args...);
+            }
             if( c > 0 && c<(int)sizeof(promptBuffer)) {
                 prompt();
             }
@@ -140,7 +153,7 @@ class GUI {
         char       promptBuffer[200] = {};
         bool       promptStarted = false;
         bool       promptCompleted = false;
-        bool       promptOK;
+        bool       promptOK = false;
         
         std::vector<std::string> promptChoices;
 
