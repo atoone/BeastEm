@@ -8,6 +8,7 @@
 #include "z80.h"
 #include "z80pio.h"
 #include "listing.hpp"
+#include "assets.hpp"
 #include "SDL_image.h"
 #include "nfd.h"
 
@@ -35,20 +36,21 @@ Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, 
     i2c->addDevice(display2);
     i2c->addDevice(rtc);
     
-    font = TTF_OpenFont(BEAST_FONT, FONT_SIZE*zoom);
+    std::string fontPath = assetPath(BEAST_FONT);
+    font = TTF_OpenFont(fontPath.c_str(), FONT_SIZE*zoom);
 
     if( !font) {
-        std::cout << "Couldn't load font "<< BEAST_FONT << std::endl;
+        std::cout << "Couldn't load font "<< fontPath << std::endl;
         exit(1);
     }
-    smallFont = TTF_OpenFont(BEAST_FONT, SMALL_FONT_SIZE*zoom);
+    smallFont = TTF_OpenFont(fontPath.c_str(), SMALL_FONT_SIZE*zoom);
     if( !smallFont) {
-        std::cout << "Couldn't load font "<< BEAST_FONT << std::endl;
+        std::cout << "Couldn't load font "<< fontPath << std::endl;
         exit(1);
     }
-    midFont = TTF_OpenFont(BEAST_FONT, MID_FONT_SIZE*zoom);
+    midFont = TTF_OpenFont(fontPath.c_str(), MID_FONT_SIZE*zoom);
     if( !midFont) {
-        std::cout << "Couldn't load font "<< BEAST_FONT << std::endl;
+        std::cout << "Couldn't load font "<< fontPath << std::endl;
         exit(1);
     }
 
@@ -57,7 +59,7 @@ Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, 
     gui.endPrompt(true);
 
     keyboardTexture = SDL_CreateTexture(sdlRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, KEYBOARD_WIDTH*zoom, KEYBOARD_HEIGHT*zoom);
-    pcbTexture = loadTexture(sdlRenderer, PCB_IMAGE);
+    pcbTexture = loadTexture(sdlRenderer, assetPath(PCB_IMAGE).c_str());
 
     drawKeys();
     for( int i=0; i<DISPLAY_CHARS; i++) {
@@ -576,11 +578,12 @@ void Beast::fileMenu(SDL_Event windowEvent) {
             else {
                 videoBeast = new VideoBeast(1.0f);
                 initVideoBeast();
-                std::ifstream myfile(DEFAULT_VIDEO_FILE);
+                std::string videoFile = assetPath(DEFAULT_VIDEO_FILE);
+                std::ifstream myfile(videoFile);
 
                 if(myfile) {
                     myfile.close();
-                    BinaryFile file = BinaryFile(DEFAULT_VIDEO_FILE, 0, false, BinaryFile::VIDEO_RAM);
+                    BinaryFile file = BinaryFile(videoFile.c_str(), 0, false, BinaryFile::VIDEO_RAM);
                     binaryFiles.push_back(file);
                     file.load(rom, ram, pagingEnabled, memoryPage, videoRam);
                 }

@@ -1,14 +1,16 @@
 #include "gui.hpp"
+#include "assets.hpp"
 #include <iostream>
 #include <cstring>
 #include <stdio.h>
 
 void GUI::init(float zoom) {
     this->zoom = zoom;
-    monoFont = TTF_OpenFont(MONO_FONT, MONO_SIZE*zoom);
+    std::string fontPath = assetPath(MONO_FONT);
+    monoFont = TTF_OpenFont(fontPath.c_str(), MONO_SIZE*zoom);
 
     if( !monoFont) {
-        std::cout << "Couldn't load font "<< MONO_FONT << std::endl;
+        std::cout << "Couldn't load font "<< fontPath << std::endl;
         exit(1);
     }
 

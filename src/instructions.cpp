@@ -1,4 +1,5 @@
 #include "instructions.hpp"
+#include "assets.hpp"
 #include <iostream>
 #include <iostream>
 #include <sstream>
@@ -9,7 +10,7 @@
 // Opcode file from https://spectrumforeveryone.com/technical/z80-processor-instructions/
 //
 Instructions::Instructions() {
-    std::ifstream myfile("z80_instr.txt");
+    std::ifstream myfile(assetPath("z80_instr.txt"));
     std::string line;
     int lineNum = 0;
 
