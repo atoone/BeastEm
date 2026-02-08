@@ -1406,15 +1406,18 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
 
         if (pins & Z80_MREQ) {
             const uint16_t addr = Z80_GET_ADDR(pins);
-            uint32_t mappedAddr = addr & 0x3FFF;
+            int page = memoryPage[(addr >> 14) & 0x03];
+            // Physical address for watchpoint comparison (full page << 14)
+            uint32_t physicalAddr = (addr & 0x3FFF) | (page << 14);
             bool isRam = false;
             bool isVb  = false;
+            uint32_t mappedAddr;
 
             if( pagingEnabled ) {
-                int page = memoryPage[(addr >> 14) & 0x03];
                 isRam = (page & 0xE0) == 0x20;
                 isVb  = (page & 0xE0) == 0x40;
-                mappedAddr |= (page & 0x1F) << 14;
+                // Array index uses bank-relative address (page & 0x1F)
+                mappedAddr = (addr & 0x3FFF) | ((page & 0x1F) << 14);
             }
             else {
                 // When paging disabled, physical address equals logical address
@@ -1423,12 +1426,10 @@ uint64_t Beast::run(bool run, uint64_t tickCount) {
             }
 
             // Check watchpoints for memory read/write operations
-            // Pass both logical (addr) and physical (mappedAddr) addresses:
-            // - Logical watchpoints trigger on Z80 address regardless of banking
-            // - Physical watchpoints trigger only when specific memory location is accessed
+            // Always use physical address based on current page mappings
             if ((pins & (Z80_RD | Z80_WR)) && debugManager->hasActiveWatchpoints()) {
                 bool isRead = (pins & Z80_RD) != 0;
-                int wpIndex = debugManager->checkWatchpoint(addr, mappedAddr, isRead);
+                int wpIndex = debugManager->checkWatchpoint(addr, physicalAddr, isRead);
                 if (wpIndex >= 0) {
                     stopReason = STOP_WATCHPOINT;
                     // Use tracked instruction start PC for accurate trigger address

@@ -295,9 +295,9 @@ class Beast {
         static constexpr uint8_t BP_COLOR_B = 50;
         static constexpr uint8_t BP_ALPHA_ENABLED = 255;
         static constexpr uint8_t BP_ALPHA_DISABLED = 100;
-        static constexpr uint8_t WP_COLOR_R = 255;
+        static constexpr uint8_t WP_COLOR_R = 0;
         static constexpr uint8_t WP_COLOR_G = 160;
-        static constexpr uint8_t WP_COLOR_B = 0;
+        static constexpr uint8_t WP_COLOR_B = 160;
 
         const int MAX_KEYS = 48;
         const char* KEY_CAPS[48] = {"Up", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Del",

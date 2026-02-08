@@ -108,10 +108,10 @@ static bool checkSingleBreakpoint(const Breakpoint& bp, uint16_t pc, uint8_t* me
     }
 
     if (bp.isPhysical) {
-        // Physical address matching (20-bit with page resolution)
+        // Physical address matching (20-bit: page << 14 | offset)
         int pageIndex = (pc >> 14) & 0x03;
         uint8_t page = memoryPage[pageIndex];
-        uint32_t physicalAddr = (pc & 0x3FFF) | ((uint32_t)(page & 0x1F) << 14);
+        uint32_t physicalAddr = (pc & 0x3FFF) | ((uint32_t)page << 14);
         return physicalAddr == bp.address;
     } else {
         // Logical address matching (16-bit comparison)
@@ -151,7 +151,7 @@ std::optional<BreakpointInfo> DebugManager::getBreakpointAtAddress(uint16_t addr
     if (pagingEnabled) {
         int pageIndex = (addr >> 14) & 0x03;
         uint8_t page = memoryPage[pageIndex];
-        physicalAddr = (addr & 0x3FFF) | ((uint32_t)(page & 0x1F) << 14);
+        physicalAddr = (addr & 0x3FFF) | ((uint32_t)page << 14);
     } else {
         physicalAddr = addr;
     }

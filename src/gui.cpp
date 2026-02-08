@@ -36,8 +36,8 @@ void GUI::startEdit(uint32_t value, int x, int y, int offset, int digits, bool i
 
 void GUI::startAddressEdit(uint32_t value, bool isPhysical, int x, int y, int offset) {
     if (isPhysical) {
-        // Physical: store full 20-bit value (bank nibble in bits 16-19, address in bits 0-15)
-        editValue = value & 0xFFFFF;  // 20 bits max (5 hex digits)
+        // Physical: 20-bit address (5 hex digits)
+        editValue = value & 0xFFFFF;
     } else {
         // Logical: only 16-bit address matters
         editValue = value & 0xFFFF;
