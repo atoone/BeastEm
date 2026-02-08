@@ -1102,6 +1102,8 @@ void Beast::togglePageMap() {
         std::string fontPath = assetPath(BEAST_FONT);
         pageMapFont = TTF_OpenFont(fontPath.c_str(), 13);
         pageMapSmallFont = TTF_OpenFont(fontPath.c_str(), 11);
+        std::string monoPath = assetPath("RobotoMono-VariableFont_wght.ttf");
+        pageMapMonoFont = TTF_OpenFont(monoPath.c_str(), 14);
         pageMapFontH = pageMapTextHeight(pageMapFont);
         pageMapSmallFontH = pageMapTextHeight(pageMapSmallFont);
     }
@@ -1111,6 +1113,7 @@ void Beast::closePageMap() {
     if( pageMapWindow ) {
         SDL_GetWindowPosition(pageMapWindow, &pageMapSavedX, &pageMapSavedY);
     }
+    if( pageMapMonoFont ) { TTF_CloseFont(pageMapMonoFont); pageMapMonoFont = nullptr; }
     if( pageMapSmallFont ) { TTF_CloseFont(pageMapSmallFont); pageMapSmallFont = nullptr; }
     if( pageMapFont ) { TTF_CloseFont(pageMapFont); pageMapFont = nullptr; }
     if( pageMapRenderer ) { SDL_DestroyRenderer(pageMapRenderer); pageMapRenderer = nullptr; }
@@ -1536,6 +1539,14 @@ void Beast::drawPageMap() {
             filledTrigonRGBA(pageMapRenderer, endX, targetY, endX - sz, targetY - sz, endX - sz, targetY + sz,
                              ar, ag, ab, 255);
         }
+    }
+
+    // Legend centred at the bottom - same font/size/colour as main debug screen hints
+    {
+        const char* legend = "[ESC]: Close";
+        int tw, th;
+        TTF_SizeUTF8(pageMapMonoFont, legend, &tw, &th);
+        pageMapPrint(pageMapMonoFont, (PAGEMAP_WIDTH - tw) / 2, PAGEMAP_HEIGHT - 24, menuColor, "%s", legend);
     }
 }
 
@@ -2581,8 +2592,8 @@ void Beast::onDebug() {
     gui.print( GUI::COL3, GUI::END_ROW, menuColor, "[F]iles");
 
     gui.print(440, GUI::END_ROW, menuColor, "[B]reakpoints");
-    
-    gui.print(GUI::COL5, GUI::END_ROW, menuColor, "[Q]uit");
+    gui.print(560, GUI::END_ROW, menuColor, "[P]ages");
+    gui.print(GUI::COL5 + 30, GUI::END_ROW, menuColor, "[Q]uit");
 }
 
 int Beast::drawMemoryLayout(int view, int topRow, int id, SDL_Color textColor, SDL_Color bright) {

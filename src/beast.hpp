@@ -265,6 +265,7 @@ class Beast {
         uint32_t      pageMapWindowId = 0;
         TTF_Font     *pageMapFont = nullptr;
         TTF_Font     *pageMapSmallFont = nullptr;
+        TTF_Font     *pageMapMonoFont = nullptr;
         int           pageMapFontH = 0;
         int           pageMapSmallFontH = 0;
         int           pageMapSavedX = SDL_WINDOWPOS_UNDEFINED;
