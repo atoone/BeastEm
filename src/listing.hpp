@@ -40,7 +40,7 @@ class Listing {
          */
         struct Location {
             unsigned int fileNum;   // Index into sources vector
-            unsigned int lineNum;   // 1-based line number in the file
+            unsigned int lineNum;   // 0-based index into Source.lines[]
             bool valid;             // false if address not found in any listing
         };
 

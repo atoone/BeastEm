@@ -2273,16 +2273,35 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
         }
     }
 
-    if( currentLoc.valid ) {
-        currentLoc.lineNum = currentLoc.lineNum < 4 ? 0 : currentLoc.lineNum - 4;
+    // Scan backward through listing for 4 distinct earlier instruction addresses
+    // Use the original lookup (before byte verification may have invalidated it)
+    bool hasListingContext = false;
+    Listing::Location lookupLoc = listing.getLocation((page << 14) | (address & 0x3FFF));
+    if( lookupLoc.valid ) {
+        unsigned int contextTarget = 4;
+        unsigned int contextFound = 0;
+        unsigned int scanLineNum = lookupLoc.lineNum;
+        uint16_t contextStartAddr = address;
 
-        std::pair<Listing::Line, bool> line = listing.getLine(currentLoc);
-        if( line.second ) {
-            address = line.first.address;
+        while( scanLineNum > 0 && contextFound < contextTarget ) {
+            scanLineNum--;
+            auto scanLine = listing.getLine({lookupLoc.fileNum, scanLineNum, true});
+            if( scanLine.second && scanLine.first.byteCount > 0 && scanLine.first.address < contextStartAddr ) {
+                contextStartAddr = scanLine.first.address;
+                contextFound++;
+            }
+        }
+
+        if( contextFound > 0 ) {
+            hasListingContext = true;
+            address = contextStartAddr;
+            if( currentLoc.valid ) {
+                currentLoc.lineNum = scanLineNum;
+            }
         }
     }
 
-    if( !currentLoc.valid ) {
+    if( !currentLoc.valid && !hasListingContext ) {
         for( size_t i=0; i<decodedAddresses.size(); i++) {
             if( decodedAddresses[i] == address ) {
                 matchedLine = i;
@@ -2320,6 +2339,13 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
                 line = listing.getLine(currentLoc);
             }
 
+            // Skip label/comment lines (matching address but no bytes)
+            // to find the actual instruction line at this address
+            while( line.second && line.first.address == address && line.first.byteCount == 0 ) {
+                currentLoc.lineNum++;
+                line = listing.getLine(currentLoc);
+            }
+
             bool valid = line.second;
 
             if( line.second && line.first.address == address ) {
@@ -2334,9 +2360,9 @@ void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Col
 
             if( !(line.first.isData && (address == cpu.pc-1) )) {
                 // Ignore listing lines where they are interpreting current execution address as data
-                if( valid && line.first.address == address ) {
-                    gui.print(GUI::COL1, GUI::ROW22+(14*i), i==3 ? highColor: textColor, "%.86s", const_cast<char*>(line.first.text.c_str()));
-                    lineHasOpcodes[i] = (line.first.byteCount > 0);
+                if( valid && line.first.address == address && line.first.byteCount > 0 ) {
+                    gui.print(GUI::COL1, GUI::ROW22+(14*i), (address == cpu.pc-1) ? highColor: textColor, "%.86s", const_cast<char*>(line.first.text.c_str()));
+                    lineHasOpcodes[i] = true;
                     address += line.first.byteCount;
                     continue;
                 }

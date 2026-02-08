@@ -227,8 +227,6 @@ void Listing::loadFile(Source &source) {
   }
 
   while (std::getline(myfile, text)) {
-    lineNum++;
-
     Line line = {};
     line.text = text; // Store original text for display
 
@@ -250,12 +248,14 @@ void Listing::loadFile(Source &source) {
       if (foundAddress && (nextAddress != address)) {
         Location loc = {source.fileNum, addressLine, true};
         // Create physical address: (page << 14) | 14-bit offset
-        lineMap.emplace((source.page << 14) | (address & 0x3FFF), loc);
+        // Use assignment so the most recently loaded listing takes precedence
+        // when multiple listings map to the same address
+        lineMap[(source.page << 14) | (address & 0x3FFF)] = loc;
       }
 
       foundAddress = true;
       address = nextAddress;
-      addressLine = lineNum;
+      addressLine = lineNum;  // 0-based index (lineNum before push_back)
 
       line.address = address;
       line.head = text.substr(
@@ -292,13 +292,14 @@ void Listing::loadFile(Source &source) {
     }
 
     source.lines.push_back(line);
+    lineNum++;  // Increment after push_back so addressLine is 0-based index
   }
   myfile.close();
 
   // Don't forget to record the final address
   if (foundAddress) {
     Location loc = {source.fileNum, addressLine, true};
-    lineMap.emplace((source.page << 14) | (address & 0x3FFF), loc);
+    lineMap[(source.page << 14) | (address & 0x3FFF)] = loc;
   }
   std::cout << "Parsed listing, file " << source.filename << " for page "
             << source.page << " has " << lineNum << " lines." << std::endl;
