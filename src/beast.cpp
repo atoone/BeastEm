@@ -573,7 +573,7 @@ void Beast::debugMenu(SDL_Event windowEvent) {
         case SDLK_w    : mode = WATCHPOINTS; watchpointSelection = 0; watchpointEditMode = false; watchpointEditField = 0; break;
         case SDLK_p    : togglePageMap(); break;
         case SDLK_q    : mode = QUIT;   break;
-        case SDLK_r    : mode = RUN; stopReason = STOP_NONE; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
+        case SDLK_r    : closePageMap(); mode = RUN; stopReason = STOP_NONE; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
         case SDLK_e    : reset();                // Fall through into step
         case SDLK_s    : mode = STEP; stopReason = STOP_STEP; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
         case SDLK_u    : mode = OUT; stopReason = STOP_STEP; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
@@ -1083,7 +1083,7 @@ void Beast::togglePageMap() {
     }
     else {
         pageMapWindow = SDL_CreateWindow("Page Map",
-            SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+            pageMapSavedX, pageMapSavedY,
             PAGEMAP_WIDTH, PAGEMAP_HEIGHT, SDL_WINDOW_ALLOW_HIGHDPI);
         if( !pageMapWindow ) {
             std::cerr << "Could not create page map window: " << SDL_GetError() << std::endl;
@@ -1108,6 +1108,9 @@ void Beast::togglePageMap() {
 }
 
 void Beast::closePageMap() {
+    if( pageMapWindow ) {
+        SDL_GetWindowPosition(pageMapWindow, &pageMapSavedX, &pageMapSavedY);
+    }
     if( pageMapSmallFont ) { TTF_CloseFont(pageMapSmallFont); pageMapSmallFont = nullptr; }
     if( pageMapFont ) { TTF_CloseFont(pageMapFont); pageMapFont = nullptr; }
     if( pageMapRenderer ) { SDL_DestroyRenderer(pageMapRenderer); pageMapRenderer = nullptr; }
@@ -1549,7 +1552,7 @@ void Beast::fileMenu(SDL_Event windowEvent) {
             if( index < listing.fileCount() + binaryFiles.size() ) filePrompt(index); 
             break;
         } 
-        case SDLK_r    : mode = RUN; stopReason = STOP_NONE; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
+        case SDLK_r    : closePageMap(); mode = RUN; stopReason = STOP_NONE; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
         case SDLK_s    : sourceFilePrompt(); break;
         case SDLK_c    : binaryFilePrompt(PROMPT_BINARY_CPU); break;
         case SDLK_p    : binaryFilePrompt(PROMPT_BINARY_PAGE); break;

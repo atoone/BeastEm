@@ -267,6 +267,8 @@ class Beast {
         TTF_Font     *pageMapSmallFont = nullptr;
         int           pageMapFontH = 0;
         int           pageMapSmallFontH = 0;
+        int           pageMapSavedX = SDL_WINDOWPOS_UNDEFINED;
+        int           pageMapSavedY = SDL_WINDOWPOS_UNDEFINED;
         static const int PAGEMAP_WIDTH = 728;
         static const int PAGEMAP_HEIGHT = 740;
         void filePrompt(unsigned int index);
