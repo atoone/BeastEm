@@ -1,0 +1,91 @@
+# file opened: watchpoint_test.asm
+ 1    0000              ; completely unrelated to nVaders
+ 2    0000              ; just a quick routine to help test new watchpoints in beastem
+ 3    0000              ; *NB* cant actually use these if we've mapped the BIOS out!!
+ 4    0000              get_page_mapping EQU	0x0FDDC 	; Return the logical (cpu) page C (0-2) in A
+ 5    0000              set_page_mapping EQU	0x0FDDF 	; Set the logical (cpu) page in A (0-2) to the physical (RAM/ROM) page in E
+ 6    0000
+ 7    0000              ; we'll have to talk directly to the port instead
+ 8    0000              IO_MEM_0            EQU    070h      ; Page 0: 0000h - 3fffh
+ 9    0000              IO_MEM_1            EQU    071h      ; Page 1: 4000h - 7fffh
+10    0000              IO_MEM_2            EQU    072h      ; Page 2: 8000h - bfffh
+11    0000              IO_MEM_3            EQU    073h      ; Page 3: c000h - ffffh
+12    0000              IO_MEM_CTRL         EQU    074h      ; Paging enable register
+13    0000              IO_MEM_ENABLE       EQU    1
+14    0000              IO_MEM_DISABLE      EQU    0
+15    0000
+16    0000              		OUTPUT	wptest.com
+17    0000              		ORG	0x0100
+18    0100              copy1
+19    0100 21 00 10     		LD	HL, 0x1000
+20    0103 11 00 20     		LD	DE, 0x2000
+21    0106 06 FF        		LD	B, 0xFF
+22    0108
+23    0108 7E           loop		LD	A, (HL)
+24    0109 12           		LD	(DE), A
+25    010A
+26    010A 1A           		LD	A, (DE)
+27    010B 77           		LD	(HL), A
+28    010C
+29    010C 23           		INC	HL
+30    010D 13           		INC	DE
+31    010E 10 F8        		DJNZ	loop
+32    0110
+33    0110              mappo_worko
+34    0110              ; now do some freaky mapping so that we can test
+35    0110              ; *physical* watchpoints are working separately from
+36    0110              ; logical ones.
+37    0110              ;
+38    0110              ; FIRST make sure that mapping is enabled!
+39    0110 3E 01        		LD	A, IO_MEM_ENABLE
+40    0112 D3 74        		OUT	(IO_MEM_CTRL), A
+41    0114
+42    0114              ; we map 8000-bfff => 84000-87fff
+43    0114              ;    and c000-ffff => 80000-83fff
+44    0114 0E 72        		LD	C, IO_MEM_2	; logical page 2
+45    0116 1E 21        		LD	E, 0x21	; physical page 21
+46    0118 ED 59        		OUT	(C), E
+47    011A
+48    011A 0E 73        		LD	C, IO_MEM_3	; logical page 3
+49    011C 1E 20        		LD	E, 0x20	; physical page 20
+50    011E ED 59        		OUT	(C), E
+51    0120
+52    0120 18 14        		JR	copy2
+53    0122
+54    0122              ; BROKEN! can't call BIOS if it is mapped out!!!
+55    0122              mappo_no_worko
+56    0122              ; now do some freaky mapping so that we can test
+57    0122              ; *physical* watchpoints are working separately from
+58    0122              ; logical ones.
+59    0122              ;
+60    0122              ; we map 8000-bfff => 84000-87fff
+61    0122              ;    and c000-ffff => 80000-83fff
+62    0122 3E 02        		LD	A, 2	; logical page 2
+63    0124 1E 21        		LD	E, 0x21	; physical page 21
+64    0126 CD DF FD     		CALL	set_page_mapping
+65    0129 D2 46 01     		JP	NC, bad_mapping
+66    012C
+67    012C 3E 03        		LD	A, 3	; logical page 3
+68    012E 1E 20        		LD	E, 0x20	; physical page 20
+69    0130 CD DF FD     		CALL	set_page_mapping
+70    0133 D2 46 01     		JP	NC, bad_mapping
+71    0136
+72    0136              copy2
+73    0136 21 00 80     		LD	HL, 0x8000
+74    0139 11 00 C0     		LD	DE, 0xc000
+75    013C 06 FF        		LD	B, 0xFF
+76    013E
+77    013E 7E           loop2		LD	A, (HL)
+78    013F 12           		LD	(DE), A
+79    0140
+80    0140 1A           		LD	A, (DE)
+81    0141 77           		LD	(HL), A
+82    0142
+83    0142 23           		INC	HL
+84    0143 13           		INC	DE
+85    0144 10 F8        		DJNZ	loop2
+86    0146
+87    0146 18 FE        bad_mapping	JR	bad_mapping
+88    0148
+89    0148
+# file closed: watchpoint_test.asm
