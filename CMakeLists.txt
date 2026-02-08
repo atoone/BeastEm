@@ -57,6 +57,7 @@ add_executable(beastem
     src/listing.cpp
     src/binaryFile.cpp
     src/gui.cpp
+    src/pagemap.cpp
     src/videobeast.cpp
     src/debug.cpp
     src/display.cpp

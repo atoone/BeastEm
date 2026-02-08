@@ -18,6 +18,7 @@
 #include "instructions.hpp"
 #include "videobeast.hpp"
 #include "debugmanager.hpp"
+#include "pagemap.hpp"
 
 #define BEAST_IO_MASK (Z80_M1|Z80_IORQ|Z80_A7|Z80_A6|Z80_A5|Z80_A4)
 
@@ -253,25 +254,8 @@ class Beast {
         void drawBreakpoints();
         void watchpointsMenu(SDL_Event windowEvent);
         void drawWatchpoints();
-        void togglePageMap();
-        void closePageMap();
-        void drawPageMap();
-        void pageMapPrint(TTF_Font *font, int x, int y, SDL_Color color, const char* fmt, ...);
-        void pageMapPrintRotated(TTF_Font *font, int cx, int cy, double angle, SDL_Color color, const char* fmt, ...);
-        int  pageMapTextHeight(TTF_Font *font);
+        PageMap pageMap;
 
-        SDL_Window   *pageMapWindow = nullptr;
-        SDL_Renderer *pageMapRenderer = nullptr;
-        uint32_t      pageMapWindowId = 0;
-        TTF_Font     *pageMapFont = nullptr;
-        TTF_Font     *pageMapSmallFont = nullptr;
-        TTF_Font     *pageMapMonoFont = nullptr;
-        int           pageMapFontH = 0;
-        int           pageMapSmallFontH = 0;
-        int           pageMapSavedX = SDL_WINDOWPOS_UNDEFINED;
-        int           pageMapSavedY = SDL_WINDOWPOS_UNDEFINED;
-        static const int PAGEMAP_WIDTH = 728;
-        static const int PAGEMAP_HEIGHT = 740;
         void filePrompt(unsigned int index);
         void sourceFilePrompt();
         void binaryFilePrompt(int promptId);
