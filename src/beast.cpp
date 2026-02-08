@@ -1196,14 +1196,15 @@ void Beast::drawPageMap() {
     int sfw = 0;  // Address font character width
     { int dummy; TTF_SizeUTF8(pageMapSmallFont, "0", &sfw, &dummy); }
 
-    // Layout: RAM brackets | RAM addresses | RAM pages ... ROM addresses | ROM pages | ROM brackets
-    int ramBracketX = 68;
-    int ramAddrX = 101 - sfw;
-    int ramColX = 128;
+    // Layout: RAM brackets | RAM addresses | RAM pages ... centre addr | centre | ... ROM addresses | ROM pages | ROM brackets
+    // All X positions scaled by 1.3 from original 560px layout to fit 728px window
+    int ramBracketX = 88;
+    int ramAddrX = 131 - sfw;
+    int ramColX = 166;
 
-    int romAddrX = 331 - sfw;
-    int romColX = 358;
-    int romBracketX = 455;
+    int romAddrX = 495 - sfw;
+    int romColX = 522;
+    int romBracketX = 619;
 
     // Helper lambda to get page colour
     auto getPageColor = [&](uint8_t pageNum) -> SDL_Color {
@@ -1228,7 +1229,8 @@ void Beast::drawPageMap() {
     };
 
     // --- Draw RAM page fills ---
-    pageMapPrint(pageMapFont, ramColX + 25, topY - 20, menuColor, "RAM");
+    pageMapPrint(pageMapFont, ramColX + 10, topY - 34, menuColor, "PHYSICAL");
+    pageMapPrint(pageMapFont, ramColX + 25, topY - 18, menuColor, "RAM");
     for( int i = 0; i < 32; i++ ) {
         uint8_t pageNum = 0x3F - i;
         int y = topY + i * boxHeight;
@@ -1265,7 +1267,8 @@ void Beast::drawPageMap() {
     pageMapPrint(pageMapSmallFont, ramAddrX, topY - sfh / 2, addrColor, "%05X", (uint32_t)0xFFFFF);
 
     // --- Draw ROM page fills ---
-    pageMapPrint(pageMapFont, romColX + 25, topY - 20, menuColor, "ROM");
+    pageMapPrint(pageMapFont, romColX + 10, topY - 34, menuColor, "PHYSICAL");
+    pageMapPrint(pageMapFont, romColX + 25, topY - 18, menuColor, "ROM");
     for( int i = 0; i < 32; i++ ) {
         uint8_t pageNum = 0x1F - i;
         int y = topY + i * boxHeight;
@@ -1346,8 +1349,191 @@ void Beast::drawPageMap() {
     drawBracketRight(0, 15, romBracketX, "RESTORE", restoreColor);
     drawBracketRight(12, 27, romBracketX + 18, "ROM DISK", romDiskColor);
 
-    // Paging status in centre area
-    pageMapPrint(pageMapSmallFont, 238, topY, addrColor, "Paging: %s", pagingEnabled ? "ON" : "OFF");
+    // --- Centre column: 4 logical CPU banks (same box height as physical pages) ---
+    // Gaps: RAM right (256) —88px— centre left (344) —88px— ROM left (522)
+    int centreBoxWidth = boxWidth;
+    int centreColX = 344;
+    int centreAddrX = centreColX - 27;  // Address labels left of centre boxes
+
+    // 4 banks at boxHeight each, vertically centred in the column
+    int centreTopY = topY + (colHeight - 4 * boxHeight) / 2;
+
+    // VideoBeast colour for pages in 0x40-0x5F range
+    SDL_Color videoBeastColor = {0x80, 0x80, 0x80, 255};
+
+    // Bank ordering: high addresses at top to match physical columns
+    const int bankOrder[4] = {3, 2, 1, 0};
+    const int bankPorts[4] = {0x73, 0x72, 0x71, 0x70};
+
+    // Column title - just above the logical pages
+    pageMapPrint(pageMapFont, centreColX + 13, centreTopY - 34, menuColor, "LOGICAL");
+    pageMapPrint(pageMapFont, centreColX + 25, centreTopY - 18, menuColor, "CPU");
+
+    // Track arrow info for drawing after the boxes
+    struct ArrowInfo {
+        uint8_t page;
+        bool isRam;
+        bool isVideoBeast;
+        int targetRowIdx;
+    } arrows[4];
+
+    for( int row = 0; row < 4; row++ ) {
+        int bank = bankOrder[row];
+        uint8_t page = pagingEnabled ? memoryPage[bank] : (uint8_t)bank;
+        int y = centreTopY + row * boxHeight;
+
+        bool isRam = (page & 0xE0) == 0x20;
+        bool isRom = (page & 0xE0) == 0x00;
+        bool isVideoBeast = (page & 0xE0) == 0x40;
+        bool isSharedRom = isRom && (page & 0x1F) >= 0x10 && (page & 0x1F) <= 0x13;
+
+        // Draw fill
+        if( isSharedRom ) {
+            int x1 = centreColX, x2 = centreColX + centreBoxWidth - 1;
+            int yb = y + boxHeight - 1;
+            filledTrigonRGBA(pageMapRenderer, x1, y, x2, y, x1, yb,
+                             restoreColor.r, restoreColor.g, restoreColor.b, 255);
+            filledTrigonRGBA(pageMapRenderer, x2, y, x1, yb, x2, yb,
+                             romDiskColor.r, romDiskColor.g, romDiskColor.b, 255);
+        } else if( isVideoBeast ) {
+            SDL_SetRenderDrawColor(pageMapRenderer, videoBeastColor.r, videoBeastColor.g, videoBeastColor.b, 255);
+            SDL_Rect r = {centreColX, y, centreBoxWidth, boxHeight};
+            SDL_RenderFillRect(pageMapRenderer, &r);
+        } else {
+            uint8_t colorPage = isRam ? page : (page & 0x1F);
+            SDL_Color fillColor = getPageColor(colorPage);
+            SDL_SetRenderDrawColor(pageMapRenderer, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
+            SDL_Rect r = {centreColX, y, centreBoxWidth, boxHeight};
+            SDL_RenderFillRect(pageMapRenderer, &r);
+        }
+
+        // Text colour
+        bool useLightText;
+        if( isSharedRom ) useLightText = true;
+        else if( isVideoBeast ) useLightText = false;
+        else useLightText = needsLightText(isRam ? page : (page & 0x1F));
+        SDL_Color txtColor = useLightText ? lightText : darkText;
+
+        // Label: "n: #PP" where n = logical bank number (0-3), PP = physical page
+        char label[16];
+        snprintf(label, sizeof(label), "%d: #%02X", bank, page);
+        int tw, th;
+        TTF_SizeUTF8(pageMapFont, label, &tw, &th);
+        pageMapPrint(pageMapFont, centreColX + (centreBoxWidth - tw) / 2, y + (boxHeight - fh) / 2, txtColor, "%s", label);
+
+        // Address label at bottom edge of this bank (same style as physical pages)
+        uint16_t baseAddr = bank * 0x4000;
+        int bottomEdge = y + boxHeight;
+        pageMapPrint(pageMapSmallFont, centreAddrX, bottomEdge - sfh / 2, addrColor, "%04X", baseAddr);
+
+        // Store arrow info
+        arrows[row].page = page;
+        arrows[row].isRam = isRam;
+        arrows[row].isVideoBeast = isVideoBeast;
+        if( isRam )
+            arrows[row].targetRowIdx = 0x3F - page;
+        else if( !isVideoBeast )
+            arrows[row].targetRowIdx = 0x1F - (page & 0x1F);
+        else
+            arrows[row].targetRowIdx = 0;
+    }
+
+    // Outer border around entire centre column
+    SDL_SetRenderDrawColor(pageMapRenderer, borderColor.r, borderColor.g, borderColor.b, 255);
+    SDL_Rect centreBorder = {centreColX, centreTopY, centreBoxWidth, 4 * boxHeight};
+    SDL_RenderDrawRect(pageMapRenderer, &centreBorder);
+    // Horizontal dividers between banks
+    for( int i = 1; i < 4; i++ ) {
+        int y = centreTopY + i * boxHeight;
+        SDL_RenderDrawLine(pageMapRenderer, centreColX, y, centreColX + centreBoxWidth - 1, y);
+    }
+
+    // Top-edge address for topmost bank (ceiling of address space)
+    pageMapPrint(pageMapSmallFont, centreAddrX, centreTopY - sfh / 2, addrColor, "%04X", 0xFFFF);
+
+    // Paging status indicator centred below the logical page boxes
+    {
+        char pagingBuf[16];
+        snprintf(pagingBuf, sizeof(pagingBuf), "Paging: %s", pagingEnabled ? "ON" : "OFF");
+        int tw, th;
+        TTF_SizeUTF8(pageMapSmallFont, pagingBuf, &tw, &th);
+        pageMapPrint(pageMapSmallFont, centreColX + (centreBoxWidth - tw) / 2, centreTopY + 4 * boxHeight + 6, addrColor, "%s", pagingBuf);
+    }
+
+    // --- Draw mapping arrows ---
+    int ramLaneCount = 0, romLaneCount = 0;
+    int ramLane[4] = {0}, romLane[4] = {0};
+
+    for( int row = 0; row < 4; row++ ) {
+        if( arrows[row].isVideoBeast ) continue;
+        if( arrows[row].isRam )
+            ramLane[row] = ramLaneCount++;
+        else
+            romLane[row] = romLaneCount++;
+    }
+
+    // Arrow routing gaps - constrained to avoid overlapping address labels
+    // RAM side: between RAM box right edge and centre address column left edge
+    int ramGapLeft = ramColX + boxWidth;
+    int ramGapRight = centreAddrX - 2;
+    // ROM side: between centre box right edge and ROM address column left edge
+    int romGapLeft = centreColX + centreBoxWidth;
+    int romGapRight = romAddrX - 2;
+
+    for( int row = 0; row < 4; row++ ) {
+        if( arrows[row].isVideoBeast ) continue;
+
+        uint8_t page = arrows[row].page;
+        bool isRam = arrows[row].isRam;
+        int targetRow = arrows[row].targetRowIdx;
+
+        // Arrow colour: use dark grey for BOOT pages (#00-#03) which are too light otherwise
+        uint8_t colorPage = isRam ? page : (page & 0x1F);
+        SDL_Color arrowColor;
+        if( !isRam && (page & 0x1F) <= 0x03 )
+            arrowColor = {0x88, 0x88, 0x88, 255};  // Grey for BOOT
+        else
+            arrowColor = getPageColor(colorPage);
+
+        // Start at horizontal edge of centre bank box, vertical centre of bank
+        int bankY = centreTopY + row * boxHeight + boxHeight / 2;
+        int startX = isRam ? centreColX : (centreColX + centreBoxWidth);
+
+        // End at horizontal edge of physical page box, vertical centre of target page
+        int targetY = topY + targetRow * boxHeight + boxHeight / 2;
+        int endX = isRam ? (ramColX + boxWidth) : romColX;
+
+        // Lane position for vertical routing
+        int laneX;
+        if( isRam ) {
+            int totalLanes = ramLaneCount > 0 ? ramLaneCount : 1;
+            int laneSpacing = (ramGapRight - ramGapLeft) / (totalLanes + 1);
+            laneX = ramGapRight - (ramLane[row] + 1) * laneSpacing;
+        } else {
+            int totalLanes = romLaneCount > 0 ? romLaneCount : 1;
+            int laneSpacing = (romGapRight - romGapLeft) / (totalLanes + 1);
+            laneX = romGapLeft + (romLane[row] + 1) * laneSpacing;
+        }
+
+        uint8_t ar = arrowColor.r, ag = arrowColor.g, ab = arrowColor.b;
+
+        // 3-segment routed arrow (drawn 3px thick via ±1 offset)
+        for( int d = -1; d <= 1; d++ ) {
+            lineRGBA(pageMapRenderer, startX, bankY + d, laneX, bankY + d, ar, ag, ab, 255);
+            lineRGBA(pageMapRenderer, laneX + d, bankY, laneX + d, targetY, ar, ag, ab, 255);
+            lineRGBA(pageMapRenderer, laneX, targetY + d, endX, targetY + d, ar, ag, ab, 255);
+        }
+
+        // Arrowhead at the physical page end
+        int sz = 5;
+        if( isRam ) {
+            filledTrigonRGBA(pageMapRenderer, endX, targetY, endX + sz, targetY - sz, endX + sz, targetY + sz,
+                             ar, ag, ab, 255);
+        } else {
+            filledTrigonRGBA(pageMapRenderer, endX, targetY, endX - sz, targetY - sz, endX - sz, targetY + sz,
+                             ar, ag, ab, 255);
+        }
+    }
 }
 
 void Beast::fileMenu(SDL_Event windowEvent) {

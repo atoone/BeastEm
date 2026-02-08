@@ -267,7 +267,7 @@ class Beast {
         TTF_Font     *pageMapSmallFont = nullptr;
         int           pageMapFontH = 0;
         int           pageMapSmallFontH = 0;
-        static const int PAGEMAP_WIDTH = 560;
+        static const int PAGEMAP_WIDTH = 728;
         static const int PAGEMAP_HEIGHT = 740;
         void filePrompt(unsigned int index);
         void sourceFilePrompt();
