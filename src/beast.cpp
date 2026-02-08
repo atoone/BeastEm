@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <cstring>
+#include <cstdarg>
 #include <stdio.h>
 #include <iomanip>
 #include <algorithm>
@@ -243,6 +244,7 @@ void Beast::loadSamples(Sint16 *stream, int length) {
 }
 
 Beast::~Beast() {
+    closePageMap();
     SDL_CloseAudio();
     if( audioFile ) {
         fclose(audioFile);
@@ -445,6 +447,12 @@ void Beast::mainLoop() {
 
             SDL_RenderPresent(sdlRenderer);
 
+            // Render page map in its separate window if open
+            if( pageMapWindow ) {
+                drawPageMap();
+                SDL_RenderPresent(pageMapRenderer);
+            }
+
             if( gui.endPrompt(false) && gui.isPromptOK() ) {
                 promptComplete();
             }
@@ -468,11 +476,22 @@ void Beast::mainLoop() {
                 mode = QUIT;
             }
 
+            // Handle page map window events
+            if( pageMapWindow && windowEvent.window.windowID == pageMapWindowId ) {
+                if( windowEvent.window.event == SDL_WINDOWEVENT_CLOSE ) {
+                    closePageMap();
+                }
+                else if( SDL_KEYDOWN == windowEvent.type && windowEvent.key.keysym.sym == SDLK_ESCAPE ) {
+                    closePageMap();
+                }
+                continue;  // Don't process page map events as main window events
+            }
+
             if( windowEvent.window.windowID != windowId && videoBeast) {
                 videoBeast->handleEvent(windowEvent);
             }
 
-            if (windowEvent.window.event == SDL_WINDOWEVENT_CLOSE) {
+            if (windowEvent.window.event == SDL_WINDOWEVENT_CLOSE && windowEvent.window.windowID == windowId) {
                 mode = QUIT;
             }
 
@@ -552,6 +571,7 @@ void Beast::debugMenu(SDL_Event windowEvent) {
             break;
         case SDLK_b    : mode = BREAKPOINTS; breakpointSelection = 0; break;
         case SDLK_w    : mode = WATCHPOINTS; watchpointSelection = 0; watchpointEditMode = false; watchpointEditField = 0; break;
+        case SDLK_p    : togglePageMap(); break;
         case SDLK_q    : mode = QUIT;   break;
         case SDLK_r    : mode = RUN; stopReason = STOP_NONE; watchpointTriggerIndex = -1; breakpointTriggerIndex = -1; break;
         case SDLK_e    : reset();                // Fall through into step
@@ -1055,6 +1075,279 @@ void Beast::watchpointsMenu(SDL_Event windowEvent) {
             selection = 0;
             break;
     }
+}
+
+void Beast::togglePageMap() {
+    if( pageMapWindow ) {
+        closePageMap();
+    }
+    else {
+        pageMapWindow = SDL_CreateWindow("Page Map",
+            SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+            PAGEMAP_WIDTH, PAGEMAP_HEIGHT, SDL_WINDOW_ALLOW_HIGHDPI);
+        if( !pageMapWindow ) {
+            std::cerr << "Could not create page map window: " << SDL_GetError() << std::endl;
+            return;
+        }
+        pageMapWindowId = SDL_GetWindowID(pageMapWindow);
+        pageMapRenderer = SDL_CreateRenderer(pageMapWindow, -1, SDL_RENDERER_ACCELERATED);
+        if( !pageMapRenderer ) {
+            pageMapRenderer = SDL_CreateRenderer(pageMapWindow, -1, SDL_RENDERER_SOFTWARE);
+        }
+        if( !pageMapRenderer ) {
+            SDL_DestroyWindow(pageMapWindow);
+            pageMapWindow = nullptr;
+            return;
+        }
+        std::string fontPath = assetPath(BEAST_FONT);
+        pageMapFont = TTF_OpenFont(fontPath.c_str(), 13);
+        pageMapSmallFont = TTF_OpenFont(fontPath.c_str(), 11);
+        pageMapFontH = pageMapTextHeight(pageMapFont);
+        pageMapSmallFontH = pageMapTextHeight(pageMapSmallFont);
+    }
+}
+
+void Beast::closePageMap() {
+    if( pageMapSmallFont ) { TTF_CloseFont(pageMapSmallFont); pageMapSmallFont = nullptr; }
+    if( pageMapFont ) { TTF_CloseFont(pageMapFont); pageMapFont = nullptr; }
+    if( pageMapRenderer ) { SDL_DestroyRenderer(pageMapRenderer); pageMapRenderer = nullptr; }
+    if( pageMapWindow ) { SDL_DestroyWindow(pageMapWindow); pageMapWindow = nullptr; }
+    pageMapWindowId = 0;
+}
+
+int Beast::pageMapTextHeight(TTF_Font *font) {
+    if( !font ) return 0;
+    int w, h;
+    TTF_SizeUTF8(font, "0", &w, &h);
+    return h;
+}
+
+void Beast::pageMapPrint(TTF_Font *font, int x, int y, SDL_Color color, const char* fmt, ...) {
+    char buffer[200];
+    va_list args;
+    va_start(args, fmt);
+    int c = vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    if( c <= 0 || c >= (int)sizeof(buffer) || !font ) return;
+
+    SDL_Surface *surface = TTF_RenderText_Blended(font, buffer, color);
+    if( !surface ) return;
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(pageMapRenderer, surface);
+    if( texture ) {
+        SDL_Rect rect = {x, y, surface->w, surface->h};
+        SDL_RenderCopy(pageMapRenderer, texture, NULL, &rect);
+        SDL_DestroyTexture(texture);
+    }
+    SDL_FreeSurface(surface);
+}
+
+void Beast::pageMapPrintRotated(TTF_Font *font, int cx, int cy, double angle, SDL_Color color, const char* fmt, ...) {
+    char buffer[200];
+    va_list args;
+    va_start(args, fmt);
+    int c = vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    if( c <= 0 || c >= (int)sizeof(buffer) || !font ) return;
+
+    SDL_Surface *surface = TTF_RenderText_Blended(font, buffer, color);
+    if( !surface ) return;
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(pageMapRenderer, surface);
+    if( texture ) {
+        // Position so the centre of the rotated text is at (cx, cy)
+        SDL_Rect dst = {cx - surface->w / 2, cy - surface->h / 2, surface->w, surface->h};
+        SDL_RenderCopyEx(pageMapRenderer, texture, NULL, &dst, angle, NULL, SDL_FLIP_NONE);
+        SDL_DestroyTexture(texture);
+    }
+    SDL_FreeSurface(surface);
+}
+
+void Beast::drawPageMap() {
+    // Clear window background
+    SDL_SetRenderDrawColor(pageMapRenderer, 0xF0, 0xF0, 0xE0, 0xFF);
+    SDL_RenderClear(pageMapRenderer);
+
+    SDL_Color menuColor = {0x30, 0x30, 0xA0, 255};
+    SDL_Color addrColor = {0x60, 0x60, 0x60, 255};  // Lighter for addresses
+    SDL_Color darkText = {0x20, 0x20, 0x20, 255};
+    SDL_Color lightText = {0xFF, 0xFF, 0xFF, 255};
+    SDL_Color borderColor = {0x40, 0x40, 0x40, 255};
+
+    // Page purpose colours (from microbeast_memory_map.svg)
+    SDL_Color cpmColor     = {73, 147, 243, 255};
+    SDL_Color ramDiskColor = {77, 178, 187, 255};
+    SDL_Color freeColor    = {188, 236, 241, 255};
+    SDL_Color restoreColor = {246, 107, 113, 255};
+    SDL_Color romDiskColor = {177, 77, 180, 255};
+    SDL_Color bootColor    = {249, 208, 251, 255};
+
+    // Title
+    pageMapPrint(pageMapFont, 20, 8, menuColor, "PAGE MAP");
+
+    // Layout constants - each box is exactly boxHeight pixels tall,
+    // occupying rows [y, y+boxHeight-1]. Next box starts at y+boxHeight.
+    int boxWidth = 90;
+    int boxHeight = 21;
+    int topY = 40;
+    int colHeight = 32 * boxHeight;  // Total column pixel height
+
+    // Measured font heights for precise vertical centering
+    int fh = pageMapFontH;    // Page label font height
+    int sfh = pageMapSmallFontH;  // Address font height
+    int sfw = 0;  // Address font character width
+    { int dummy; TTF_SizeUTF8(pageMapSmallFont, "0", &sfw, &dummy); }
+
+    // Layout: RAM brackets | RAM addresses | RAM pages ... ROM addresses | ROM pages | ROM brackets
+    int ramBracketX = 68;
+    int ramAddrX = 101 - sfw;
+    int ramColX = 128;
+
+    int romAddrX = 331 - sfw;
+    int romColX = 358;
+    int romBracketX = 455;
+
+    // Helper lambda to get page colour
+    auto getPageColor = [&](uint8_t pageNum) -> SDL_Color {
+        if( pageNum >= 0x35 ) return freeColor;
+        if( pageNum >= 0x25 ) return ramDiskColor;
+        if( pageNum == 0x24 ) return freeColor;
+        if( pageNum >= 0x20 ) return cpmColor;
+        if( pageNum >= 0x14 ) return restoreColor;
+        if( pageNum >= 0x10 ) return restoreColor;
+        if( pageNum >= 0x04 ) return romDiskColor;
+        return bootColor;
+    };
+
+    auto needsLightText = [&](uint8_t pageNum) -> bool {
+        if( pageNum >= 0x38 ) return false;
+        if( pageNum >= 0x25 ) return false;
+        if( pageNum == 0x24 ) return false;
+        if( pageNum >= 0x20 ) return true;
+        if( pageNum >= 0x10 ) return true;
+        if( pageNum >= 0x04 ) return true;
+        return false;
+    };
+
+    // --- Draw RAM page fills ---
+    pageMapPrint(pageMapFont, ramColX + 25, topY - 20, menuColor, "RAM");
+    for( int i = 0; i < 32; i++ ) {
+        uint8_t pageNum = 0x3F - i;
+        int y = topY + i * boxHeight;
+        SDL_Color fillColor = getPageColor(pageNum);
+        SDL_SetRenderDrawColor(pageMapRenderer, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
+        SDL_Rect r = {ramColX, y, boxWidth, boxHeight};
+        SDL_RenderFillRect(pageMapRenderer, &r);
+    }
+    // Outer border around entire RAM column
+    SDL_SetRenderDrawColor(pageMapRenderer, borderColor.r, borderColor.g, borderColor.b, 255);
+    SDL_Rect ramBorder = {ramColX, topY, boxWidth, colHeight};
+    SDL_RenderDrawRect(pageMapRenderer, &ramBorder);
+    // Horizontal dividers between RAM pages
+    for( int i = 1; i < 32; i++ ) {
+        int y = topY + i * boxHeight;
+        SDL_RenderDrawLine(pageMapRenderer, ramColX, y, ramColX + boxWidth - 1, y);
+    }
+
+    // RAM page labels and address labels
+    for( int i = 0; i < 32; i++ ) {
+        uint8_t pageNum = 0x3F - i;
+        int y = topY + i * boxHeight;
+
+        // Page number centred vertically inside the box
+        SDL_Color txtColor = needsLightText(pageNum) ? lightText : darkText;
+        pageMapPrint(pageMapFont, ramColX + 30, y + (boxHeight - fh) / 2, txtColor, "#%02X", pageNum);
+
+        // Address label: vertical centre of text == bottom edge of page box
+        uint32_t physBase = ((uint32_t)(pageNum & 0x1F) << 14) | 0x80000;
+        int bottomEdge = y + boxHeight;
+        pageMapPrint(pageMapSmallFont, ramAddrX, bottomEdge - sfh / 2, addrColor, "%05X", physBase);
+    }
+    // Top-edge address for topmost RAM page (#3F)
+    pageMapPrint(pageMapSmallFont, ramAddrX, topY - sfh / 2, addrColor, "%05X", (uint32_t)0xFFFFF);
+
+    // --- Draw ROM page fills ---
+    pageMapPrint(pageMapFont, romColX + 25, topY - 20, menuColor, "ROM");
+    for( int i = 0; i < 32; i++ ) {
+        uint8_t pageNum = 0x1F - i;
+        int y = topY + i * boxHeight;
+        int yb = y + boxHeight - 1;
+
+        if( pageNum >= 0x10 && pageNum <= 0x13 ) {
+            // Shared pages: upper-left triangle = RESTORE red, lower-right = ROM DISK purple
+            int x1 = romColX, x2 = romColX + boxWidth - 1;
+            filledTrigonRGBA(pageMapRenderer, x1, y, x2, y, x1, yb,
+                             restoreColor.r, restoreColor.g, restoreColor.b, 255);
+            filledTrigonRGBA(pageMapRenderer, x2, y, x1, yb, x2, yb,
+                             romDiskColor.r, romDiskColor.g, romDiskColor.b, 255);
+        } else {
+            SDL_Color fillColor = getPageColor(pageNum);
+            SDL_SetRenderDrawColor(pageMapRenderer, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
+            SDL_Rect r = {romColX, y, boxWidth, boxHeight};
+            SDL_RenderFillRect(pageMapRenderer, &r);
+        }
+    }
+    // Outer border around entire ROM column
+    SDL_SetRenderDrawColor(pageMapRenderer, borderColor.r, borderColor.g, borderColor.b, 255);
+    SDL_Rect romBorder = {romColX, topY, boxWidth, colHeight};
+    SDL_RenderDrawRect(pageMapRenderer, &romBorder);
+    // Horizontal dividers between ROM pages
+    for( int i = 1; i < 32; i++ ) {
+        int y = topY + i * boxHeight;
+        SDL_RenderDrawLine(pageMapRenderer, romColX, y, romColX + boxWidth - 1, y);
+    }
+
+    // ROM page labels and address labels
+    for( int i = 0; i < 32; i++ ) {
+        uint8_t pageNum = 0x1F - i;
+        int y = topY + i * boxHeight;
+
+        // Page number centred vertically inside the box
+        SDL_Color txtColor = needsLightText(pageNum) ? lightText : darkText;
+        pageMapPrint(pageMapFont, romColX + 30, y + (boxHeight - fh) / 2, txtColor, "#%02X", pageNum);
+
+        // Address label: vertical centre of text == bottom edge of page box
+        uint32_t physBase = (uint32_t)(pageNum & 0x1F) << 14;
+        int bottomEdge = y + boxHeight;
+        pageMapPrint(pageMapSmallFont, romAddrX, bottomEdge - sfh / 2, addrColor, "%05X", physBase);
+    }
+    // Top-edge address for topmost ROM page (#1F)
+    pageMapPrint(pageMapSmallFont, romAddrX, topY - sfh / 2, addrColor, "%05X", (uint32_t)0x7FFFF);
+
+    // --- Purpose brackets / labels ---
+    auto drawBracketLeft = [&](int startIdx, int endIdx, int bx, const char* label, SDL_Color bracketColor) {
+        int y1 = topY + startIdx * boxHeight;
+        int y2 = topY + (endIdx + 1) * boxHeight - 1;
+        int midY = (y1 + y2) / 2;
+        lineRGBA(pageMapRenderer, bx, y1, bx, y2, bracketColor.r, bracketColor.g, bracketColor.b, 255);
+        lineRGBA(pageMapRenderer, bx, y1, bx + 4, y1, bracketColor.r, bracketColor.g, bracketColor.b, 255);
+        lineRGBA(pageMapRenderer, bx, y2, bx + 4, y2, bracketColor.r, bracketColor.g, bracketColor.b, 255);
+        // Label reads bottom-to-top (-90), just left of bracket
+        int labelX = bx - fh / 2 - 4;
+        pageMapPrintRotated(pageMapFont, labelX, midY, -90.0, bracketColor, "%s", label);
+    };
+
+    auto drawBracketRight = [&](int startIdx, int endIdx, int bx, const char* label, SDL_Color bracketColor) {
+        int y1 = topY + startIdx * boxHeight;
+        int y2 = topY + (endIdx + 1) * boxHeight - 1;
+        int midY = (y1 + y2) / 2;
+        lineRGBA(pageMapRenderer, bx, y1, bx, y2, bracketColor.r, bracketColor.g, bracketColor.b, 255);
+        lineRGBA(pageMapRenderer, bx, y1, bx - 4, y1, bracketColor.r, bracketColor.g, bracketColor.b, 255);
+        lineRGBA(pageMapRenderer, bx, y2, bx - 4, y2, bracketColor.r, bracketColor.g, bracketColor.b, 255);
+        // Label reads top-to-bottom (+90), just right of bracket
+        int labelX = bx + fh / 2 + 4;
+        pageMapPrintRotated(pageMapFont, labelX, midY, 90.0, bracketColor, "%s", label);
+    };
+
+    // RAM brackets (left side)
+    drawBracketLeft(28, 31, ramBracketX, "CP/M", menuColor);
+    drawBracketLeft(11, 26, ramBracketX, "RAM DISK", menuColor);
+
+    // ROM brackets (right side) - offset +2 so RESTORE/BOOT don't touch the page boxes
+    drawBracketRight(28, 31, romBracketX, "BOOT", menuColor);
+    drawBracketRight(0, 15, romBracketX, "RESTORE", restoreColor);
+    drawBracketRight(12, 27, romBracketX + 18, "ROM DISK", romDiskColor);
+
+    // Paging status in centre area
+    pageMapPrint(pageMapSmallFont, 238, topY, addrColor, "Paging: %s", pagingEnabled ? "ON" : "OFF");
 }
 
 void Beast::fileMenu(SDL_Event windowEvent) {

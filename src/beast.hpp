@@ -253,6 +253,22 @@ class Beast {
         void drawBreakpoints();
         void watchpointsMenu(SDL_Event windowEvent);
         void drawWatchpoints();
+        void togglePageMap();
+        void closePageMap();
+        void drawPageMap();
+        void pageMapPrint(TTF_Font *font, int x, int y, SDL_Color color, const char* fmt, ...);
+        void pageMapPrintRotated(TTF_Font *font, int cx, int cy, double angle, SDL_Color color, const char* fmt, ...);
+        int  pageMapTextHeight(TTF_Font *font);
+
+        SDL_Window   *pageMapWindow = nullptr;
+        SDL_Renderer *pageMapRenderer = nullptr;
+        uint32_t      pageMapWindowId = 0;
+        TTF_Font     *pageMapFont = nullptr;
+        TTF_Font     *pageMapSmallFont = nullptr;
+        int           pageMapFontH = 0;
+        int           pageMapSmallFontH = 0;
+        static const int PAGEMAP_WIDTH = 560;
+        static const int PAGEMAP_HEIGHT = 740;
         void filePrompt(unsigned int index);
         void sourceFilePrompt();
         void binaryFilePrompt(int promptId);
