@@ -2250,7 +2250,8 @@ void Beast::itemSelect(int direction) {
 }
 
 void Beast::drawListing(int page, uint16_t address, SDL_Color textColor, SDL_Color highColor, SDL_Color disassColor) {
-    Listing::Location currentLoc = listing.getLocation(page << 16 | (uint32_t)address);
+    // Physical address: (page << 14) | 14-bit offset
+    Listing::Location currentLoc = listing.getLocation((page << 14) | (address & 0x3FFF));
 
     int matchedLine = -1;
 
