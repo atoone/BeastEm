@@ -1,0 +1,113 @@
+# file opened: breakpoint_test.asm
+  1   0000              ; a quick routine to help test new breakpoints in beastem
+  2   0000
+  3   0000              ; *NB* cant actually use these if we've mapped the BIOS out!!
+  4   0000              get_page_mapping EQU	0x0FDDC 	; Return the logical (cpu) page C (0-2) in A
+  5   0000              set_page_mapping EQU	0x0FDDF 	; Set the logical (cpu) page in A (0-2) to the physical (RAM/ROM) page in E
+  6   0000
+  7   0000              ; we'll have to talk directly to the port instead
+  8   0000              IO_MEM_0            EQU    070h      ; Page 0: 0000h - 3fffh
+  9   0000              IO_MEM_1            EQU    071h      ; Page 1: 4000h - 7fffh
+ 10   0000              IO_MEM_2            EQU    072h      ; Page 2: 8000h - bfffh
+ 11   0000              IO_MEM_3            EQU    073h      ; Page 3: c000h - ffffh
+ 12   0000              IO_MEM_CTRL         EQU    074h      ; Paging enable register
+ 13   0000              IO_MEM_ENABLE       EQU    1
+ 14   0000              IO_MEM_DISABLE      EQU    0
+ 15   0000
+ 16   0000              CODE_START1	EQU	0x4000
+ 17   0000              CODE_START2	EQU	0x8000
+ 18   0000
+ 19   0000              		OUTPUT	bptest.com
+ 20   0000              		ORG	0x0100
+ 21   0100              ;
+ 22   0100              ; FIRST make sure that mapping is enabled!
+ 23   0100 3E 01        		LD	A, IO_MEM_ENABLE
+ 24   0102 D3 74        		OUT	(IO_MEM_CTRL), A
+ 25   0104
+ 26   0104              ; the basic idea:
+ 27   0104              ; - we are executing from page 0x0 (0000-3fff)
+ 28   0104              ; - we set up mappings:
+ 29   0104              ;      page 0x1 (4000-7fff)  ==> phys page 0x20 (80000-83fff)
+ 30   0104              ;      page 0x2 (8000-bfff)  ==> phys page 0x21 (84000-87fff)
+ 31   0104              ; - we copy some executable code into each of those pages
+ 32   0104              ; - we set breakpoints in each of the physical pages
+ 33   0104              ; - we run code in page 1 and verify that one physical BP triggers
+ 34   0104              ; - we map the other physical page into page 1
+ 35   0104              ; - we run code in page 1 and verify that the other physical BP triggers
+ 36   0104
+ 37   0104              ; FIRST: setup page 0x1 (4000-7fff)  ==> phys page 0x20 (80000-83fff)
+ 38   0104 0E 71        		LD	C, IO_MEM_1	; page 1
+ 39   0106 1E 20        		LD	E, 0x20	; physical page 20
+ 40   0108 ED 59        		OUT	(C), E
+ 41   010A
+ 42   010A              ;        and   page 0x2 (8000-bfff)  ==> phys page 0x21 (84000-87fff)
+ 43   010A 0E 72        		LD	C, IO_MEM_2	; page 2
+ 44   010C 1E 21        		LD	E, 0x21	; physical page 21
+ 45   010E ED 59        		OUT	(C), E
+ 46   0110
+ 47   0110              ; 	also set up page 0x3 (c000-ffff) -> phys page 0x23 (8c000-8ffff)
+ 48   0110              ;       so that we've got some RAM for our stack
+ 49   0110 0E 73        		LD	C, IO_MEM_3	; page 3
+ 50   0112 1E 23        		LD	E, 0x23	; physical page 23
+ 51   0114 ED 59        		OUT	(C), E
+ 52   0116
+ 53   0116              ; SECOND: copy code blocks into their intended destinations
+ 54   0116 11 00 40     		LD	DE, CODE_START1
+ 55   0119 21 3A 01     		LD	HL, code_block_1
+ 56   011C 01 07 00     		LD	BC, end_code_block_1 - code_block_1
+ 57   011F ED B0        		LDIR
+ 58   0121
+ 59   0121 11 00 80     		LD	DE, CODE_START2
+ 60   0124 21 41 01     		LD	HL, code_block_2
+ 61   0127 01 07 00     		LD	BC, end_code_block_2 - code_block_2
+ 62   012A ED B0        		LDIR
+ 63   012C
+ 64   012C              ; THIRD: start executing code_block_1
+ 65   012C              ; if we break in here we should see A=0x55
+ 66   012C CD 00 40     		CALL	CODE_START1
+ 67   012F
+ 68   012F              ; FOURTH: map the *other* physical page (0x21) into page 0x1
+ 69   012F 0E 71        		LD	C, IO_MEM_1	; page 1
+ 70   0131 1E 21        		LD	E, 0x21	; physical page 21
+ 71   0133 ED 59        		OUT	(C), E
+ 72   0135
+ 73   0135              ; FIFTH: call the same address again, but now it's code_block_2 running
+ 74   0135              ; if we break in here we should see A=0xAA
+ 75   0135 CD 00 40     		CALL	CODE_START1
+ 76   0138
+ 77   0138              ; we are done
+ 78   0138 18 FE        halt		JR	halt
+ 79   013A
+ 80   013A
+ 81   013A
+ 82   013A
+ 83   013A
+ 84   013A              code_block_1
+ 85   013A              		DISP	CODE_START1
+ 86   4000 06 08        		LD	B, 8		; go round 8 times
+ 87   4002              1
+ 88   4002 3E 55        		LD	A, 0x55		; quickly identify this code loop
+ 89   4004 10 FC        		DJNZ	1_B
+ 90   4006 C9           		RET
+ 91   4007              		ENT
+ 92   0141              end_code_block_1
+ 93   0141
+ 94   0141              code_block_2
+ 95   0141              		DISP	CODE_START1	; NB yes CODE_START_1
+ 96   4000              					; this code will be copied to CODE_START_2
+ 97   4000              					; but it will *run* from CODE_START_1
+ 98   4000              					; ...I need a lie down.
+ 99   4000
+100   4000 06 08        		LD	B, 8		; go round 8 times
+101   4002              1
+102   4002 3E AA        		LD	A, 0xAA		; quickly identify this code loop
+103   4004 10 FC        		DJNZ	1_B
+104   4006
+105   4006 C9           		RET
+106   4007              		ENT
+107   0148              end_code_block_2
+108   0148
+109   0148 3E 21        		LD	A, 0x21
+110   014A D3 70        		OUT	(0x70), A
+111   014C
+# file closed: breakpoint_test.asm
