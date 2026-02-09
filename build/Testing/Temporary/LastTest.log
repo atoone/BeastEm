@@ -1,0 +1,66 @@
+Start testing: Feb 08 18:33 GMT
+----------------------------------------------------------
+1/1 Testing: DebugManagerTests
+1/1 Test: DebugManagerTests
+Command: "/home/ant/src/microbeast/beastem/build/test_debugmanager"
+Directory: /home/ant/src/microbeast/beastem/build
+"DebugManagerTests" start time: Feb 08 18:33 GMT
+Output:
+----------------------------------------------------------
+=== DebugManager Tests ===
+Running add_logical_breakpoint... PASSED
+Running check_logical_breakpoint_triggers... PASSED
+Running check_physical_breakpoint_triggers... PASSED
+Running disabled_breakpoint_does_not_trigger... PASSED
+Running has_active_breakpoints_empty... PASSED
+Running has_active_breakpoints_disabled... PASSED
+Running has_active_breakpoints_multiple... PASSED
+Running add_breakpoint_returns_minus_one_when_full... PASSED
+Running remove_breakpoint... PASSED
+Running get_breakpoint_invalid_index... PASSED
+Running set_breakpoint_enabled_invalid_index... PASSED
+Running logical_breakpoint_ignores_banking... PASSED
+Running clear_all_breakpoints... PASSED
+Running find_breakpoint_by_address... PASSED
+
+=== Watchpoint Tests ===
+Running add_watchpoint_write_only... PASSED
+Running add_watchpoint_returns_minus_one_when_full... PASSED
+Running remove_watchpoint... PASSED
+Running clear_all_watchpoints... PASSED
+Running find_watchpoint_by_start_address... PASSED
+Running get_watchpoint_invalid_index... PASSED
+Running set_watchpoint_enabled_invalid_index... PASSED
+Running check_watchpoint_empty_list... PASSED
+Running add_watchpoint_rejects_invalid... PASSED
+Running check_watchpoint_triggers_on_write... PASSED
+Running check_watchpoint_triggers_on_read... PASSED
+Running check_watchpoint_read_write_both_trigger... PASSED
+Running check_watchpoint_write_only_ignores_reads... PASSED
+Running check_watchpoint_read_only_ignores_writes... PASSED
+Running check_watchpoint_disabled_does_not_trigger... PASSED
+Running has_active_watchpoints_empty... PASSED
+Running has_active_watchpoints_disabled... PASSED
+Running has_active_watchpoints_multiple... PASSED
+Running check_watchpoint_logical_ignores_banking... PASSED
+Running check_watchpoint_physical_honours_banking... PASSED
+
+=== Story 2-3: Index-returning check methods ===
+Running check_breakpoint_returns_index... PASSED
+Running check_breakpoint_returns_minus_one_when_disabled... PASSED
+Running check_watchpoint_returns_index... PASSED
+Running check_watchpoint_returns_minus_one_when_disabled... PASSED
+Running get_breakpoint_at_address... PASSED
+Running get_breakpoint_at_address_physical... PASSED
+Running get_breakpoint_at_address_simple_ignores_physical... PASSED
+
+=== All tests PASSED ===
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"DebugManagerTests" end time: Feb 08 18:33 GMT
+"DebugManagerTests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Feb 08 18:33 GMT
