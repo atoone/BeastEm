@@ -1,4 +1,5 @@
 #include "videobeast.hpp"
+#include "assets.hpp"
 #include <iostream>
 #include <fstream>
 #include <algorithm> 
@@ -24,9 +25,9 @@ int VideoBeast::init(uint64_t clock_time_ps, int guiWidth) {
 
     pixel_format = SDL_AllocFormat(SDL_PIXELFORMAT_RGB555);
 
-    loadRegisters("video_registers.mem");
-    loadPalette("palette_1.mem", palette1, paletteReg1);
-    loadPalette("palette_2.mem", palette2, paletteReg2);
+    loadRegisters(assetPath("video_registers.mem").c_str());
+    loadPalette(assetPath("palette_1.mem").c_str(), palette1, paletteReg1);
+    loadPalette(assetPath("palette_2.mem").c_str(), palette2, paletteReg2);
 
     background = getColour((registers[REG_BACKGROUND_H] << 8) + registers[REG_BACKGROUND_L]);
     clearWindow();
