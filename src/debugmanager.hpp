@@ -73,4 +73,9 @@ private:
     Watchpoint watchpoints[MAX_WATCHPOINTS] = {};
     int breakpointCount = 0;
     int watchpointCount = 0;
+    bool activeBreakpoints = false;
+    bool activeWatchpoints = false;
+
+    void updateActiveBreakpoints();
+    void updateActiveWatchpoints();
 };
