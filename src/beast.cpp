@@ -449,7 +449,7 @@ void Beast::mainLoop() {
 
             // Render page map in its separate window if open
             if( pageMap.isOpen() ) {
-                pageMap.draw(memoryPage, pagingEnabled);
+                pageMap.draw(memoryPage, pagingEnabled, videoBeast != nullptr);
             }
 
             if( gui.endPrompt(false) && gui.isPromptOK() ) {

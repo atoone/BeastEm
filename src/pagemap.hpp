@@ -11,7 +11,7 @@ public:
     void close();
     bool isOpen() const;
     uint32_t windowId() const;
-    void draw(const uint8_t memoryPage[4], bool pagingEnabled);
+    void draw(const uint8_t memoryPage[4], bool pagingEnabled, bool videoBeastEnabled);
 
 private:
     SDL_Window   *window = nullptr;

@@ -109,7 +109,7 @@ void PageMap::printRotated(TTF_Font *f, int cx, int cy, double angle, SDL_Color 
     SDL_FreeSurface(surface);
 }
 
-void PageMap::draw(const uint8_t memoryPage[4], bool pagingEnabled) {
+void PageMap::draw(const uint8_t memoryPage[4], bool pagingEnabled, bool videoBeastEnabled) {
     if( !window ) return;
 
     // Clear window background
@@ -129,6 +129,7 @@ void PageMap::draw(const uint8_t memoryPage[4], bool pagingEnabled) {
     SDL_Color restoreColor = {246, 107, 113, 255};
     SDL_Color romDiskColor = {177, 77, 180, 255};
     SDL_Color bootColor    = {249, 208, 251, 255};
+    SDL_Color vconsoleColor = {44, 34, 242, 255};
 
     // Title
     print(font, 20, 8, menuColor, "PAGE MAP");
@@ -160,7 +161,7 @@ void PageMap::draw(const uint8_t memoryPage[4], bool pagingEnabled) {
     auto getPageColor = [&](uint8_t pageNum) -> SDL_Color {
         if( pageNum >= 0x35 ) return freeColor;
         if( pageNum >= 0x25 ) return ramDiskColor;
-        if( pageNum == 0x24 ) return freeColor;
+        if( pageNum == 0x24 ) return !videoBeastEnabled ? vconsoleColor : freeColor;
         if( pageNum >= 0x20 ) return cpmColor;
         if( pageNum >= 0x14 ) return restoreColor;
         if( pageNum >= 0x10 ) return restoreColor;
@@ -171,7 +172,7 @@ void PageMap::draw(const uint8_t memoryPage[4], bool pagingEnabled) {
     auto needsLightText = [&](uint8_t pageNum) -> bool {
         if( pageNum >= 0x38 ) return false;
         if( pageNum >= 0x25 ) return false;
-        if( pageNum == 0x24 ) return false;
+        if( pageNum == 0x24 ) return !videoBeastEnabled;
         if( pageNum >= 0x20 ) return true;
         if( pageNum >= 0x10 ) return true;
         if( pageNum >= 0x04 ) return true;
@@ -292,6 +293,17 @@ void PageMap::draw(const uint8_t memoryPage[4], bool pagingEnabled) {
 
     // RAM brackets (left side)
     drawBracketLeft(28, 31, ramBracketX, "CP/M", menuColor);
+    if( !videoBeastEnabled ) {
+        // Virtual console bracket for page #24 - single horizontal tick with two-line rotated label
+        int vcIdx = 0x3F - 0x24;  // row index 27
+        int vcMidY = topY + vcIdx * boxHeight + boxHeight / 2;
+        int labelX = ramBracketX - fh / 2 - 4 - 12;
+        int tickEndX = labelX + fh / 2;
+        lineRGBA(renderer, tickEndX, vcMidY, ramBracketX + 4, vcMidY,
+                 vconsoleColor.r, vconsoleColor.g, vconsoleColor.b, 255);
+        printRotated(font, labelX, vcMidY, -90.0, vconsoleColor, "CONSOLE");
+        printRotated(font, labelX - fh - 2, vcMidY, -90.0, vconsoleColor, "VIRTUAL");
+    }
     drawBracketLeft(11, 26, ramBracketX, "RAM DISK", menuColor);
 
     // ROM brackets (right side) - offset +2 so RESTORE/BOOT don't touch the page boxes
