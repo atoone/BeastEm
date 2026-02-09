@@ -1,5 +1,4 @@
 # file opened: watchpoint_test.asm
- 1    0000              ; completely unrelated to nVaders
  2    0000              ; just a quick routine to help test new watchpoints in beastem
  3    0000              ; *NB* cant actually use these if we've mapped the BIOS out!!
  4    0000              get_page_mapping EQU	0x0FDDC 	; Return the logical (cpu) page C (0-2) in A
