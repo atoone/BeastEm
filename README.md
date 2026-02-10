@@ -100,7 +100,6 @@ indicate when a connection is made, and the `D` key will disconnect and await a 
 The UART simulates hardware handshake (no data is discarded or overrun), and the 16C550 RX/TX FIFO, but does not
 currently implement interrupts, so software must poll the UART directly for its state.
 
-
 # Building
 
 ## Windows
@@ -112,7 +111,7 @@ Windows users can install g++ with MySys64, following [this guide](https://code.
 ## Linux
 
 Linux users will need to install the SDL2 development libraries, along with build tooling if needed and GTK+-3. E.g.
-on Debian (Bookworm and above): 
+on Debian (Bookworm and above):
 
 ```shell
 sudo apt-get install build-essential cmake git gtk+3-dev libsdl2-dev libsdl2-net-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-gfx-dev
@@ -125,9 +124,9 @@ packages to get the appropriate headers and CMake files. On Fedora, for example:
 sudo dnf install gcc gcc-c++ cmake git gtk3-devel SDL2-devel SDL2_net-devel SDL2_image-devel SDL2_ttf-devel SDL2_gfx-devel
 ```
 
-> **Note**: Debian Bullseye (and older) are not officially supported by the CMake build, due to missing modern CMake 
+> **Note**: Debian Bullseye (and older) are not officially supported by the CMake build, due to missing modern CMake
   files in the standard SDL2 dependencies from `apt`. If you are set on building on such a platform, then the recommended
-  path is to use [Linuxbrew](https://docs.brew.sh/Homebrew-on-Linux) and avoid using any of the built-in `apt` 
+  path is to use [Linuxbrew](https://docs.brew.sh/Homebrew-on-Linux) and avoid using any of the built-in `apt`
   package dependencies which will use conflicting `glibc`.
 
 Build the executable with:
@@ -152,7 +151,7 @@ Once the executable is built, copy it and the files in the `assets` folder to th
 Install the required SDL libraries, along with cmake if necessary, for example using [homebrew](https://brew.sh/):
 
 ```shell
-brew install cmake sdl2 sdl_2gfx sdl2_image sdl2_net sdl2_ttf
+brew install cmake sdl2 sdl2_gfx sdl2_image sdl2_net sdl2_ttf
 ```
 
 And build with:
@@ -162,7 +161,7 @@ cmake .
 make clean all
 ```
 
-This should find the appropriate includes and libraries for you, and should work on both Intel and Apple Silicon. 
+This should find the appropriate includes and libraries for you, and should work on both Intel and Apple Silicon.
 
 Alternatively, you can build manually with e.g:
 
@@ -190,7 +189,6 @@ Some features of MicroBeast are not yet implemented:
 
 * RTC Alarms, battery monitoring
 * PIO inputs
-
 
 # Help
 
