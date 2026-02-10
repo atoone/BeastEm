@@ -213,7 +213,7 @@ void GUI::drawPrompt(bool immediate) {
         std::string prompt = (editValue > 0 ? "< ": "  ")+promptChoices[editValue]+(editValue < promptChoices.size()-1 ? " >": "  ");
         textSurface = TTF_RenderText_Blended(monoFont, prompt.c_str(), color);
         textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
-        textRect.x = (screenWidth - textSurface->w)/2;
+        textRect.x = (screenWidth*zoom - textSurface->w)/2;
         textRect.y = promptY+charHeight/2;
         textRect.w = textSurface->w;
         textRect.h = textSurface->h;

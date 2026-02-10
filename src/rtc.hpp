@@ -71,4 +71,7 @@ class I2cRTC: public I2cDevice {
         static const int MASK_MONTH = 0x1F;
 
         const int MONTH_DAYS[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+        static const int SRAM_ADDR  = 0x20;
+        static const int SRAM_LENGTH= 64;
 };

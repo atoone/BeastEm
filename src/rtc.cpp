@@ -5,6 +5,9 @@
 I2cRTC::I2cRTC(uint8_t address, uint64_t intMask) {
     this->address = address;
     this->intMask = intMask;
+    for( int i=0; i<SRAM_LENGTH; i++ ) {
+        mem[SRAM_ADDR+i] = rand();
+    }
 }
 
 void I2cRTC::tick(uint64_t* busState, uint64_t clock_time_ps) {
@@ -122,6 +125,7 @@ uint8_t I2cRTC::readNext() {
             result = bcd(clock.tm_year % 100);
             break;
         default:
+            // std::cout << "Reading mem " << 0+currentAddress << " = " << 0+mem[currentAddress] << std::endl;
             result = mem[currentAddress];
     }
     // std::cout << "RTC: Read " << 0+currentAddress << " -> " << 0+result << std::endl;
@@ -184,6 +188,8 @@ void I2cRTC::write(uint8_t ioByte) {
                 mktime(&clock);
                 weekOffset = wkDay - clock.tm_wday;
                 break;  
+            //default:
+                // std::cout << "Writing mem " << 0+currentAddress << " = " << 0+mem[currentAddress] << std::endl;
         }
         currentAddress++;
     }

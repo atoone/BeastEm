@@ -189,8 +189,8 @@ class Beast {
 
         std::string *listingPath;
 
-        int         writeDataLength;
-        int         writeDataAddress;
+        int         writeDataLength = 0;
+        int         writeDataAddress = 0;
 
         SDL_Renderer* createRenderer(SDL_Window *window);
         void          initVideoBeast();
