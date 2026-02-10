@@ -1,4 +1,5 @@
 ; a quick routine to help test new breakpoints in beastem
+; not CP/M! Just load it into ROM in BeastEm!
 
 ; *NB* cant actually use these if we've mapped the BIOS out!!
 get_page_mapping EQU	0x0FDDC 	; Return the logical (cpu) page C (0-2) in A
