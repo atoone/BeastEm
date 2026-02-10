@@ -68,7 +68,7 @@ add_executable(beastem
 # nfd cmake adds relevant platform GUI libraries to link_directories etc...
 add_subdirectory(deps/nativefiledialog-extended-1.1.1)
 
-include_directories(beastem 
+include_directories(
     deps/nativefiledialog-extendevid-1.1.1/src/include
     ${SDL2_INCLUDE_DIRS} 
     ${SDL_NET_INCLUDE_DIRS}
