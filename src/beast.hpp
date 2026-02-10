@@ -18,6 +18,7 @@
 #include "instructions.hpp"
 #include "videobeast.hpp"
 #include "debugmanager.hpp"
+#include "pagemap.hpp"
 
 #define BEAST_IO_MASK (Z80_M1|Z80_IORQ|Z80_A7|Z80_A6|Z80_A5|Z80_A4)
 
@@ -253,6 +254,8 @@ class Beast {
         void drawBreakpoints();
         void watchpointsMenu(SDL_Event windowEvent);
         void drawWatchpoints();
+        PageMap pageMap;
+
         void filePrompt(unsigned int index);
         void sourceFilePrompt();
         void binaryFilePrompt(int promptId);

@@ -13,3 +13,6 @@ deps/nativefiledialog-extended-1.1.1/src/Makefile
 deps/nativefiledialog-extended-1.1.1/src/cmake_install.cmake
 deps/nativefiledialog-extended-1.1.1/src/libnfd.a
 
+.claude
+_bmad/
+_bmad-output/
