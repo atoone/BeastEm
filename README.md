@@ -16,6 +16,8 @@ It includes a simple debugger and disassembler, serial out to console, audio dum
 
 All of the main features of MicroBeast are emulated, allowing software to be developed for the machine and similar Z80 architectures.
 
+![BeastEm Running](docs/emulator.png)
+
 # Running
 
 Precompiled binaries are available for Windows-64 in the [Release section](https://github.com/atoone/BeastEm/releases) on GitHub. Download the .zip file and run `beast.bat` to start the emulator. Note you will need to run from the command line if you wish to enable VideoBeast emulation (the `-d` or `-d2` command line options).
