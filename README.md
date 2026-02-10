@@ -27,7 +27,7 @@ Linux and OSX users should follow the build instructions below to create the ``b
 If no parameters are supplied, BeastEm will start the emulator up with a recent ROM image of the [MicroBeast firmware](https://github.com/atoone/MicroBeast/wiki/Firmware). This supplies a memory editor, YModem download utility and CP/M 2.2 environment with a few programs to try out. This is equivalent to running with the command line:
 
 ```
-beastem -f flash_v1.5.bin -l 0 firmware.lst -l 23 monitor.lst
+beastem -f flash_v1.7.bin -l 0 firmware.lst -l 23 monitor.lst
 ```
 
 Supplying a `-f` binary file command line option will override this behaviour, so the emulator can be started with your own custom firmware.
@@ -38,8 +38,8 @@ The following command line options may be used:
 
 | Option | Description |
 |--------|-------------|
-| `-f [address] filename` | Read binary file into memory at address (hex), or 0 if no address given |
-| `-l [page] listing` | Read listing file and link it to memory page (hex), or page 0 if no page given |
+| `-f/-fw [address] filename` | Read binary file into memory at address (hex), or 0 if no address given. `-fw` will watch the file for changes and auto-reload when paused. |
+| `-l/-lw [page] listing` | Read listing file and link it to memory page (hex), or page 0 if no page given `-lw` will watch the file for changes and auto-reload when paused. |
 | `-a device-id`  | Use audio device with the given ID, instead of default |
 | `-s sample-rate` | Sample audio at the given rate. Use 0 to turn off audio |
 | `-v volume`     | Set volume, 0-10. Default is 5 |
@@ -47,6 +47,7 @@ The following command line options may be used:
 | `-b breakpoint` | Stop at the given breakpoint (hex) |
 | `-z zoom`       | Zoom the display size by the given factor (float) |
 | `-d filename` or `-d2 filename`   | Enable VideoBeast Emulation (`d2` scales display x2), loading file into video RAM. (e.g. use `videobeast.dat`) |
+| `-A path` | Path to asset files (default: BEASTEM_ASSETS env or cwd) |
 
 ## Listing Files
 
@@ -60,7 +61,7 @@ If the hex bytes in the listing file do not match the current memory contents, B
 
 The Emulator starts in the debug view, showing the state of the CPU, PIO and a disassembly or listing of the current execution address. When the emulator is running, the debug view is hidden and keyboard input goes directly to MicroBeast. At any time, hitting `ESCAPE` will return to the debug view.
 
-![BeastEm Debug View](docs/beastem_1.1.png)
+![BeastEm Debug View](docs/beastem_1.2.png)
 
 In the debug view, most commands take a single keypress. The currently implemented commands are:
 
@@ -74,9 +75,9 @@ In the debug view, most commands take a single keypress. The currently implement
 | `L` | Toggle listing following PC, or at specific address                                          |
 | `E` | Soft reset CPU                                                                               |
 | `F` | File management: Load source and binary files                                                |
-| `B` | Toggle breakpoint, edit value when breakpoint enabled                                        |
+| `B` | Edit breakpoints and watchpoints                                                             |
 | `D` | When a terminal is connected over a network port, **D**isconnect it and await a new connection |
-| `A` | Toggles appending audio output to the chosen audio file                                      |
+| `P` | View the MicroBeast Page map                                                                 |
 | `Q` | Quit                                                                                         |
 | `Up`, `Down`    | Select debug values for editing                                                  |
 | `Left`, `Right` | Update selected item (increment/decrement registers, select memory view etc.)    |
@@ -99,6 +100,35 @@ indicate when a connection is made, and the `D` key will disconnect and await a 
 
 The UART simulates hardware handshake (no data is discarded or overrun), and the 16C550 RX/TX FIFO, but does not
 currently implement interrupts, so software must poll the UART directly for its state.
+
+## Files Menu
+
+The files menu allows files to be loaded into MicroBeast and the emulator. Source files are used to
+show disassembly as the Z80 executes code in a given physical page - BeastEm can load listings in TASM or SJAsmPlus
+formats. Binary files can be loaded into physical RAM or VideoBeast RAM.
+
+Selecting a file and hitting `ENTER` allows files to be reloaded, watched or forgotten. Watched files are
+automatically reloaded when they are updated on disk and the emulator is paused.
+
+The files menu also allows data to be saved from MicroBeast memory, and to write an audio file out from
+the beeper.
+
+## Breakpoint Menu
+
+The emulator can stop on multiple breakpoints, and on memory access by the CPU (watchpoints). The Breakpoint
+menu allows breakpoints to be configured for a given logical address in the Z80's
+64K address space (shown with a leading `#` symbol), or a physical address (a five digit hex number). This allows code to be identified 
+either when the CPU executes from a given location, or specifically when code is executed from a physical
+page, regardless of which bank that page is mapped to.
+
+Similarly Watchpoints allow the emulator to stop when a given memory location is accessed. A range of addresses
+can be monitored, and the emulator can stop on read, write or both read and write operations.
+
+## Page Map
+
+From the main menu, BeastEm can show the current memory mappings visually with the Page Map view.
+
+![BeastEm Page Map View](docs/page_map.png)
 
 # Building
 
