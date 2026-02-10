@@ -48,7 +48,7 @@ class GUI {
         static const int ROW22 = ROW20+28;
         static const int END_ROW = ROW22+(13*14);
 
-        enum EditType {ET_HEX, ET_BASE_10};
+        enum EditType {ET_HEX, ET_BASE_10, ET_ADDRESS};
 
         GUI(SDL_Renderer *sdlRenderer, int screenWidth, int screenHeight):
             sdlRenderer (sdlRenderer),
@@ -60,9 +60,11 @@ class GUI {
         void      init(float zoom);
 
         void      startEdit(uint32_t value, int x, int y, int offset, int digits, bool isContinue = false, EditType editType = ET_HEX);
+        void      startAddressEdit(uint32_t value, bool isPhysical, int x, int y, int offset);
         bool      isEditing();
         bool      isContinuousEdit();
         bool      isEditOK();
+        bool      isLogicalAddress();  // For ET_ADDRESS: true if first nibble is "don't care"
         void      endEdit(bool editOK);
         void      drawEdit();
         bool      handleKey(SDL_Keycode key);
@@ -81,18 +83,26 @@ class GUI {
         bool      promptChanged();
 
         template<typename... Args> void print(int x, int y, SDL_Color color, const char *fmt, Args... args) {
-            char buffer[200]; 
-
-            int c = snprintf(buffer, sizeof(buffer), fmt, args...);
+            char buffer[200];
+            int c;
+            if constexpr (sizeof...(Args) == 0) {
+                c = snprintf(buffer, sizeof(buffer), "%s", fmt);
+            } else {
+                c = snprintf(buffer, sizeof(buffer), fmt, args...);
+            }
             if( c > 0 && c<(int)sizeof(buffer)) {
                 printb(x,y, color, 0, {0}, buffer);
             }
         }
 
         template<typename... Args> void print(int x, int y, SDL_Color color, int highlight, SDL_Color background, const char *fmt, Args... args) {
-            char buffer[200]; 
-
-            int c = snprintf(buffer, sizeof(buffer), fmt, args...);
+            char buffer[200];
+            int c;
+            if constexpr (sizeof...(Args) == 0) {
+                c = snprintf(buffer, sizeof(buffer), "%s", fmt);
+            } else {
+                c = snprintf(buffer, sizeof(buffer), fmt, args...);
+            }
             if( c > 0 && c<(int)sizeof(buffer)) {
                 printb(x,y, color, highlight, background, buffer);
             }
@@ -100,7 +110,12 @@ class GUI {
 
         template<typename... Args> void startPrompt(int id, const char *fmt, Args... args) {
             promptId = id;
-            int c = snprintf(promptBuffer, sizeof(promptBuffer), fmt, args...);
+            int c;
+            if constexpr (sizeof...(Args) == 0) {
+                c = snprintf(promptBuffer, sizeof(promptBuffer), "%s", fmt);
+            } else {
+                c = snprintf(promptBuffer, sizeof(promptBuffer), fmt, args...);
+            }
             if( c > 0 && c<(int)sizeof(promptBuffer)) {
                 prompt();
             }
@@ -132,6 +147,8 @@ class GUI {
         bool       editContinue = false;
         bool       editOK = false;
         EditType   editType;
+        bool       editAddressDontCare = false;     // For ET_ADDRESS: first nibble is "don't care" (logical address)
+        bool       editAddressDontCareOld = false;  // Original state for backspace restore
 
         int        promptId;
         PromptType promptType;
@@ -140,7 +157,7 @@ class GUI {
         char       promptBuffer[200] = {};
         bool       promptStarted = false;
         bool       promptCompleted = false;
-        bool       promptOK;
+        bool       promptOK = false;
         
         std::vector<std::string> promptChoices;
 

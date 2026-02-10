@@ -1,4 +1,5 @@
 #include "videobeast.hpp"
+#include "assets.hpp"
 #include <iostream>
 #include <fstream>
 #include <algorithm> 
@@ -24,9 +25,9 @@ int VideoBeast::init(uint64_t clock_time_ps, int guiWidth) {
 
     pixel_format = SDL_AllocFormat(SDL_PIXELFORMAT_RGB555);
 
-    loadRegisters("video_registers.mem");
-    loadPalette("palette_1.mem", palette1, paletteReg1);
-    loadPalette("palette_2.mem", palette2, paletteReg2);
+    loadRegisters(assetPath("video_registers.mem").c_str());
+    loadPalette(assetPath("palette_1.mem").c_str(), palette1, paletteReg1);
+    loadPalette(assetPath("palette_2.mem").c_str(), palette2, paletteReg2);
 
     background = getColour((registers[REG_BACKGROUND_H] << 8) + registers[REG_BACKGROUND_L]);
     clearWindow();
@@ -619,7 +620,7 @@ void VideoBeast::write(uint16_t addr, uint8_t data, uint64_t clock_time_ps) {
                     default:
                         std::cout << "VideoBeast 4K low page write error";
                 }
-                
+                break;
             case 3 :
                 switch ((addr >> 12) & 0x03 ) {
                     case 0 : mem[ 0x80000 | ((registers[REG_PAGE_0] << 11 ) + (addr & 0x0FFF))] = data; break;
@@ -629,6 +630,7 @@ void VideoBeast::write(uint16_t addr, uint8_t data, uint64_t clock_time_ps) {
                     default:
                         std::cout << "VideoBeast 4K high page write error";
                 }
+                break;
             case 4:
                 mem[getSinclairAddress(addr)] = data;
                 break;

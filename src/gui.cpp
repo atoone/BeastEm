@@ -1,14 +1,16 @@
 #include "gui.hpp"
+#include "assets.hpp"
 #include <iostream>
 #include <cstring>
 #include <stdio.h>
 
 void GUI::init(float zoom) {
     this->zoom = zoom;
-    monoFont = TTF_OpenFont(MONO_FONT, MONO_SIZE*zoom);
+    std::string fontPath = assetPath(MONO_FONT);
+    monoFont = TTF_OpenFont(fontPath.c_str(), MONO_SIZE*zoom);
 
     if( !monoFont) {
-        std::cout << "Couldn't load font "<< MONO_FONT << std::endl;
+        std::cout << "Couldn't load font "<< fontPath << std::endl;
         exit(1);
     }
 
@@ -23,11 +25,35 @@ void GUI::startEdit(uint32_t value, int x, int y, int offset, int digits, bool i
     editX = x;
     editY = y;
     editOffset = offset;
-    editDigits = digits;  
+    editDigits = digits;
     editIndex = digits-1;
     this->editType = editType;
+    editAddressDontCare = false;
 
     editContinue = isContinue;
+    editOK = false;
+}
+
+void GUI::startAddressEdit(uint32_t value, bool isPhysical, int x, int y, int offset) {
+    if (isPhysical) {
+        // Physical: 20-bit address (5 hex digits)
+        editValue = value & 0xFFFFF;
+    } else {
+        // Logical: only 16-bit address matters
+        editValue = value & 0xFFFF;
+    }
+    editOldValue = editValue;
+
+    editX = x;
+    editY = y;
+    editOffset = offset;
+    editDigits = 5;  // Always 5 characters for address
+    editIndex = 4;   // Start at leftmost position
+    editType = ET_ADDRESS;
+    editAddressDontCare = !isPhysical;  // Logical = don't care first nibble
+    editAddressDontCareOld = editAddressDontCare;  // Save for backspace
+
+    editContinue = false;
     editOK = false;
 }
 
@@ -43,7 +69,23 @@ bool GUI::isEditOK() {
     return editOK;
 }
 
+bool GUI::isLogicalAddress() {
+    return editAddressDontCare;
+}
+
 void GUI::endEdit(bool isOK) {
+    // Right-justify value if not all digits were entered (early RETURN)
+    if (isOK && editIndex >= 0) {
+        if (editType == ET_ADDRESS) {
+            // For address mode, only shift the 4 data nibbles (not the don't-care nibble)
+            if (editIndex < 4) {
+                editValue >>= (editIndex + 1) * 4;
+            }
+            // If user pressed Enter immediately (editIndex == 4), value stays as-is
+        } else {
+            editValue >>= (editIndex + 1) * 4;
+        }
+    }
     editOK = isOK;
     editContinue = false;
     editIndex = -1;
@@ -67,7 +109,21 @@ void GUI::drawEdit() {
     SDL_Color edited = {0xF0, 0x40, 0x40};
 
     for( int i=editDigits-1; i>=0; i--) {
-        if( editType == ET_HEX ) {
+        if( editType == ET_ADDRESS ) {
+            // Address mode: 5 digits, first is bank nibble or '#' for don't-care
+            if( i == 4 ) {
+                // First nibble: show '#' if logical, hex digit if physical
+                if( editAddressDontCare ) {
+                    buffer[0] = '#';
+                } else {
+                    snprintf(buffer, sizeof(buffer), "%01X", (editValue >> 16) & 0x0F);
+                }
+            } else {
+                // Lower 4 nibbles: always hex from editValue
+                snprintf(buffer, sizeof(buffer), "%01X", (editValue >> (i*4)) & 0x0F);
+            }
+        }
+        else if( editType == ET_HEX ) {
             snprintf(buffer, sizeof(buffer), "%01X", (editValue >> (i*4)) & 0x0F);
         }
         else if( editType == ET_BASE_10 ) {
@@ -79,7 +135,7 @@ void GUI::drawEdit() {
         SDL_Surface *textSurface = TTF_RenderText_Blended(monoFont, buffer, color);
         SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
 
-        textRect.x = editX*zoom+(width*(editOffset+(editDigits-i)-2)); 
+        textRect.x = editX*zoom+(width*(editOffset+(editDigits-i)-2));
         textRect.y = editY*zoom;
         textRect.w = textSurface->w;
         textRect.h = textSurface->h;
@@ -100,7 +156,15 @@ bool GUI::handleKey(SDL_Keycode key) {
             case SDLK_0 ... SDLK_9: editDigit( key - SDLK_0 ); break;
             case SDLK_a ... SDLK_f: editDigit( key - SDLK_a + 10 ); break;
             default:
-                return false;
+                // For ET_ADDRESS mode, accept non-hex chars as "don't care" in first position
+                if( editType == ET_ADDRESS && editIndex == 4 ) {
+                    // Any non-hex key in first position = logical address (don't care)
+                    editAddressDontCare = true;
+                    editValue &= 0xFFFF;  // Clear bank nibble
+                    editIndex--;  // Move to next position
+                } else {
+                    return false;
+                }
         }
     }
     if( promptStarted ) {
@@ -150,7 +214,17 @@ uint32_t GUI::getEditValue() {
 
 void GUI::editDigit(uint8_t digit) {
     if( editIndex >= 0 ) {
-        if( editType == ET_HEX ) {
+        if( editType == ET_ADDRESS ) {
+            if( editIndex == 4 ) {
+                // First nibble: hex digit = physical address, store bank nibble
+                editAddressDontCare = false;
+                editValue = (editValue & 0xFFFF) | ((uint32_t)digit << 16);
+            } else {
+                // Lower 4 nibbles: standard hex edit
+                editValue = (editValue & ~(0x000F << (editIndex*4))) | (digit << (editIndex*4));
+            }
+        }
+        else if( editType == ET_HEX ) {
             editValue = (editValue & ~(0x000F << (editIndex*4))) | (digit << (editIndex*4));
         }
         else if( editType == ET_BASE_10 && digit < 10 ) {
@@ -165,10 +239,17 @@ void GUI::editDelta(int delta) {
     editValue = (editValue+delta) & (0x0FFFFFF >> ((6-editDigits)*4));
 }
 
-void GUI::editBackspace() {    if( editIndex < (editDigits-1) ) {
+void GUI::editBackspace() {
+    if( editIndex < (editDigits-1) ) {
         editIndex++;
-        editValue = (editValue & ~(0x000F << (editIndex*4))) | (editOldValue & (0x000F << (editIndex*4)));
-    }                  
+        if( editType == ET_ADDRESS && editIndex == 4 ) {
+            // Backing up to first nibble: restore original don't-care state and bank nibble
+            editAddressDontCare = editAddressDontCareOld;
+            editValue = (editValue & 0xFFFF) | (editOldValue & 0xF0000);
+        } else {
+            editValue = (editValue & ~(0x000F << (editIndex*4))) | (editOldValue & (0x000F << (editIndex*4)));
+        }
+    }
 }
 
 bool GUI::isPrompt() {

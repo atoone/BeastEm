@@ -18,8 +18,8 @@ class I2cDisplay: public I2cDevice {
         virtual void    stop();
     private:
         uint8_t address;
-        uint16_t byteCount;
-        uint8_t currentAddress;
+        uint16_t byteCount = 0;
+        uint8_t currentAddress = 0;
 
         bool commandUnlocked = false;
         uint8_t currentPage = 0;
@@ -32,11 +32,11 @@ class I2cDisplay: public I2cDevice {
         static const int PAGE_2_SIZE = 192;
         static const int PAGE_3_SIZE = 18;
 
-        uint8_t page_0[PAGE_0_SIZE];
-        uint8_t page_1[PAGE_1_SIZE];
-        uint8_t page_2[PAGE_2_SIZE];
+        uint8_t page_0[PAGE_0_SIZE] = {0};
+        uint8_t page_1[PAGE_1_SIZE] = {0};
+        uint8_t page_2[PAGE_2_SIZE] = {0};
 
-        uint8_t page_3[PAGE_3_SIZE];
+        uint8_t page_3[PAGE_3_SIZE] = {0};
 
         void writeLEDControl(uint8_t ioByte);
         void writePWM(uint8_t ioByte);

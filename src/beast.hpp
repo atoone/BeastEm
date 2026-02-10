@@ -17,6 +17,8 @@
 #include "binaryFile.hpp"
 #include "instructions.hpp"
 #include "videobeast.hpp"
+#include "debugmanager.hpp"
+#include "pagemap.hpp"
 
 #define BEAST_IO_MASK (Z80_M1|Z80_IORQ|Z80_A7|Z80_A6|Z80_A5|Z80_A4)
 
@@ -29,15 +31,19 @@ class Beast {
 
     enum Modifier {NONE, CTRL, SHIFT, CTRL_SHIFT, SHIFT_SWAP};
 
-    enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, QUIT};
+    enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, BREAKPOINTS, WATCHPOINTS, QUIT};
 
-    enum Selection {SEL_PC, SEL_A, SEL_HL, SEL_BC, SEL_DE, SEL_FLAGS, SEL_SP, SEL_IX, SEL_IY, 
-        SEL_PAGING, SEL_PAGE0, SEL_PAGE1, SEL_PAGE2, SEL_PAGE3, 
-        SEL_A2, SEL_HL2, SEL_BC2, SEL_DE2, 
-        SEL_MEM0, SEL_VIEWPAGE0, SEL_VIDEOVIEW0, SEL_VIEWADDR0, SEL_MEM1, SEL_VIEWPAGE1, SEL_VIDEOVIEW1, SEL_VIEWADDR1, SEL_MEM2, SEL_VIEWPAGE2, SEL_VIDEOVIEW2, SEL_VIEWADDR2, 
+    enum StopReason {STOP_NONE, STOP_STEP, STOP_BREAKPOINT, STOP_WATCHPOINT, STOP_ESCAPE};
+
+    enum Selection {SEL_PC, SEL_A, SEL_HL, SEL_BC, SEL_DE, SEL_FLAGS, SEL_SP, SEL_IX, SEL_IY,
+        SEL_PAGING, SEL_PAGE0, SEL_PAGE1, SEL_PAGE2, SEL_PAGE3,
+        SEL_A2, SEL_HL2, SEL_BC2, SEL_DE2,
+        SEL_MEM0, SEL_VIEWPAGE0, SEL_VIDEOVIEW0, SEL_VIEWADDR0, SEL_MEM1, SEL_VIEWPAGE1, SEL_VIDEOVIEW1, SEL_VIEWADDR1, SEL_MEM2, SEL_VIEWPAGE2, SEL_VIDEOVIEW2, SEL_VIEWADDR2,
         SEL_VOLUME,
         SEL_LISTING,
         SEL_BREAKPOINT,
+        SEL_BP_LIST, SEL_BP_ADDRESS,
+        SEL_WP_LIST, SEL_WP_ADDRESS, SEL_WP_RANGE, SEL_WP_TYPE,
         SEL_END_MARKER };
 
     enum MemView {MV_PC, MV_SP, MV_HL, MV_BC, MV_DE, MV_IX, MV_IY, MV_Z80, MV_MEM, MV_VIDEO};
@@ -116,13 +122,24 @@ class Beast {
         const char* PCB_IMAGE="layout_2d.png";
         const char* DEFAULT_VIDEO_FILE="videobeast.dat";
 
-        TTF_Font *font, *smallFont, *midFont;
+        TTF_Font *font, *smallFont, *midFont, *indicatorFont;
         int screenWidth, screenHeight;
         float zoom = 1.0f;
 
         Mode    mode = DEBUG;
         int     selection = 0;
         int     fileActionIndex = -1;
+        int     breakpointSelection = 0;
+        bool    breakpointEditMode = false;
+        int     watchpointSelection = 0;
+        bool    watchpointEditMode = false;
+        int     watchpointEditField = 0;  // 0=address, 1=range, 2=type
+        bool    watchpointAddMode = false;  // true when adding new, false when editing existing
+        uint32_t watchpointEditAddress = 0;
+        uint16_t watchpointEditRange = 1;
+        bool     watchpointEditOnRead = false;
+        bool     watchpointEditOnWrite = true;
+        bool     watchpointEditIsPhysical = false;
 
         z80_t    cpu;
         z80pio_t pio;
@@ -136,14 +153,21 @@ class Beast {
 
         VideoBeast *videoBeast;
         uint64_t   nextVideoBeastTickPs;
-        
+
+        DebugManager *debugManager;
+
+        // Stop reason tracking for debug display
+        StopReason stopReason = STOP_NONE;
+        uint16_t   watchpointTriggerAddress = 0;  // Address of instruction that caused WP trigger
+        int        watchpointTriggerIndex = -1;   // Which WP (0-7) was triggered
+        int        breakpointTriggerIndex = -1;   // Which BP (0-7) was triggered
+        uint16_t   currentInstructionPC = 0;      // PC at start of current instruction (for accurate WP trigger address)
+
         uint64_t pins;
         uint8_t portB;
         uint64_t clock_cycle_ps;
         uint64_t clock_time_ps  = 0;
         uint64_t targetSpeedHz;
-        uint64_t breakpoint = NOT_SET;
-        uint64_t lastBreakpoint = 0;
 
         bool     romOperation = false;
         uint8_t  romSequence = 0;
@@ -167,10 +191,10 @@ class Beast {
         uint32_t   memVideoAddress[3][5] = {0};
         VideoView  memVideoView[3] = {VV_RAM, VV_RAM, VV_RAM};
 
-        uint32_t   memoryEditAddress;
-        uint32_t   memoryEditAddressMask;
-        int        memoryEditPage;
-        int        memoryEditView;
+        uint32_t   memoryEditAddress = 0;
+        uint32_t   memoryEditAddressMask = 0;
+        int        memoryEditPage = 0;
+        int        memoryEditView = 0;
 
         uint64_t              listAddress = NOT_SET;
         std::vector<uint16_t> decodedAddresses;         // Addresses decoded on screen
@@ -187,7 +211,7 @@ class Beast {
         const char* audioFilename = "audio.raw";
         FILE*       audioFile = nullptr;
 
-        std::string *listingPath;
+        std::string *listingPath = nullptr;
 
         int         writeDataLength = 0;
         int         writeDataAddress = 0;
@@ -226,12 +250,18 @@ class Beast {
 
         void fileMenu(SDL_Event windowEvent);
         void debugMenu(SDL_Event windowEvent);
+        void breakpointsMenu(SDL_Event windowEvent);
+        void drawBreakpoints();
+        void watchpointsMenu(SDL_Event windowEvent);
+        void drawWatchpoints();
+        PageMap pageMap;
+
         void filePrompt(unsigned int index);
         void sourceFilePrompt();
         void binaryFilePrompt(int promptId);
         void checkWatchedFiles();
 
-        uint8_t loadBinaryPage;
+        uint8_t loadBinaryPage = 0;
 
         void onFile();
         void onDebug();
@@ -261,6 +291,16 @@ class Beast {
         const int FONT_SIZE = 28;
         const int SMALL_FONT_SIZE = 14;
         const int MID_FONT_SIZE = 14;
+
+        // Indicator colors for breakpoints and watchpoints (RGB + Alpha)
+        static constexpr uint8_t BP_COLOR_R = 220;
+        static constexpr uint8_t BP_COLOR_G = 50;
+        static constexpr uint8_t BP_COLOR_B = 50;
+        static constexpr uint8_t BP_ALPHA_ENABLED = 255;
+        static constexpr uint8_t BP_ALPHA_DISABLED = 100;
+        static constexpr uint8_t WP_COLOR_R = 0;
+        static constexpr uint8_t WP_COLOR_G = 160;
+        static constexpr uint8_t WP_COLOR_B = 160;
 
         const int MAX_KEYS = 48;
         const char* KEY_CAPS[48] = {"Up", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Del",
