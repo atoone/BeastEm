@@ -13,6 +13,8 @@ class GUI {
     enum PromptType {PT_NONE, PT_CONFIRM, PT_VALUE, PT_CHOICE};
 
     public:
+        enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, BREAKPOINTS, WATCHPOINTS, TRACELOG, QUIT};
+
         static const int COL1 = 50;
         static const int COL2 = 190;
         static const int COL3 = 330;
@@ -48,7 +50,7 @@ class GUI {
         static const int ROW22 = ROW20+28;
         static const int END_ROW = ROW22+(13*14);
 
-        enum EditType {ET_HEX, ET_BASE_10, ET_ADDRESS};
+        enum EditType {ET_HEX, ET_BASE_10, ET_ADDRESS, ET_STRING};
 
         GUI(SDL_Renderer *sdlRenderer, int screenWidth, int screenHeight):
             sdlRenderer (sdlRenderer),
@@ -59,8 +61,9 @@ class GUI {
 
         void      init(float zoom);
 
-        void      startEdit(uint32_t value, int x, int y, int offset, int digits, bool isContinue = false, EditType editType = ET_HEX);
-        void      startAddressEdit(uint32_t value, bool isPhysical, int x, int y, int offset);
+        void      startEdit(uint32_t value, int x, int y, int characterOffset, int digits, bool isContinue = false, EditType editType = ET_HEX);
+        void      startAddressEdit(uint32_t value, bool isPhysical, int x, int y, int characterOffset);
+        void      startStringEdit(std::string value, int x, int y, int length, int characterOffset=1);
         bool      isEditing();
         bool      isContinuousEdit();
         bool      isEditOK();
@@ -68,7 +71,9 @@ class GUI {
         void      endEdit(bool editOK);
         void      drawEdit();
         bool      handleKey(SDL_Keycode key);
+        void      handleText(char text[]);
         uint32_t  getEditValue();
+        std::string getStringValue();
         void      editDelta(int delta);
 
         bool      isPrompt();                        // True if we're currently in a prompt
@@ -142,7 +147,7 @@ class GUI {
         uint32_t   editValue, editOldValue;
 
         int        editX, editY, editOffset;
-        int        editDigits;
+        int        editLength;
         int        editIndex = -1;
         bool       editContinue = false;
         bool       editOK = false;
@@ -162,6 +167,10 @@ class GUI {
         std::vector<std::string> promptChoices;
 
         uint32_t   oldPromptValue;
+
+        std::string stringValue;
+        int         stringIndex = -1;
+        bool        isFirstTextEvent = false;
 
         void      editBackspace();
         void      editDigit(uint8_t digit);

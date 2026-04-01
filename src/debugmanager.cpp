@@ -1,13 +1,30 @@
 #include "debugmanager.hpp"
+#include <functional>
 
 int DebugManager::addBreakpoint(uint32_t address, bool isPhysical) {
   if (breakpointCount >= MAX_BREAKPOINTS) {
     return -1;
   }
 
-  breakpoints[breakpointCount].address = address;
-  breakpoints[breakpointCount].isPhysical = isPhysical;
-  breakpoints[breakpointCount].enabled = true;
+  if (breakpoints[breakpointCount] == nullptr) {
+    breakpoints[breakpointCount] = new Breakpoint;
+  }
+
+  breakpoints[breakpointCount]->address = address;
+  breakpoints[breakpointCount]->isPhysical = isPhysical;
+  breakpoints[breakpointCount]->enabled = true;
+  breakpoints[breakpointCount]->isTrace = false;
+
+  activeBreakpoints = true;
+  return breakpointCount++;
+}
+
+int DebugManager::addBreakpoint(Breakpoint *breakpoint) {
+  if (breakpointCount >= MAX_BREAKPOINTS) {
+    return -1;
+  }
+
+  breakpoints[breakpointCount] = breakpoint;
 
   activeBreakpoints = true;
   return breakpointCount++;
@@ -22,15 +39,35 @@ bool DebugManager::removeBreakpoint(int index) {
   for (int i = index; i < breakpointCount - 1; i++) {
     breakpoints[i] = breakpoints[i + 1];
   }
-  breakpointCount--;
+  breakpoints[--breakpointCount] = nullptr;
+  
   updateActiveBreakpoints();
   return true;
 }
 
+void DebugManager::updateBreakpoint(int index, uint32_t address, bool isPhysical) {
+  if (index >= 0 && index < breakpointCount) {
+    breakpoints[index]->address = address;
+    breakpoints[index]->isPhysical = isPhysical;
+  }
+}
+
 void DebugManager::setBreakpointEnabled(int index, bool enabled) {
   if (index >= 0 && index < breakpointCount) {
-    breakpoints[index].enabled = enabled;
+    breakpoints[index]->enabled = enabled;
     updateActiveBreakpoints();
+  }
+}
+
+void DebugManager::setBreakpointIsTrace(int index, bool isTrace) {
+  if (index >= 0 && index < breakpointCount) {
+    breakpoints[index]->isTrace = isTrace;
+  }
+}
+
+void DebugManager::setBreakpointName(int index, std::string name) {
+  if (index >= 0 && index < breakpointCount) {
+    breakpoints[index]->name.assign(name);
   }
 }
 
@@ -38,7 +75,7 @@ const Breakpoint *DebugManager::getBreakpoint(int index) const {
   if (index < 0 || index >= breakpointCount) {
     return nullptr;
   }
-  return &breakpoints[index];
+  return breakpoints[index];
 }
 
 int DebugManager::getBreakpointCount() const { return breakpointCount; }
@@ -51,8 +88,8 @@ void DebugManager::clearAllBreakpoints() {
 int DebugManager::findBreakpointByAddress(uint32_t address,
                                           bool isPhysical) const {
   for (int i = 0; i < breakpointCount; i++) {
-    if (breakpoints[i].address == address &&
-        breakpoints[i].isPhysical == isPhysical) {
+    if (breakpoints[i]->address == address &&
+        breakpoints[i]->isPhysical == isPhysical) {
       return i;
     }
   }
@@ -97,7 +134,7 @@ bool DebugManager::hasActiveBreakpoints() const { return activeBreakpoints; }
 
 void DebugManager::updateActiveBreakpoints() {
   for (int i = 0; i < breakpointCount; i++) {
-    if (breakpoints[i].enabled) {
+    if (breakpoints[i]->enabled) {
       activeBreakpoints = true;
       return;
     }
@@ -133,7 +170,7 @@ static bool checkSingleBreakpoint(const Breakpoint &bp, uint16_t pc,
 int DebugManager::checkBreakpoint(uint16_t pc, uint8_t *memoryPage) const {
   // Check user breakpoints
   for (int i = 0; i < breakpointCount; i++) {
-    if (checkSingleBreakpoint(breakpoints[i], pc, memoryPage)) {
+    if (checkSingleBreakpoint(*breakpoints[i], pc, memoryPage)) {
       return i;
     }
   }
@@ -150,9 +187,9 @@ std::optional<BreakpointInfo>
 DebugManager::getBreakpointAtAddress(uint16_t addr) const {
   for (int i = 0; i < breakpointCount; i++) {
     // Only check logical breakpoints for display purposes
-    if (!breakpoints[i].isPhysical &&
-        (uint16_t)breakpoints[i].address == addr) {
-      return BreakpointInfo{i, breakpoints[i].enabled};
+    if (!breakpoints[i]->isPhysical &&
+        (uint16_t)breakpoints[i]->address == addr) {
+      return BreakpointInfo{i, breakpoints[i]->enabled, breakpoints[i]->isTrace};
     }
   }
   return std::nullopt;
@@ -172,15 +209,15 @@ DebugManager::getBreakpointAtAddress(uint16_t addr, uint8_t *memoryPage,
   }
 
   for (int i = 0; i < breakpointCount; i++) {
-    if (breakpoints[i].isPhysical) {
+    if (breakpoints[i]->isPhysical) {
       // Physical breakpoint: compare against calculated physical address
-      if (breakpoints[i].address == physicalAddr) {
-        return BreakpointInfo{i, breakpoints[i].enabled};
+      if (breakpoints[i]->address == physicalAddr) {
+        return BreakpointInfo{i, breakpoints[i]->enabled, breakpoints[i]->isTrace};
       }
     } else {
       // Logical breakpoint: compare against logical address
-      if ((uint16_t)breakpoints[i].address == addr) {
-        return BreakpointInfo{i, breakpoints[i].enabled};
+      if ((uint16_t)breakpoints[i]->address == addr) {
+        return BreakpointInfo{i, breakpoints[i]->enabled, breakpoints[i]->isTrace};
       }
     }
   }
@@ -299,4 +336,23 @@ int DebugManager::checkWatchpoint(uint16_t logicalAddress,
     }
   }
   return -1;
+}
+
+void DebugManager::logTrace(const Breakpoint *breakpoint, z80_t cpu, uint32_t physicalAddress, uint64_t tick, std::function<uint8_t(uint16_t)> memRead) {
+  if(traceLogs.size() > maxTraceLogSize) {
+    traceLogs.pop_front();
+  }
+
+  TraceLog traceLog = {physicalAddress, tick, cpu.pc, cpu.sp, cpu.af, cpu.bc, cpu.de, cpu.hl, cpu.ix, cpu.iy, breakpoint, {}};
+  traceLogs.push_back(traceLog);
+
+  // TODO: If the trace includes address references, add DataLogs for the current data at that address
+}
+
+std::deque<TraceLog>* DebugManager::getTraceLogs() {
+  return &traceLogs;
+}
+
+int DebugManager::getLogSize() {
+  return traceLogs.size();
 }

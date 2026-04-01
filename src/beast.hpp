@@ -18,6 +18,7 @@
 #include "instructions.hpp"
 #include "videobeast.hpp"
 #include "debugmanager.hpp"
+#include "breakpointGui.hpp"
 #include "pagemap.hpp"
 
 #define BEAST_IO_MASK (Z80_M1|Z80_IORQ|Z80_A7|Z80_A6|Z80_A5|Z80_A4)
@@ -30,8 +31,6 @@
 class Beast {
 
     enum Modifier {NONE, CTRL, SHIFT, CTRL_SHIFT, SHIFT_SWAP};
-
-    enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, BREAKPOINTS, WATCHPOINTS, QUIT};
 
     enum StopReason {STOP_NONE, STOP_STEP, STOP_BREAKPOINT, STOP_WATCHPOINT, STOP_ESCAPE};
 
@@ -126,20 +125,9 @@ class Beast {
         int screenWidth, screenHeight;
         float zoom = 1.0f;
 
-        Mode    mode = DEBUG;
+        GUI::Mode    mode = GUI::DEBUG;
         int     selection = 0;
         int     fileActionIndex = -1;
-        int     breakpointSelection = 0;
-        bool    breakpointEditMode = false;
-        int     watchpointSelection = 0;
-        bool    watchpointEditMode = false;
-        int     watchpointEditField = 0;  // 0=address, 1=range, 2=type
-        bool    watchpointAddMode = false;  // true when adding new, false when editing existing
-        uint32_t watchpointEditAddress = 0;
-        uint16_t watchpointEditRange = 1;
-        bool     watchpointEditOnRead = false;
-        bool     watchpointEditOnWrite = true;
-        bool     watchpointEditIsPhysical = false;
 
         z80_t    cpu;
         z80pio_t pio;
@@ -154,7 +142,8 @@ class Beast {
         VideoBeast *videoBeast;
         uint64_t   nextVideoBeastTickPs;
 
-        DebugManager *debugManager;
+        DebugManager    *debugManager;
+        BreakpointGui   *breakpointGui;
 
         // Stop reason tracking for debug display
         StopReason stopReason = STOP_NONE;
@@ -250,10 +239,6 @@ class Beast {
 
         void fileMenu(SDL_Event windowEvent);
         void debugMenu(SDL_Event windowEvent);
-        void breakpointsMenu(SDL_Event windowEvent);
-        void drawBreakpoints();
-        void watchpointsMenu(SDL_Event windowEvent);
-        void drawWatchpoints();
         PageMap pageMap;
 
         void filePrompt(unsigned int index);
@@ -296,6 +281,9 @@ class Beast {
         static constexpr uint8_t BP_COLOR_R = 220;
         static constexpr uint8_t BP_COLOR_G = 50;
         static constexpr uint8_t BP_COLOR_B = 50;
+        static constexpr uint8_t TRACE_COLOR_R = 160;
+        static constexpr uint8_t TRACE_COLOR_G = 50;
+        static constexpr uint8_t TRACE_COLOR_B = 220;
         static constexpr uint8_t BP_ALPHA_ENABLED = 255;
         static constexpr uint8_t BP_ALPHA_DISABLED = 100;
         static constexpr uint8_t WP_COLOR_R = 0;

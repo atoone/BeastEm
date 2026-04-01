@@ -52,6 +52,7 @@ add_executable(beastem
     src/assets.cpp
     src/beast.cpp
     src/debugmanager.cpp
+    src/breakpointGui.cpp
     src/digit.cpp
     src/i2c.cpp
     src/listing.cpp
