@@ -611,7 +611,6 @@ void BreakpointGui::drawTraceLog() {
           (screenHeight - 24) * zoom, 0xF0, 0xF0, 0xE0, 0xE8);
 
   SDL_Color textColor = {0, 0x30, 0x30, 255};
-  SDL_Color dimColor = {0x80, 0x80, 0x80, 255};
   SDL_Color menuColor = {0x30, 0x30, 0xA0, 255};
   SDL_Color bright = {0xD0, 0xFF, 0xD0, 255};
 
@@ -621,7 +620,7 @@ void BreakpointGui::drawTraceLog() {
   gui->print(GUI::COL5, 34, menuColor, "[W]atchpoints");
 
   std::deque<TraceLog>* logs = debugManager->getTraceLogs();
-  for (int i=logStart; i<logStart+LOG_LIST_SIZE; i++) {
+  for (size_t i=logStart; i<logStart+LOG_LIST_SIZE; i++) {
     if (i<logs->size()) {
         int row = GUI::ROW3 + (i * GUI::ROW_HEIGHT);
         TraceLog log = logs->at(i);

@@ -30,6 +30,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <set>
 
 class Listing {
 
@@ -44,6 +45,21 @@ class Listing {
             bool valid;             // false if address not found in any listing
         };
 
+        struct Symbol {
+            std::string label;
+            uint32_t    value;
+        };
+
+        struct SymbolComp {
+            bool operator()(const Symbol*s1, const Symbol* s2) const {
+                if (s1 && s2) {
+                    return s1->label < s2->label;
+                }
+                return s1<s2;
+            }
+        };
+
+        
         /**
          * A single parsed line from a listing file.
          *
@@ -75,6 +91,7 @@ class Listing {
             unsigned int fileNum;   // Index in sources vector
             int page;               // Memory page/bank (0-31) for physical addressing
             std::vector<Line> lines;  // All parsed lines from the file
+            std::vector<Symbol> symbols;
             bool watch;             // If true, check for file modifications
             std::filesystem::file_time_type lastRead;  // For change detection
         };
@@ -102,7 +119,9 @@ class Listing {
          * Parses a listing file and builds the address mapping.
          * Can be called again to reload after file changes.
          */
-        void    loadFile(Source &source);
+        void loadFile(Source &source);
+
+        void addSymbol(unsigned int &bytePos, std::string &text, Listing::Line &line, Listing::Source &source);
 
         /**
          * Removes a file from tracking. Cleans up lineMap entries.
@@ -170,6 +189,8 @@ class Listing {
          */
         std::map<uint32_t, Location> lineMap;
 
+        std::set<Symbol*, SymbolComp> symbolMap;
+        
         /**
          * Regex pattern to extract address from listing lines.
          *
@@ -197,4 +218,7 @@ class Listing {
          */
         int fromHex(char c);
 
+        void updateSymbolMap();
+
+        std::vector<Symbol*> findSymbols(std::string matching);
 };

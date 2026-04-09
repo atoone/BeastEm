@@ -44,7 +44,7 @@ class BreakpointGui {
         bool     watchpointEditOnWrite = true;
         bool     watchpointEditIsPhysical = false;
 
-        int     logStart;
+        size_t    logStart;
         
         const int MAX_NAME_LENGTH = 12; // Maximum length for breakpoint names
 

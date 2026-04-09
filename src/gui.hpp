@@ -10,7 +10,7 @@
 
 class GUI {
 
-    enum PromptType {PT_NONE, PT_CONFIRM, PT_VALUE, PT_CHOICE};
+    enum PromptType {PT_NONE, PT_CONFIRM, PT_VALUE, PT_CHOICE, PT_LABEL};
 
     public:
         enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, BREAKPOINTS, WATCHPOINTS, TRACELOG, QUIT};
@@ -50,6 +50,9 @@ class GUI {
         static const int ROW22 = ROW20+28;
         static const int END_ROW = ROW22+(13*14);
 
+        static const int LABEL_LIST_LENGTH = 10;
+        static const int MAX_LABEL_LENGTH  = 8;
+
         enum EditType {ET_HEX, ET_BASE_10, ET_ADDRESS, ET_STRING};
 
         GUI(SDL_Renderer *sdlRenderer, int screenWidth, int screenHeight):
@@ -82,7 +85,9 @@ class GUI {
         void      promptYesNo();
         void      promptValue(uint32_t value, int offset, int digits);
         void      promptChoice(std::vector<std::string> choices);
-        
+
+        void      promptLabel();
+
         int       getPromptId();
         bool      isPromptOK();
         bool      promptChanged();
@@ -167,6 +172,7 @@ class GUI {
         std::vector<std::string> promptChoices;
 
         uint32_t   oldPromptValue;
+        int        oldEditLength;  // Stores edit length when dropping into label prompt.
 
         std::string stringValue;
         int         stringIndex = -1;

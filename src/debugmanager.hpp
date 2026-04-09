@@ -137,7 +137,7 @@ private:
     void updateActiveWatchpoints();
 
     std::deque<TraceLog> traceLogs;
-    int maxTraceLogSize = DEFAULT_TRACE_SIZE;
+    size_t maxTraceLogSize = DEFAULT_TRACE_SIZE;
 
     const Breakpoint BDOS_Trace = Breakpoint{ 0x05, false, true, true, "BDOS", {
         {C, BYTE, 0xFF, true, {

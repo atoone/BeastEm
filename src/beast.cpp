@@ -517,7 +517,7 @@ void Beast::mainLoop() {
         mode = GUI::QUIT;
       }
 
-      if (SDL_TEXTINPUT == windowEvent.type && gui.isEditing()) {
+      if (SDL_TEXTINPUT == windowEvent.type && (gui.isEditing() || gui.isPrompt())) {
         gui.handleText(windowEvent.text.text);
         if (mode == GUI::BREAKPOINTS) {
           breakpointGui->breakpointTextEvent();
@@ -580,14 +580,14 @@ void Beast::debugMenu(SDL_Event windowEvent) {
     updateSelection(1, maxSelection);
     break;
   case SDLK_LEFT:
-    if (itemEdit()) {
+    if (itemEdit(false)) {
       gui.editDelta(-1);
       editComplete();
     } else
       itemSelect(-1);
     break;
   case SDLK_RIGHT:
-    if (itemEdit()) {
+    if (itemEdit(false)) {
       gui.editDelta(1);
       editComplete();
     } else
@@ -601,7 +601,7 @@ void Beast::debugMenu(SDL_Event windowEvent) {
     else if (SEL_MEM2 == selection || SEL_VIDEOVIEW2 == selection)
       startMemoryEdit(2);
     else
-      itemEdit();
+      itemEdit(false);
     break;
   case SDLK_SPACE:
     if (SEL_MEM0 <= selection && selection <= SEL_VIEWADDR0)
@@ -610,6 +610,9 @@ void Beast::debugMenu(SDL_Event windowEvent) {
       startMemoryEdit(1);
     if (SEL_MEM2 <= selection && selection <= SEL_VIEWADDR2)
       startMemoryEdit(2);
+    break;
+  case SDLK_PERIOD:
+    itemEdit(true);
     break;
   case SDLK_b:
     mode = GUI::BREAKPOINTS;
@@ -1458,114 +1461,124 @@ void Beast::updateMemoryEdit(int delta, bool startEdit) {
                 true);
 }
 
-bool Beast::itemEdit() {
+bool Beast::itemEdit(bool getLabel) {
   if (gui.isContinuousEdit())
     return false;
 
   switch (selection) {
   case SEL_PC:
-    gui.startEdit(cpu.pc - 1, GUI::COL1, GUI::ROW1, 8, 4);
+    editValue(cpu.pc - 1, GUI::COL1, GUI::ROW1, 8, 4, getLabel);
     break;
   case SEL_A:
-    gui.startEdit(cpu.a, GUI::COL1, GUI::ROW2, 8, 2);
+    editValue(cpu.a, GUI::COL1, GUI::ROW2, 8, 2, getLabel);
     break;
   case SEL_HL:
-    gui.startEdit(cpu.hl, GUI::COL1, GUI::ROW3, 8, 4);
+    editValue(cpu.hl, GUI::COL1, GUI::ROW3, 8, 4, getLabel);
     break;
   case SEL_BC:
-    gui.startEdit(cpu.bc, GUI::COL1, GUI::ROW4, 8, 4);
+    editValue(cpu.bc, GUI::COL1, GUI::ROW4, 8, 4, getLabel);
     break;
   case SEL_DE:
-    gui.startEdit(cpu.de, GUI::COL1, GUI::ROW5, 8, 4);
+    editValue(cpu.de, GUI::COL1, GUI::ROW5, 8, 4, getLabel);
     break;
 
   case SEL_SP:
-    gui.startEdit(cpu.sp, GUI::COL2, GUI::ROW3, 8, 4);
+    editValue(cpu.sp, GUI::COL2, GUI::ROW3, 8, 4, getLabel);
     break;
   case SEL_IX:
-    gui.startEdit(cpu.ix, GUI::COL2, GUI::ROW4, 8, 4);
+    editValue(cpu.ix, GUI::COL2, GUI::ROW4, 8, 4, getLabel);
     break;
   case SEL_IY:
-    gui.startEdit(cpu.iy, GUI::COL2, GUI::ROW5, 8, 4);
+    editValue(cpu.iy, GUI::COL2, GUI::ROW5, 8, 4, getLabel);
     break;
 
   case SEL_PAGING:
-    pagingEnabled = !pagingEnabled;
+    if (!getLabel) pagingEnabled = !pagingEnabled;
     break;
   case SEL_PAGE0:
-    gui.startEdit(memoryPage[0], GUI::COL3, GUI::ROW2, 10, 2);
+    editValue(memoryPage[0], GUI::COL3, GUI::ROW2, 10, 2, getLabel);
     break;
   case SEL_PAGE1:
-    gui.startEdit(memoryPage[1], GUI::COL3, GUI::ROW3, 10, 2);
+    editValue(memoryPage[1], GUI::COL3, GUI::ROW3, 10, 2, getLabel);
     break;
   case SEL_PAGE2:
-    gui.startEdit(memoryPage[2], GUI::COL3, GUI::ROW4, 10, 2);
+    editValue(memoryPage[2], GUI::COL3, GUI::ROW4, 10, 2, getLabel);
     break;
   case SEL_PAGE3:
-    gui.startEdit(memoryPage[3], GUI::COL3, GUI::ROW5, 10, 2);
+    editValue(memoryPage[3], GUI::COL3, GUI::ROW5, 10, 2, getLabel);
     break;
 
   case SEL_VIEWADDR0:
     if (memView[0] == MV_Z80)
-      gui.startEdit(memAddress[0], GUI::COL1, GUI::ROW8, 3, 4);
+      editValue(memAddress[0], GUI::COL1, GUI::ROW8, 3, 4, getLabel);
     if (memView[0] == MV_MEM)
-      gui.startEdit(memPageAddress[0], GUI::COL1, GUI::ROW9, 3, 4);
+      editValue(memPageAddress[0], GUI::COL1, GUI::ROW9, 3, 4, getLabel);
     if (memView[0] == MV_VIDEO)
-      gui.startEdit(getVideoAddress(0, memVideoView[0]), GUI::COL1, GUI::ROW9,
-                    3, 5);
+      editValue(getVideoAddress(0, memVideoView[0]), GUI::COL1, GUI::ROW9,
+                    3, 5, getLabel);
     break;
   case SEL_VIEWADDR1:
     if (memView[1] == MV_Z80)
-      gui.startEdit(memAddress[1], GUI::COL1, GUI::ROW12, 3, 4);
+      editValue(memAddress[1], GUI::COL1, GUI::ROW12, 3, 4, getLabel);
     if (memView[1] == MV_MEM)
-      gui.startEdit(memPageAddress[1], GUI::COL1, GUI::ROW13, 3, 4);
+      editValue(memPageAddress[1], GUI::COL1, GUI::ROW13, 3, 4, getLabel);
     if (memView[1] == MV_VIDEO)
-      gui.startEdit(getVideoAddress(1, memVideoView[1]), GUI::COL1, GUI::ROW13,
-                    3, 5);
+      editValue(getVideoAddress(1, memVideoView[1]), GUI::COL1, GUI::ROW13,
+                    3, 5, getLabel);
     break;
   case SEL_VIEWADDR2:
     if (memView[2] == MV_Z80)
-      gui.startEdit(memAddress[2], GUI::COL1, GUI::ROW16, 3, 4);
+      editValue(memAddress[2], GUI::COL1, GUI::ROW16, 3, 4, getLabel);
     if (memView[2] == MV_MEM)
-      gui.startEdit(memPageAddress[2], GUI::COL1, GUI::ROW17, 3, 4);
+      editValue(memPageAddress[2], GUI::COL1, GUI::ROW17, 3, 4, getLabel);
     if (memView[2] == MV_VIDEO)
-      gui.startEdit(getVideoAddress(2, memVideoView[2]), GUI::COL1, GUI::ROW17,
-                    3, 5);
+      editValue(getVideoAddress(2, memVideoView[2]), GUI::COL1, GUI::ROW17,
+                    3, 5, getLabel);
     break;
 
   case SEL_VIEWPAGE0:
-    gui.startEdit(memViewPage[0], GUI::COL1, GUI::ROW8, 1, 2);
+    editValue(memViewPage[0], GUI::COL1, GUI::ROW8, 1, 2, getLabel);
     break;
   case SEL_VIEWPAGE1:
-    gui.startEdit(memViewPage[1], GUI::COL1, GUI::ROW12, 1, 2);
+    editValue(memViewPage[1], GUI::COL1, GUI::ROW12, 1, 2, getLabel);
     break;
   case SEL_VIEWPAGE2:
-    gui.startEdit(memViewPage[2], GUI::COL1, GUI::ROW16, 1, 2);
+    editValue(memViewPage[2], GUI::COL1, GUI::ROW16, 1, 2, getLabel);
     break;
 
   case SEL_VOLUME:
-    gui.startEdit(volume, 430, GUI::ROW19, 9, 2, false, GUI::ET_BASE_10);
+    if (!getLabel) gui.startEdit(volume, 430, GUI::ROW19, 9, 2, false, GUI::ET_BASE_10);
     break;
 
   case SEL_A2:
-    gui.startEdit(cpu.af2 & 0xFF, GUI::COL4, GUI::ROW2, 9, 2);
+    editValue(cpu.af2 & 0xFF, GUI::COL4, GUI::ROW2, 9, 2, getLabel);
     break;
   case SEL_HL2:
-    gui.startEdit(cpu.hl2, GUI::COL4, GUI::ROW3, 9, 4);
+    editValue(cpu.hl2, GUI::COL4, GUI::ROW3, 9, 4, getLabel);
     break;
   case SEL_BC2:
-    gui.startEdit(cpu.bc2, GUI::COL4, GUI::ROW4, 9, 4);
+    editValue(cpu.bc2, GUI::COL4, GUI::ROW4, 9, 4, getLabel);
     break;
   case SEL_DE2:
-    gui.startEdit(cpu.de2, GUI::COL4, GUI::ROW5, 9, 4);
+    editValue(cpu.de2, GUI::COL4, GUI::ROW5, 9, 4, getLabel);
     break;
 
   case SEL_LISTING:
-    gui.startEdit(listAddress, GUI::COL1, GUI::END_ROW, 10, 4);
+    editValue(listAddress, GUI::COL1, GUI::END_ROW, 10, 4, getLabel);
     break;
   }
 
   return gui.isEditing();
+}
+
+void Beast::editValue(uint32_t value, int x, int y, int characterOffset, int digits, bool getLabel) {
+  if (!getLabel) {
+    gui.startEdit(value, x, y, characterOffset, digits);
+  }
+  else{
+    gui.startPrompt(-1, "Label lookup");
+    gui.promptLabel();
+  }
 }
 
 void Beast::editComplete() {

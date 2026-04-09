@@ -110,7 +110,7 @@ int Listing::addFile(std::string filename, int page, bool watch) {
   if (pos != std::string::npos && ((pos + 2) < filename.length())) {
     shortname = filename.substr(pos + 1);
   }
-  Source source = {shortname, filename, fileNum, page, {}, watch};
+  Source source = {shortname, filename, fileNum, page, {}, {}, watch};
 
   sources.push_back(source);
   return sources.size() - 1;
@@ -197,21 +197,23 @@ void Listing::loadFile(Source &source) {
 
   // Clear any previously parsed data for this file
   source.lines.clear();
-  std::cout << "Clearing old lines " << source.fileNum << std::endl;
+  source.symbols.clear();
+
+  //std::cout << "Clearing old lines " << source.fileNum << std::endl;
   for (auto it = lineMap.begin(); it != lineMap.end();) {
+    // TODO: Peformance fix here
     if (it->second.fileNum == source.fileNum) {
       it = lineMap.erase(it);
     } else {
       ++it;
     }
   }
-  std::cout << "Lines cleared" << std::endl;
+  //std::cout << "Lines cleared" << std::endl;
 
   uint32_t address = 0;
   bool foundAddress = false;
   unsigned int lineNum = 0;
-  unsigned int addressLine =
-      0; // Line number where current address was first seen
+  unsigned int addressLine = 0; // Line number where current address was first seen
 
   std::string text;
 
@@ -226,73 +228,105 @@ void Listing::loadFile(Source &source) {
     return;
   }
 
+  bool isLabelMap = false;
+
   while (std::getline(myfile, text)) {
     Line line = {};
     line.text = text; // Store original text for display
 
     if (text.length() == 0) {
-      std::cout << "Ending on line " << lineNum << std::endl;
-      break;
+      continue;
     }
 
     ltrim(text);
 
-    // Try to match the address pattern in this line
-    std::regex matcher = std::regex(addressRegex, std::regex::icase);
-    std::smatch match;
-    if (std::regex_search(text, match, matcher)) {
-      uint32_t nextAddress = std::stoi(match.str(2), nullptr, 16);
+    if (!isLabelMap ) {
+      // Try to match the address pattern in this line
+      std::regex matcher = std::regex(addressRegex, std::regex::icase);
+      std::smatch match;
+      if (std::regex_search(text, match, matcher)) {
+        uint32_t nextAddress = std::stoi(match.str(2), nullptr, 16);
 
-      // When address changes, record the mapping for the previous address
-      // This handles multi-line instructions and data blocks
-      if (foundAddress && (nextAddress != address)) {
-        Location loc = {source.fileNum, addressLine, true};
-        // Create physical address: (page << 14) | 14-bit offset
-        // Use assignment so the most recently loaded listing takes precedence
-        // when multiple listings map to the same address
-        lineMap[(source.page << 14) | (address & 0x3FFF)] = loc;
-      }
+        // When address changes, record the mapping for the previous address
+        // This handles multi-line instructions and data blocks
+        if (foundAddress && (nextAddress != address)) {
+          Location loc = {source.fileNum, addressLine, true};
+          // Create physical address: (page << 14) | 14-bit offset
+          // Use assignment so the most recently loaded listing takes precedence
+          // when multiple listings map to the same address
+          lineMap[(source.page << 14) | (address & 0x3FFF)] = loc;
+        }
 
-      foundAddress = true;
-      address = nextAddress;
-      addressLine = lineNum;  // 0-based index (lineNum before push_back)
+        foundAddress = true;
+        address = nextAddress;
+        addressLine = lineNum;  // 0-based index (lineNum before push_back)
 
-      line.address = address;
-      line.head = text.substr(
-          0, match.position(2)); // Text before address (line num, etc.)
+        line.address = address;
+        line.head = text.substr(
+            0, match.position(2)); // Text before address (line num, etc.)
 
-      // Parse up to 4 machine code bytes following the address
-      // Format: "ADDR XX XX XX XX" where XX are hex byte pairs
-      int byteCount = 0;
-      unsigned int bytePos = match.position(2) + match.length(2);
+        // Parse up to 4 machine code bytes following the address
+        // Format: "ADDR XX XX XX XX" where XX are hex byte pairs
+        int byteCount = 0;
+        unsigned int bytePos = match.position(2) + match.length(2);
 
-      while (byteCount < 4 && ((bytePos + 2) < text.length()) &&
-             (text[bytePos] == ' ') && isxdigit(tolower(text[bytePos + 1])) &&
-             isxdigit(tolower(text[bytePos + 2]))) {
-        line.bytes[byteCount++] =
-            (fromHex(text[bytePos + 1]) << 4) | fromHex(text[bytePos + 2]);
-        bytePos += 3;
-      }
-      line.byteCount = byteCount;
+        while (byteCount < 4 && ((bytePos + 2) < text.length()) &&
+              (text[bytePos] == ' ') && isxdigit(tolower(text[bytePos + 1])) &&
+              isxdigit(tolower(text[bytePos + 2]))) {
+          line.bytes[byteCount++] =
+              (fromHex(text[bytePos + 1]) << 4) | fromHex(text[bytePos + 2]);
+          bytePos += 3;
+        }
 
-      // Check if this line contains only data (no source code after bytes)
-      // Used to distinguish data directives (DB, DW) from instructions
-      if (byteCount > 0) {
-        line.isData = true;
+        addSymbol(bytePos, text, line, source);
 
-        while (bytePos < text.length()) {
-          if (!isspace(text[bytePos++])) {
-            line.isData = false; // Found non-whitespace => has source code
-            break;
+        line.byteCount = byteCount;
+
+        // Check if this line contains only data (no source code after bytes)
+        // Used to distinguish data directives (DB, DW) from instructions
+        if (byteCount > 0) {
+          line.isData = true;
+
+          while (bytePos < text.length()) {
+            if (!isspace(text[bytePos++])) {
+              line.isData = false; // Found non-whitespace => has source code
+              break;
+            }
           }
         }
+      } else {
+        if( text.rfind("tasm:", 0) == 0 ) {
+          // We ignore tasm output
+        }
+        else if( text.rfind("# file closed", 0) == 0) {
+          // SJAsmPlus telling us things.
+        }
+        else if( text.rfind("Value", 0) == 0) {
+          // SJAsmPlus symbol map follows
+          source.symbols.clear(); // Forget the labels we've scraped and just use the symbol map
+          isLabelMap = true;
+        }
+        else {
+          std::cout << "No match on line " << lineNum << ": " << text << std::endl;
+        }
       }
-    } else {
-      std::cout << "No match on line " << lineNum << ": " << text << std::endl;
-    }
 
-    source.lines.push_back(line);
-    lineNum++;  // Increment after push_back so addressLine is 0-based index
+      source.lines.push_back(line);
+      lineNum++;  // Increment after push_back so addressLine is 0-based index
+    }
+    else {
+      // SJAsmPlus label format:
+      // 0x0010 X module.labelName
+      //
+      if (text.length() > 9 && text.rfind("0x",0) == 0) {
+        if (text[7] != 'X') { // Skip unused labels
+          uint32_t value = std::stoi(text.substr(2,4), nullptr, 16);
+          std::string label = text.substr(9);
+          Symbol symbol = {label, value};
+          source.symbols.push_back(symbol);
+        }
+      }
+    }
   }
   myfile.close();
 
@@ -301,8 +335,78 @@ void Listing::loadFile(Source &source) {
     Location loc = {source.fileNum, addressLine, true};
     lineMap[(source.page << 14) | (address & 0x3FFF)] = loc;
   }
+
+  updateSymbolMap();
   std::cout << "Parsed listing, file " << source.filename << " for page "
             << source.page << " has " << lineNum << " lines." << std::endl;
+}
+
+void Listing::addSymbol(unsigned int &bytePos, std::string &text, Listing::Line &line, Listing::Source &source) {
+  // Now see if we have a label..
+  if (bytePos + 2 < text.length())
+  {
+    if (text[bytePos] == '.' && text[bytePos + 1] == '.' && text[bytePos + 2] == '.')
+    {
+      // DEFS can result in a truncated byte sequence indicated by a '...' string - skip if so.
+      bytePos += 3;
+    }
+
+    if (text[bytePos++] == ' ')
+    {
+      if (text[bytePos] != ' ' && text[bytePos] != '\t' &&
+          text[bytePos] != '.' && text[bytePos] != '_' && text[bytePos] != '@')
+      {
+        // Not whitespace or local label indicator..
+        std::string label = "";
+        while (++bytePos < text.length())
+        {
+          if (text[bytePos] == ':' || text[bytePos] == ' ' || text[bytePos] == '\t')
+            break;
+          label += text[bytePos];
+        }
+
+        bool isEquate = false;
+        while (++bytePos < text.length() && (text[bytePos] == ' ' || text[bytePos] == '\t') ) {}
+
+        if( bytePos < text.length() && text[bytePos] == '.') bytePos++;
+
+        if (text.rfind("equ", bytePos) == bytePos || text.rfind("EQU", bytePos) == bytePos) {
+          isEquate = true;
+        }
+
+        if (!isEquate) {
+          Symbol symbol = {label, line.address};
+          source.symbols.push_back(symbol);
+        }
+      }
+    }
+  }
+}
+
+void Listing::updateSymbolMap() {
+  symbolMap.clear();
+  for(auto source: sources) {
+    for (Symbol symbol: source.symbols) {
+      symbolMap.insert(&symbol);
+    }
+  }
+}
+
+std::vector<Listing::Symbol*> Listing::findSymbols(std::string matching) {
+  std::vector<Symbol*> result = {};
+
+  for (auto symbol: symbolMap) {
+    size_t k = 0;
+    for (size_t i = 0; i < symbol->label.size(); ++i)
+      if (matching[k] == symbol->label[i]) {
+        k++;
+        if (k == matching.size()) {
+            result.push_back(symbol);
+            break;
+        }
+    }
+  }
+  return result;
 }
 
 /**

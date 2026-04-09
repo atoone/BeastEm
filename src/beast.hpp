@@ -234,7 +234,8 @@ class Beast {
         void     setVideoAddress(int index, VideoView view, uint32_t value);
         uint8_t  readVideoMemory(VideoView view, uint32_t address);
         void     writeVideoMemory(VideoView view, uint32_t memoryEditAddress, uint8_t value );
-        bool itemEdit();
+        bool itemEdit(bool getLabel);
+        void editValue(uint32_t value, int x, int y, int characterOffset, int digits, bool getLabel);
         void editComplete();
 
         void fileMenu(SDL_Event windowEvent);

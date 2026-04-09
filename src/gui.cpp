@@ -175,7 +175,8 @@ void GUI::drawEdit() {
 }
 
 void GUI::handleText(char text[]) {
-    if( editType == ET_STRING && stringIndex < editLength && !isFirstTextEvent ) {
+    if( ((editType == ET_STRING && stringIndex < editLength) ||
+         (promptType == PT_LABEL && stringIndex < MAX_LABEL_LENGTH))  && !isFirstTextEvent ) {
         // Ignore CTRL-C, CTRL-V and Newline/Carriage Return values
         if( !( SDL_GetModState() & KMOD_CTRL && ( text[0] == 'c' || text[0] == 'C' || text[0] == 'v' || text[0] == 'V' ) ) &&
             !( text[0] == '\n' || text[0] == '\r') ) {
@@ -258,6 +259,13 @@ bool GUI::handleKey(SDL_Keycode key) {
                 case SDLK_LEFT   : if( editValue > 0 ) editValue--; break;
                 case SDLK_DOWN   :
                 case SDLK_RIGHT  : if( editValue < promptChoices.size()-1 ) editValue++; break;
+            }
+        }
+        if( promptType == PT_LABEL ) {
+            switch(key) { 
+                case SDLK_ESCAPE: promptOK = false; promptCompleted = true; break;
+                case SDLK_RETURN: promptOK = true; promptCompleted = true; break;
+                case SDLK_BACKSPACE: editBackspace();  break;
             }
         }
     }
@@ -373,6 +381,22 @@ void GUI::drawPrompt(bool immediate) {
         SDL_DestroyTexture(textTexture);
         SDL_FreeSurface(textSurface);
     }
+    if( promptType == PT_LABEL ) {
+        if( stringValue.length() > 0 ) {
+            textSurface = TTF_RenderText_Blended(monoFont, stringValue.c_str(), color);
+            textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
+            textRect.x = (screenWidth*zoom - MAX_LABEL_LENGTH*charWidth)/2;
+            textRect.y = promptY+charHeight/2;
+            textRect.w = textSurface->w;
+            textRect.h = textSurface->h;
+            
+            boxRGBA(sdlRenderer, textRect.x, textRect.y, textRect.x+textRect.w, textRect.y+textRect.h, bright.r, bright.g, bright.b, 0xFF);
+            SDL_RenderCopy(sdlRenderer, textTexture, NULL, &textRect);
+
+            SDL_DestroyTexture(textTexture);
+            SDL_FreeSurface(textSurface);
+        }
+    }
     if( immediate ) {
         SDL_RenderPresent(sdlRenderer);
     }
@@ -396,6 +420,17 @@ void GUI::promptChoice(std::vector<std::string> choices) {
     promptY -= charHeight;
     editValue = 0;
     promptHeight += 2*charHeight;
+}
+
+void GUI::promptLabel() {
+    promptType = PT_LABEL;
+    stringValue = "";
+    stringIndex = 0;
+    isFirstTextEvent = true;
+    oldEditLength = editLength;
+    editLength = MAX_LABEL_LENGTH;
+    promptY -= charHeight*(2+LABEL_LIST_LENGTH)/2;
+    promptHeight += (2+LABEL_LIST_LENGTH)*charHeight;
 }
 
 int GUI::getPromptId() {
