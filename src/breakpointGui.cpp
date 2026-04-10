@@ -46,7 +46,7 @@ GUI::Mode BreakpointGui::breakpointsMenu(SDL_Event windowEvent, GUI::Mode mode) 
                 breakpointEditMode = BEdit::NOEDIT;
             }
             // Check if edit was canceled (e.g., by ESCAPE handled internally by GUI)
-            if (!gui->isEditing())
+            if (!gui->isEditing() && !gui->isPrompt())
             {
                 breakpointEditMode = BEdit::NOEDIT;
             }

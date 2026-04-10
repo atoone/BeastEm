@@ -8,6 +8,26 @@
 #include "SDL_ttf.h"
 #include "SDL2_gfxPrimitives.h"
 
+class Lookup {
+    /* The lookup class is used by the GUI to look up matching labels for the user to select a value by name */
+    public:
+        /* Perform a lookup on the given match string, and remember the results */
+        virtual void lookup(std::string match) = 0;
+
+        /* Return the number of matches in the most recent lookup */
+        virtual size_t matches() = 0;
+
+        /* Get the label for the n-th match in the most recent lookup */
+        virtual std::string getLabel(size_t index) = 0;
+
+        /* Get the numerical value for the n-th match in the most recent lookup */
+        virtual int getValue(size_t index) = 0;
+
+        /* Get a second numerical value for the n-th match in the most recent lookup */
+        virtual int getAdditionalValue(size_t index) = 0;
+};
+
+
 class GUI {
 
     enum PromptType {PT_NONE, PT_CONFIRM, PT_VALUE, PT_CHOICE, PT_LABEL};
@@ -51,15 +71,17 @@ class GUI {
         static const int END_ROW = ROW22+(13*14);
 
         static const int LABEL_LIST_LENGTH = 10;
-        static const int MAX_LABEL_LENGTH  = 8;
+        static const int MAX_LABEL_LENGTH  = 12;
 
         enum EditType {ET_HEX, ET_BASE_10, ET_ADDRESS, ET_STRING};
 
-        GUI(SDL_Renderer *sdlRenderer, int screenWidth, int screenHeight):
+        GUI(Lookup *lookupSource, SDL_Renderer *sdlRenderer, int screenWidth, int screenHeight):
             sdlRenderer (sdlRenderer),
             screenWidth (screenWidth),
             screenHeight (screenHeight)
-            {};
+            {
+                this->lookupSource = lookupSource;
+            };
         ~GUI() {};
 
         void      init(float zoom);
@@ -170,6 +192,9 @@ class GUI {
         bool       promptOK = false;
         
         std::vector<std::string> promptChoices;
+        Lookup     *lookupSource;
+        size_t     lookupIndex;
+        bool       promptLabelToEdit;
 
         uint32_t   oldPromptValue;
         int        oldEditLength;  // Stores edit length when dropping into label prompt.

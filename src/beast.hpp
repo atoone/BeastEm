@@ -59,7 +59,8 @@ class Beast {
     static const int PROMPT_BINARY_VIDEO   = 8;
     static const int PROMPT_WRITE_ADDRESS  = 9; 
     static const int PROMPT_WRITE_LENGTH   = 10;
-
+    static const int PROMPT_LABEL          = 11;
+    
     static const int ROM_SIZE = 1<<19;
     static const int RAM_SIZE = 1<<19;
 

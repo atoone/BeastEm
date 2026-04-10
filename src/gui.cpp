@@ -32,6 +32,7 @@ void GUI::startEdit(uint32_t value, int x, int y, int characterOffset, int digit
 
     editContinue = isContinue;
     editOK = false;
+    promptType = PT_NONE;
 }
 
 void GUI::startAddressEdit(uint32_t value, bool isPhysical, int x, int y, int characterOffset) {
@@ -55,6 +56,7 @@ void GUI::startAddressEdit(uint32_t value, bool isPhysical, int x, int y, int ch
 
     editContinue = false;
     editOK = false;
+    promptType = PT_NONE;
 }
 
 void GUI::startStringEdit(std::string value, int x, int y, int length, int characterOffset) {
@@ -71,10 +73,11 @@ void GUI::startStringEdit(std::string value, int x, int y, int length, int chara
 
     editContinue = false;
     editOK = false;
+    promptType = PT_NONE;
 }
 
 bool GUI::isEditing() {
-    return editType != ET_STRING ? editIndex >= 0 : stringIndex < editLength;
+    return promptType != PT_LABEL && (editType != ET_STRING ? editIndex >= 0 : stringIndex < editLength);
 }
 
 bool GUI::isContinuousEdit() {
@@ -90,18 +93,6 @@ bool GUI::isLogicalAddress() {
 }
 
 void GUI::endEdit(bool isOK) {
-    // Right-justify value if not all digits were entered (early RETURN)
-    if (isOK && editIndex >= 0) {
-        if (editType == ET_ADDRESS) {
-            // For address mode, only shift the 4 data nibbles (not the don't-care nibble)
-            if (editIndex < 4) {
-                editValue >>= (editIndex + 1) * 4;
-            }
-            // If user pressed Enter immediately (editIndex == 4), value stays as-is
-        } else {
-            editValue >>= (editIndex + 1) * 4;
-        }
-    }
     editOK = isOK;
     editContinue = false;
     editIndex = -1;
@@ -194,6 +185,11 @@ void GUI::handleText(char text[]) {
             if( stringIndex == editLength ) {
                 editOK = true;
             }
+
+            if (promptType == PT_LABEL) {
+                lookupSource->lookup(stringValue);
+                lookupIndex = 0;
+            }
         }
     }
     isFirstTextEvent = false;
@@ -202,15 +198,16 @@ void GUI::handleText(char text[]) {
 bool GUI::handleKey(SDL_Keycode key) {
     if( isEditing() ) {
         switch(key) {  
-            case SDLK_ESCAPE: endEdit(false); break;
-            case SDLK_RETURN: endEdit(true);  break;
-            case SDLK_BACKSPACE: editBackspace();  break;
+            case SDLK_ESCAPE: endEdit(false); return true;
+            case SDLK_RETURN: endEdit(true); return true;
+            case SDLK_BACKSPACE: editBackspace(); return true;
         }
 
         if( editType != ET_STRING ) {
             switch(key) {
                 case SDLK_0 ... SDLK_9: editDigit( key - SDLK_0 ); break;
                 case SDLK_a ... SDLK_f: editDigit( key - SDLK_a + 10 ); break;
+                case SDLK_PERIOD : startPrompt(-1, "Start typing label to search"); promptLabel(); promptLabelToEdit = true; break;
                 default:
                     // For ET_ADDRESS mode, accept non-hex chars as "don't care" in first position
                     if( editType == ET_ADDRESS && editIndex == 4 ) {
@@ -263,10 +260,40 @@ bool GUI::handleKey(SDL_Keycode key) {
         }
         if( promptType == PT_LABEL ) {
             switch(key) { 
-                case SDLK_ESCAPE: promptOK = false; promptCompleted = true; break;
-                case SDLK_RETURN: promptOK = true; promptCompleted = true; break;
+                case SDLK_ESCAPE: 
+                    if (promptLabelToEdit) {
+                        promptType = PT_NONE;
+                        promptStarted = false;
+                        editLength = oldEditLength;
+                    }
+                    else {    
+                        promptOK = false; promptCompleted = true;
+                    }
+                    break;
+                case SDLK_RETURN: 
+                    if (lookupIndex > 0) {
+                        int value = lookupSource->getValue(lookupIndex-1);
+                        //int physicalVal = lookupSource->getAdditionalValue(lookupIndex-1);
+                        editValue = value;
+                    }
+
+                    if (promptLabelToEdit) {
+                        promptType = PT_NONE;
+                        promptStarted = false;
+                        editLength = oldEditLength;
+                    }
+                    else {    
+                        promptOK = lookupIndex > 0; promptCompleted = true; 
+                    }
+                    break;
                 case SDLK_BACKSPACE: editBackspace();  break;
+                case SDLK_UP     :
+                case SDLK_LEFT   : if( lookupIndex > 1 ) lookupIndex--; break;
+                case SDLK_DOWN   :
+                case SDLK_RIGHT  : if( lookupIndex < lookupSource->matches() ) lookupIndex++; break;
             }
+
+            
         }
     }
     return true;
@@ -308,7 +335,7 @@ void GUI::editDelta(int delta) {
 }
 
 void GUI::editBackspace() {
-    if( editType != ET_STRING ) {
+    if( editType != ET_STRING && promptType != PT_LABEL ) {
         if( editIndex < (editLength-1) ) {
             editIndex++;
             if( editType == ET_ADDRESS && editIndex == 4 ) {
@@ -324,6 +351,11 @@ void GUI::editBackspace() {
         if( stringIndex > 0 ) {
             stringIndex--;
             stringValue.resize(stringIndex);
+
+            if (promptType == PT_LABEL) {
+                lookupSource->lookup(stringValue);
+                lookupIndex = 0;
+            }
         }
     }
 }
@@ -382,19 +414,25 @@ void GUI::drawPrompt(bool immediate) {
         SDL_FreeSurface(textSurface);
     }
     if( promptType == PT_LABEL ) {
-        if( stringValue.length() > 0 ) {
-            textSurface = TTF_RenderText_Blended(monoFont, stringValue.c_str(), color);
-            textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
-            textRect.x = (screenWidth*zoom - MAX_LABEL_LENGTH*charWidth)/2;
-            textRect.y = promptY+charHeight/2;
-            textRect.w = textSurface->w;
-            textRect.h = textSurface->h;
-            
-            boxRGBA(sdlRenderer, textRect.x, textRect.y, textRect.x+textRect.w, textRect.y+textRect.h, bright.r, bright.g, bright.b, 0xFF);
-            SDL_RenderCopy(sdlRenderer, textTexture, NULL, &textRect);
+        int maxLen = strlen(promptBuffer)-4;
+        char *buffer = new char[maxLen+1];
 
-            SDL_DestroyTexture(textTexture);
-            SDL_FreeSurface(textSurface);
+        if( stringValue.length() > 0 ) {
+            std::size_t length = stringValue.copy(buffer, maxLen);
+            buffer[length] = '\0';
+
+            printb(promptX + 3*charWidth, promptY-((LABEL_LIST_LENGTH/2+1)*charHeight), color, lookupIndex == 0 ? length: 0, bright, buffer);
+        }
+        for (size_t i=0; i<lookupSource->matches() && i<LABEL_LIST_LENGTH; i++ ) {
+            std::size_t length = lookupSource->getLabel(i).copy(buffer, maxLen);
+            buffer[length] = '\0';
+
+            printb(promptX + charWidth,  promptY-((LABEL_LIST_LENGTH/2-i-1)*charHeight), color, lookupIndex == i+1 ? length: 0, bright, buffer);
+            if( lookupIndex == i+1 ) {
+                int value = lookupSource->getValue(i);
+                int physicalVal = lookupSource->getAdditionalValue(i);
+                print(promptX + 2*charWidth, promptY+((LABEL_LIST_LENGTH/2+2)*charHeight), color, 0, bright, "0x%04X  Physical: 0x%05X", value, physicalVal);
+            }
         }
     }
     if( immediate ) {
@@ -429,8 +467,11 @@ void GUI::promptLabel() {
     isFirstTextEvent = true;
     oldEditLength = editLength;
     editLength = MAX_LABEL_LENGTH;
-    promptY -= charHeight*(2+LABEL_LIST_LENGTH)/2;
-    promptHeight += (2+LABEL_LIST_LENGTH)*charHeight;
+    promptHeight += (4+LABEL_LIST_LENGTH)*charHeight;
+    this->lookupSource = lookupSource;
+    lookupSource->lookup(stringValue);
+    lookupIndex = 0;
+    promptLabelToEdit = false;
 }
 
 int GUI::getPromptId() {

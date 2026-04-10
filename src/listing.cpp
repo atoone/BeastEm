@@ -278,7 +278,14 @@ void Listing::loadFile(Source &source) {
           bytePos += 3;
         }
 
-        addSymbol(bytePos, text, line, source);
+        if (bytePos + 2 < text.length()) {
+          if (text[bytePos] == '.' && text[bytePos + 1] == '.' && text[bytePos + 2] == '.') {
+            // DEFS can result in a truncated byte sequence indicated by a '...' string - skip if so.
+            bytePos += 3;
+          }
+        }
+
+        addSymbol(text, line, source);
 
         line.byteCount = byteCount;
 
@@ -298,7 +305,7 @@ void Listing::loadFile(Source &source) {
         if( text.rfind("tasm:", 0) == 0 ) {
           // We ignore tasm output
         }
-        else if( text.rfind("# file closed", 0) == 0) {
+        else if( text.rfind("# ", 0) == 0) {
           // SJAsmPlus telling us things.
         }
         else if( text.rfind("Value", 0) == 0) {
@@ -322,7 +329,7 @@ void Listing::loadFile(Source &source) {
         if (text[7] != 'X') { // Skip unused labels
           uint32_t value = std::stoi(text.substr(2,4), nullptr, 16);
           std::string label = text.substr(9);
-          Symbol symbol = {label, value};
+          Symbol symbol = {label, value, source.page};
           source.symbols.push_back(symbol);
         }
       }
@@ -338,46 +345,36 @@ void Listing::loadFile(Source &source) {
 
   updateSymbolMap();
   std::cout << "Parsed listing, file " << source.filename << " for page "
-            << source.page << " has " << lineNum << " lines." << std::endl;
+            << source.page << " has " << lineNum << " lines, " << source.symbols.size() << " label(s)." << std::endl;
 }
 
-void Listing::addSymbol(unsigned int &bytePos, std::string &text, Listing::Line &line, Listing::Source &source) {
+void Listing::addSymbol( std::string &text, Listing::Line &line, Listing::Source &source) {
   // Now see if we have a label..
-  if (bytePos + 2 < text.length())
-  {
-    if (text[bytePos] == '.' && text[bytePos + 1] == '.' && text[bytePos + 2] == '.')
-    {
-      // DEFS can result in a truncated byte sequence indicated by a '...' string - skip if so.
-      bytePos += 3;
-    }
+  size_t index = symbolColumn;
 
-    if (text[bytePos++] == ' ')
-    {
-      if (text[bytePos] != ' ' && text[bytePos] != '\t' &&
-          text[bytePos] != '.' && text[bytePos] != '_' && text[bytePos] != '@')
-      {
-        // Not whitespace or local label indicator..
-        std::string label = "";
-        while (++bytePos < text.length())
-        {
-          if (text[bytePos] == ':' || text[bytePos] == ' ' || text[bytePos] == '\t')
-            break;
-          label += text[bytePos];
-        }
+  if (index + 2 < text.length()) {
+    if (NON_LABEL_CHARS.find(text[index]) == std::string::npos) {
+      // Not whitespace or local label indicator..
+      std::string label = "";
+      while (index < text.length()) {
+        if (text[index] == ':' || text[index] == ' ' || text[index] == '\t')
+          break;
+        label += text[index++];
+      }
 
-        bool isEquate = false;
-        while (++bytePos < text.length() && (text[bytePos] == ' ' || text[bytePos] == '\t') ) {}
+      bool isEquate = false;
+      while (++index < text.length() && (text[index] == ' ' || text[index] == '\t') ) {}
 
-        if( bytePos < text.length() && text[bytePos] == '.') bytePos++;
+      if( index < text.length() && text[index] == '.') index++;
 
-        if (text.rfind("equ", bytePos) == bytePos || text.rfind("EQU", bytePos) == bytePos) {
-          isEquate = true;
-        }
+      if (text.rfind("equ", index) == index || text.rfind("EQU", index) == index) {
+        isEquate = true;
+      }
 
-        if (!isEquate) {
-          Symbol symbol = {label, line.address};
-          source.symbols.push_back(symbol);
-        }
+      if (!isEquate) {
+        Symbol symbol = {label, line.address, source.page};
+        source.symbols.push_back(symbol);
+        // std::cout << "Label '" << label << " = " << line.address << std::endl;
       }
     }
   }
@@ -386,27 +383,10 @@ void Listing::addSymbol(unsigned int &bytePos, std::string &text, Listing::Line 
 void Listing::updateSymbolMap() {
   symbolMap.clear();
   for(auto source: sources) {
-    for (Symbol symbol: source.symbols) {
-      symbolMap.insert(&symbol);
+    for (auto symbol: source.symbols) {
+      symbolMap.insert(symbol);
     }
   }
-}
-
-std::vector<Listing::Symbol*> Listing::findSymbols(std::string matching) {
-  std::vector<Symbol*> result = {};
-
-  for (auto symbol: symbolMap) {
-    size_t k = 0;
-    for (size_t i = 0; i < symbol->label.size(); ++i)
-      if (matching[k] == symbol->label[i]) {
-        k++;
-        if (k == matching.size()) {
-            result.push_back(symbol);
-            break;
-        }
-    }
-  }
-  return result;
 }
 
 /**
@@ -478,3 +458,77 @@ bool Listing::isUpdated(Source &file) {
  * Toggles the watch status for a source file.
  */
 void Listing::toggleWatch(Source &file) { file.watch = !file.watch; }
+
+void Listing::lookup(std::string match) {
+  symbolLookup.clear();
+
+  if (match.length()<2) {
+    return;
+  }
+
+
+  for (Symbol symbol: symbolMap) {
+    bool found = true;
+    size_t i = match.length();
+    if( i>symbol.label.length() ) continue;
+
+    while(i-->0) {
+      if(tolower(match[i]) != tolower(symbol.label[i])) {
+        found = false;
+        break;
+      }
+    }
+    if (found) {
+      symbolLookup.push_back(symbol);
+    }
+    
+    if (symbolLookup.size()>MAX_LOOKUP) break;
+  }
+
+ 
+  for(auto symbol: symbolMap) {
+    if (symbolLookup.size()>MAX_LOOKUP) break;
+
+    size_t k = 0;
+    for (size_t i = 0; i < symbol.label.size(); ++i)
+      if (tolower(match[k]) == tolower(symbol.label[i])) {
+        k++;
+        if (k == match.size()) {
+            bool found = false;
+
+            for (auto existing: symbolLookup) {
+
+              if (existing.label == symbol.label) {
+                found = true;
+                break;
+              }
+            }
+
+            if (!found) symbolLookup.push_back(symbol);
+            break;
+        }
+      }
+  }
+
+}
+
+size_t Listing::matches() {
+  return symbolLookup.size();
+}
+
+std::string Listing::getLabel(size_t index) {
+  if (index>symbolLookup.size()) return "";
+  return symbolLookup[index].label;
+}
+
+int Listing::getValue(size_t index) {
+  if (index>symbolLookup.size()) return 0;
+
+  return symbolLookup[index].value;
+}
+
+int Listing::getAdditionalValue(size_t index) {
+    if (index>symbolLookup.size()) return 0;
+
+    return (symbolLookup[index].value & 0x3FFF) | (symbolLookup[index].page << 14);
+}

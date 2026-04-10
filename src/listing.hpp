@@ -24,6 +24,7 @@
  */
 
 #pragma once
+#include "gui.hpp"
 #include <cstdint>
 #include <iostream>
 #include <filesystem>
@@ -32,7 +33,7 @@
 #include <vector>
 #include <set>
 
-class Listing {
+class Listing: public Lookup {
 
     public:
         /**
@@ -48,14 +49,12 @@ class Listing {
         struct Symbol {
             std::string label;
             uint32_t    value;
+            int         page;
         };
 
         struct SymbolComp {
-            bool operator()(const Symbol*s1, const Symbol* s2) const {
-                if (s1 && s2) {
-                    return s1->label < s2->label;
-                }
-                return s1<s2;
+            bool operator()(const Symbol s1, const Symbol s2) const {
+                return s1.label < s2.label; 
             }
         };
 
@@ -121,8 +120,6 @@ class Listing {
          */
         void loadFile(Source &source);
 
-        void addSymbol(unsigned int &bytePos, std::string &text, Listing::Line &line, Listing::Source &source);
-
         /**
          * Removes a file from tracking. Cleans up lineMap entries.
          */
@@ -175,7 +172,28 @@ class Listing {
          */
         void    toggleWatch(Source &file);
 
+        virtual void lookup(std::string match);
+
+        /* Return the number of matches in the most recent lookup */
+        virtual size_t matches();
+
+        /* Get the label for the n-th match in the most recent lookup */
+        virtual std::string getLabel(size_t index);
+
+        /* Get the numerical value for the n-th match in the most recent lookup */
+        virtual int getValue(size_t index);
+
+        /* Get a second numerical value for the n-th match in the most recent lookup */
+        virtual int getAdditionalValue(size_t index);
+
     private:
+        static const int DEFAULT_SYMBOL_COLUMN = 24; 
+        static const int MAX_LOOKUP = 10;
+
+        const std::string NON_LABEL_CHARS = " \t;#._@";
+
+        int symbolColumn = DEFAULT_SYMBOL_COLUMN;
+
         /** All loaded source files */
         std::vector<Source> sources;
 
@@ -189,8 +207,10 @@ class Listing {
          */
         std::map<uint32_t, Location> lineMap;
 
-        std::set<Symbol*, SymbolComp> symbolMap;
+        std::set<Symbol, SymbolComp> symbolMap;
         
+        std::vector<Symbol> symbolLookup;
+
         /**
          * Regex pattern to extract address from listing lines.
          *
@@ -220,5 +240,6 @@ class Listing {
 
         void updateSymbolMap();
 
-        std::vector<Symbol*> findSymbols(std::string matching);
+        void addSymbol(std::string &text, Listing::Line &line, Listing::Source &source);
+
 };

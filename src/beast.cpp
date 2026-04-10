@@ -16,7 +16,7 @@
 Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom,
              Listing &listing, std::vector<BinaryFile> files)
     : rom{}, ram{}, memoryPage{0}, listing(listing), binaryFiles(files),
-      gui(createRenderer(window), screenWidth, screenHeight) {
+      gui(&listing, createRenderer(window), screenWidth, screenHeight) {
 
   windowId = SDL_GetWindowID(window);
 
@@ -977,6 +977,9 @@ void Beast::promptComplete() {
     writeDataPrompt();
     break;
   }
+  case PROMPT_LABEL: {
+    editComplete();
+  }
   }
 }
 
@@ -1576,7 +1579,7 @@ void Beast::editValue(uint32_t value, int x, int y, int characterOffset, int dig
     gui.startEdit(value, x, y, characterOffset, digits);
   }
   else{
-    gui.startPrompt(-1, "Label lookup");
+    gui.startPrompt(PROMPT_LABEL, "Start typing label to search");
     gui.promptLabel();
   }
 }
