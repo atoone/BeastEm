@@ -517,17 +517,7 @@ void Listing::lookup(std::string match) {
       if (tolower(match[k]) == tolower(symbol.label[i])) {
         k++;
         if (k == match.size()) {
-            bool found = false;
-
-            for (auto & existing: symbolLookup) {
-
-              if (existing.label == symbol.label) {
-                found = true;
-                break;
-              }
-            }
-
-            if (!found) symbolLookup.push_back(symbol);
+            symbolLookup.push_back(symbol);
             break;
         }
       }

@@ -347,16 +347,16 @@ void BreakpointGui::drawWatchpoints() {
           gui->print(GUI::COL1, row, textColor, highlight, bright,
                     " %d    0x%05X  0x%04X   ", i + 1, watchpointEditAddress,
                     watchpointEditRange);
-          gui->print(GUI::COL1 + 198, row, textColor, 4, yellow, "[%s]",
+          gui->print(GUI::COL1 + gui->getWidthFor(25), row, textColor, 4, yellow, "<%s>",
                     typeStr);
-          gui->print(GUI::COL1 + 234, row, textColor, 0, bright, "  [*]");
+          gui->print(GUI::COL1 + gui->getWidthFor(29), row, textColor, 0, bright, "  [*]");
         } else {
           gui->print(GUI::COL1, row, textColor, highlight, bright,
                     " %d    0x#%04X  0x%04X   ", i + 1, watchpointEditAddress,
                     watchpointEditRange);
-          gui->print(GUI::COL1 + 198, row, textColor, 4, yellow, "[%s]",
+          gui->print(GUI::COL1 + gui->getWidthFor(25), row, textColor, 4, yellow, "<%s>",
                     typeStr);
-          gui->print(GUI::COL1 + 234, row, textColor, 0, bright, "  [*]");
+          gui->print(GUI::COL1 + gui->getWidthFor(29), row, textColor, 0, bright, "  [*]");
         }
       }
     } else if (i < wpCount) {
@@ -391,8 +391,8 @@ void BreakpointGui::drawWatchpoints() {
   } else {
     gui->print(GUI::COL1, GUI::END_ROW, menuColor, "[A]dd");
   }
-  gui->print(GUI::COL2 - 40, GUI::END_ROW, menuColor, "[D]elete");
-  gui->print(GUI::COL3 - 40, GUI::END_ROW, menuColor, "[Space]:Toggle");
+  gui->print(GUI::COL2 - gui->getWidthFor(5), GUI::END_ROW, menuColor, "[D]elete");
+  gui->print(GUI::COL3 - gui->getWidthFor(5), GUI::END_ROW, menuColor, "[Space]:Toggle");
   gui->print(GUI::COL4, GUI::END_ROW, menuColor, "[Enter]:Edit");
   gui->print(GUI::COL5, GUI::END_ROW, menuColor, "[ESC]:Exit");
 }
@@ -438,11 +438,10 @@ GUI::Mode BreakpointGui::watchpointsMenu(SDL_Event windowEvent, GUI::Mode mode) 
             watchpointEditIsPhysical = !gui->isLogicalAddress();
             watchpointEditField = 1;
             // Start editing range with default or existing value
-            int rangeX = watchpointEditIsPhysical ? (GUI::COL1 + 160)
-                                                  : (GUI::COL1 + 160);
-            gui->startEdit(watchpointEditRange, rangeX,
+
+            gui->startEdit(watchpointEditRange, GUI::COL1,
                           GUI::ROW3 + (watchpointSelection * GUI::ROW_HEIGHT),
-                          0, 4, false, GUI::ET_HEX);
+                          18, 4, false, GUI::ET_HEX);
           } else {
             // Range field complete - store and advance to type field
             watchpointEditRange =
@@ -468,10 +467,8 @@ GUI::Mode BreakpointGui::watchpointsMenu(SDL_Event windowEvent, GUI::Mode mode) 
           gui->endEdit(true);
           watchpointEditAddress = value;
           watchpointEditField = 1;
-          int rangeX =
-              watchpointEditIsPhysical ? (GUI::COL1 + 160) : (GUI::COL1 + 160);
-          gui->startEdit(watchpointEditRange, rangeX,
-                        GUI::ROW3 + (watchpointSelection * GUI::ROW_HEIGHT), 0,
+          gui->startEdit(watchpointEditRange, GUI::COL1,
+                        GUI::ROW3 + (watchpointSelection * GUI::ROW_HEIGHT), 18,
                         4, false, GUI::ET_HEX);
         } else {
           gui->endEdit(true);

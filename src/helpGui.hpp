@@ -76,7 +76,13 @@ class HelpGui {
             row += GUI::ROW_HEIGHT;     
 
             gui->print(GUI::COL1, row, textColor, "Or press 'Y' to create a breakpoint at the current list location");
-            row += GUI::ROW_HEIGHT;  
+            row += GUI::ROW_HEIGHT*2;  
+
+            gui->print(GUI::COL1, row, textColor, "When the emulator is running, to debug VideoBeast layer timings");
+            row += GUI::ROW_HEIGHT;
+
+            gui->print(GUI::COL1, row, textColor, "click on the display window and use the '[' and ']' keys");
+            row += GUI::ROW_HEIGHT;
 
             gui->print(GUI::COL1, GUI::END_ROW, menuColor, "[R]un");
             gui->print(GUI::COL5, GUI::END_ROW, menuColor, "[ESC]:Exit");
@@ -88,7 +94,7 @@ class HelpGui {
             SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
             SDL_Rect textRect;
 
-            textRect.x = (screenWidth - textSurface->w) / 2;
+            textRect.x = (zoom*screenWidth - textSurface->w) / 2;
             textRect.y = y * zoom;
             textRect.w = textSurface->w;
             textRect.h = textSurface->h;

@@ -377,7 +377,7 @@ void DebugManager::logTrace(const Breakpoint *breakpoint, z80_t cpu, uint32_t ph
     traceLogs.pop_front();
   }
 
-  TraceLog traceLog = {physicalAddress, tick, (uint16_t)cpu.pc-1, cpu.sp, cpu.af, cpu.bc, cpu.de, cpu.hl, cpu.ix, cpu.iy, memoryPage[0], memoryPage[1], memoryPage[2], memoryPage[3], pageEnabled, breakpoint, {}};
+  TraceLog traceLog = {physicalAddress, tick, (uint16_t)(cpu.pc-1), cpu.sp, cpu.af, cpu.bc, cpu.de, cpu.hl, cpu.ix, cpu.iy, memoryPage[0], memoryPage[1], memoryPage[2], memoryPage[3], pageEnabled, breakpoint, {}};
 
   for (auto &trace:breakpoint->traces) {
     if (trace.traceType == TraceType::ADDRESS) {
