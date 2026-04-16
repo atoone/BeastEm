@@ -15,14 +15,18 @@ class BreakpointGui {
         ~BreakpointGui();
 
         GUI::Mode breakpointsMenu(SDL_Event windowEvent, GUI::Mode mode);
+        void addBreakpoint(uint32_t address, bool isPhysical);
         void breakpointTextEvent();
         void drawBreakpoints();
         GUI::Mode watchpointsMenu(SDL_Event windowEvent, GUI::Mode mode);
         void drawWatchpoints();
 
+        std::string getTraceString(TraceLog log, Trace trace, int &value);
+
         GUI::Mode traceLogMenu(SDL_Event windowEvent, GUI::Mode mode);
         void drawTraceLog();
-        void resetMode();
+        void resetMode(bool selectLast);
+        void setAddresses(uint16_t cpuAddress, uint8_t cpuPage, uint64_t listingAddress);
 
     private:        
         DebugManager    *debugManager;
@@ -31,10 +35,11 @@ class BreakpointGui {
         
         int screenWidth, screenHeight;
         float zoom = 1.0f;
-        
-        int     breakpointSelection = 0;
+
+
+        size_t  breakpointSelection = 0;
         BEdit   breakpointEditMode = BEdit::NOEDIT;
-        int     watchpointSelection = 0;
+        size_t  watchpointSelection = 0;
         bool    watchpointEditMode = false;
         int     watchpointEditField = 0;  // 0=address, 1=range, 2=type
         bool    watchpointAddMode = false;  // true when adding new, false when editing existing
@@ -45,8 +50,16 @@ class BreakpointGui {
         bool     watchpointEditIsPhysical = false;
 
         size_t    logStart;
+        size_t    currentLog;
+        bool      showRelative = false;
         
+        uint16_t  cpuAddress;
+        uint8_t   cpuPage;
+        uint64_t  listingAddress;
+
+        std::string addSeparator(uint64_t value);
+
         const int MAX_NAME_LENGTH = 12; // Maximum length for breakpoint names
 
-        const int LOG_LIST_SIZE = 20;
+        const size_t LOG_LIST_SIZE = 20;
 };

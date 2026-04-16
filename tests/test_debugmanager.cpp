@@ -58,9 +58,9 @@ TEST(check_logical_breakpoint_triggers) {
 
     uint8_t memoryPage[4] = {0, 0, 0, 0};
 
-    ASSERT_EQ(0, dm.checkBreakpoint(0x4080, memoryPage));
-    ASSERT_EQ(-1, dm.checkBreakpoint(0x4081, memoryPage));
-    ASSERT_EQ(-1, dm.checkBreakpoint(0x407F, memoryPage));
+    ASSERT_NOT_NULL(dm.checkBreakpoint(0x4080, memoryPage));
+    ASSERT_NULL(dm.checkBreakpoint(0x4081, memoryPage));
+    ASSERT_NULL(dm.checkBreakpoint(0x407F, memoryPage));
 }
 
 // AC#3: Given a physical breakpoint at $84080
@@ -77,11 +77,11 @@ TEST(check_physical_breakpoint_triggers) {
     // With bank 8 paged into slot 1
     uint8_t memoryPage[4] = {0, 8, 0, 0};  // Page 8 in slot 1
 
-    ASSERT_EQ(0, dm.checkBreakpoint(0x4080, memoryPage));
+    ASSERT_NOT_NULL(dm.checkBreakpoint(0x4080, memoryPage));
 
     // With different bank - should NOT trigger
     uint8_t memoryPage2[4] = {0, 9, 0, 0};  // Page 9 in slot 1
-    ASSERT_EQ(-1, dm.checkBreakpoint(0x4080, memoryPage2));
+    ASSERT_NULL(dm.checkBreakpoint(0x4080, memoryPage2));
 }
 
 // AC#4: Given a disabled breakpoint at $4080
@@ -94,11 +94,11 @@ TEST(disabled_breakpoint_does_not_trigger) {
 
     uint8_t memoryPage[4] = {0, 0, 0, 0};
 
-    ASSERT_EQ(-1, dm.checkBreakpoint(0x4080, memoryPage));
+    ASSERT_NULL(dm.checkBreakpoint(0x4080, memoryPage));
 
     // Re-enable and verify it triggers again (returns index 0)
     dm.setBreakpointEnabled(index, true);
-    ASSERT_EQ(0, dm.checkBreakpoint(0x4080, memoryPage));
+    ASSERT_NOT_NULL(dm.checkBreakpoint(0x4080, memoryPage));
 }
 
 // AC#5: Given no breakpoints are enabled
@@ -235,18 +235,22 @@ TEST(find_breakpoint_by_address) {
     dm.addBreakpoint(0x2000, true);   // index 1
     dm.addBreakpoint(0x3000, false);  // index 2
 
+    size_t index;
     // Find existing breakpoints
-    ASSERT_EQ(0, dm.findBreakpointByAddress(0x1000, false));
-    ASSERT_EQ(1, dm.findBreakpointByAddress(0x2000, true));
-    ASSERT_EQ(2, dm.findBreakpointByAddress(0x3000, false));
+    ASSERT_EQ(true, dm.findBreakpointByAddress(0x1000, false, index));
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(true, dm.findBreakpointByAddress(0x2000, true, index));
+    ASSERT_EQ(1, index);
+    ASSERT_EQ(true, dm.findBreakpointByAddress(0x3000, false, index));
+    ASSERT_EQ(2, index);
 
     // Address exists but wrong type
-    ASSERT_EQ(-1, dm.findBreakpointByAddress(0x1000, true));
-    ASSERT_EQ(-1, dm.findBreakpointByAddress(0x2000, false));
+    ASSERT_EQ(false, dm.findBreakpointByAddress(0x1000, true, index));
+    ASSERT_EQ(false, dm.findBreakpointByAddress(0x2000, false, index));
 
     // Non-existent address
-    ASSERT_EQ(-1, dm.findBreakpointByAddress(0x9999, false));
-    ASSERT_EQ(-1, dm.findBreakpointByAddress(0x9999, true));
+    ASSERT_EQ(false, dm.findBreakpointByAddress(0x9999, false, index));
+    ASSERT_EQ(false, dm.findBreakpointByAddress(0x9999, true, index));
 }
 
 // ==============================================================
@@ -342,21 +346,25 @@ TEST(find_watchpoint_by_start_address) {
     dm.addWatchpoint(0x2000, 32, true, true, true);   // index 1
     dm.addWatchpoint(0x3000, 64, false, true, true);  // index 2
 
+    size_t index;
     // Find existing watchpoints by their start address
-    ASSERT_EQ(0, dm.findWatchpointByStartAddress(0x1000, false));
-    ASSERT_EQ(1, dm.findWatchpointByStartAddress(0x2000, true));
-    ASSERT_EQ(2, dm.findWatchpointByStartAddress(0x3000, false));
+    ASSERT_EQ(true, dm.findWatchpointByStartAddress(0x1000, false, index));
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(true, dm.findWatchpointByStartAddress(0x2000, true, index));
+    ASSERT_EQ(1, index);
+    ASSERT_EQ(true, dm.findWatchpointByStartAddress(0x3000, false, index));
+    ASSERT_EQ(2, index);
 
     // Address exists but wrong type
-    ASSERT_EQ(-1, dm.findWatchpointByStartAddress(0x1000, true));
-    ASSERT_EQ(-1, dm.findWatchpointByStartAddress(0x2000, false));
+    ASSERT_EQ(false, dm.findWatchpointByStartAddress(0x1000, true, index));
+    ASSERT_EQ(false, dm.findWatchpointByStartAddress(0x2000, false, index));
 
     // Non-existent address
-    ASSERT_EQ(-1, dm.findWatchpointByStartAddress(0x9999, false));
-    ASSERT_EQ(-1, dm.findWatchpointByStartAddress(0x9999, true));
+    ASSERT_EQ(false, dm.findWatchpointByStartAddress(0x9999, false, index));
+    ASSERT_EQ(false, dm.findWatchpointByStartAddress(0x9999, true, index));
 
     // Address within range but not start address - should NOT find
-    ASSERT_EQ(-1, dm.findWatchpointByStartAddress(0x1008, false));  // inside 0x1000-0x100F
+    ASSERT_EQ(false, dm.findWatchpointByStartAddress(0x1008, false, index));  // inside 0x1000-0x100F
 }
 
 // Test getWatchpoint with invalid index
@@ -389,17 +397,22 @@ TEST(check_watchpoint_triggers_on_write) {
     DebugManager dm;
     dm.addWatchpoint(0x8000, 32, false, false, true);  // write-only, logical
 
+    size_t index;
+
     // Write to address within range - should trigger (logical address matches)
     // Use 0xDEADBEEF for physical address to show it's ignored for logical watchpoints
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8010, 0xDEADBEEF, false));
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8010, 0xDEADBEEF, false, index));
+    ASSERT_EQ(0, index);
 
     // Write to addresses at boundaries
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8000, 0xDEADBEEF, false));  // start of range
-    ASSERT_EQ(0, dm.checkWatchpoint(0x801F, 0xDEADBEEF, false));  // end of range (inclusive)
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8000, 0xDEADBEEF, false, index));  // start of range
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(true, dm.checkWatchpoint(0x801F, 0xDEADBEEF, false, index));  // end of range (inclusive)
+    ASSERT_EQ(0, index);
 
     // Write outside range - should NOT trigger
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x7FFF, 0xDEADBEEF, false));  // before range
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x8020, 0xDEADBEEF, false));  // after range
+    ASSERT_EQ(false, dm.checkWatchpoint(0x7FFF, 0xDEADBEEF, false, index));  // before range
+    ASSERT_EQ(false, dm.checkWatchpoint(0x8020, 0xDEADBEEF, false, index));  // after range
 }
 
 // AC#3: Given a read watchpoint on $C000-$C0FF
@@ -409,17 +422,22 @@ TEST(check_watchpoint_triggers_on_read) {
     DebugManager dm;
     dm.addWatchpoint(0xC000, 256, false, true, false);  // read-only, logical
 
+    size_t index;
+
     // Read from address within range - should trigger
     // Use 0xDEADBEEF for physical address to show it's ignored for logical watchpoints
-    ASSERT_EQ(0, dm.checkWatchpoint(0xC050, 0xDEADBEEF, true));
+    ASSERT_EQ(true, dm.checkWatchpoint(0xC050, 0xDEADBEEF, true, index));
+    ASSERT_EQ(0, index);
 
     // Read at boundaries
-    ASSERT_EQ(0, dm.checkWatchpoint(0xC000, 0xDEADBEEF, true));  // start of range
-    ASSERT_EQ(0, dm.checkWatchpoint(0xC0FF, 0xDEADBEEF, true));  // end of range (inclusive)
+    ASSERT_EQ(true, dm.checkWatchpoint(0xC000, 0xDEADBEEF, true, index));  // start of range
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(true, dm.checkWatchpoint(0xC0FF, 0xDEADBEEF, true, index));  // end of range (inclusive)
+    ASSERT_EQ(0, index);
 
     // Read outside range - should NOT trigger
-    ASSERT_EQ(-1, dm.checkWatchpoint(0xBFFF, 0xDEADBEEF, true));  // before range
-    ASSERT_EQ(-1, dm.checkWatchpoint(0xC100, 0xDEADBEEF, true));  // after range
+    ASSERT_EQ(false, dm.checkWatchpoint(0xBFFF, 0xDEADBEEF, true, index));  // before range
+    ASSERT_EQ(false, dm.checkWatchpoint(0xC100, 0xDEADBEEF, true, index));  // after range
 }
 
 // AC#4: Given a read/write watchpoint on $8000-$800F
@@ -429,9 +447,13 @@ TEST(check_watchpoint_read_write_both_trigger) {
     DebugManager dm;
     dm.addWatchpoint(0x8000, 16, false, true, true);  // both read and write, logical
 
+    size_t index;
+
     // Both read and write should trigger (0xDEADBEEF shows physical is ignored)
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8008, 0xDEADBEEF, true));   // read
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8008, 0xDEADBEEF, false));  // write
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8008, 0xDEADBEEF, true, index));   // read
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8008, 0xDEADBEEF, false, index));  // write
+    ASSERT_EQ(0, index);
 }
 
 // AC#5: Given a write watchpoint on $8000-$801F
@@ -441,11 +463,14 @@ TEST(check_watchpoint_write_only_ignores_reads) {
     DebugManager dm;
     dm.addWatchpoint(0x8000, 32, false, false, true);  // write-only, logical
 
+    size_t index;
+
     // Read should NOT trigger (0xDEADBEEF shows physical is ignored)
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x8010, 0xDEADBEEF, true));  // isRead=true means read
+    ASSERT_EQ(false, dm.checkWatchpoint(0x8010, 0xDEADBEEF, true, index));  // isRead=true means read
 
     // Write should trigger (returns index 0)
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8010, 0xDEADBEEF, false));  // isRead=false means write
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8010, 0xDEADBEEF, false, index));  // isRead=false means write
+    ASSERT_EQ(0, index);
 }
 
 // Converse: read-only watchpoint ignores writes
@@ -453,11 +478,14 @@ TEST(check_watchpoint_read_only_ignores_writes) {
     DebugManager dm;
     dm.addWatchpoint(0x8000, 32, false, true, false);  // read-only, logical
 
+    size_t index;
+
     // Write should NOT trigger (0xDEADBEEF shows physical is ignored)
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x8010, 0xDEADBEEF, false));  // isRead=false means write
+    ASSERT_EQ(false, dm.checkWatchpoint(0x8010, 0xDEADBEEF, false, index));  // isRead=false means write
 
     // Read should trigger (returns index 0)
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8010, 0xDEADBEEF, true));  // isRead=true means read
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8010, 0xDEADBEEF, true, index));  // isRead=true means read
+    ASSERT_EQ(0, index);
 }
 
 // AC#6: Given a disabled watchpoint
@@ -465,17 +493,21 @@ TEST(check_watchpoint_read_only_ignores_writes) {
 //       Then `checkWatchpoint()` returns -1 and execution continues
 TEST(check_watchpoint_disabled_does_not_trigger) {
     DebugManager dm;
-    int index = dm.addWatchpoint(0x8000, 32, false, true, true);
-    dm.setWatchpointEnabled(index, false);
+    int newIndex = dm.addWatchpoint(0x8000, 32, false, true, true);
+    dm.setWatchpointEnabled(newIndex, false);
+
+    size_t index;
 
     // Should NOT trigger when disabled (0xDEADBEEF shows physical is ignored)
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x8010, 0xDEADBEEF, true));
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x8010, 0xDEADBEEF, false));
+    ASSERT_EQ(false, dm.checkWatchpoint(0x8010, 0xDEADBEEF, true, index));
+    ASSERT_EQ(false, dm.checkWatchpoint(0x8010, 0xDEADBEEF, false, index));
 
     // Re-enable and verify it triggers again (returns index 0)
     dm.setWatchpointEnabled(index, true);
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8010, 0xDEADBEEF, true));
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8010, 0xDEADBEEF, false));
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8010, 0xDEADBEEF, true, index));
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8010, 0xDEADBEEF, false, index));
+    ASSERT_EQ(0, index);
 }
 
 // Test: Logical watchpoint triggers regardless of physical address (bank setting)
@@ -483,15 +515,21 @@ TEST(check_watchpoint_logical_ignores_banking) {
     DebugManager dm;
     dm.addWatchpoint(0x8010, 16, false, true, true);  // logical watchpoint at $8010
 
+    size_t index;
+
     // Logical address matches - should trigger regardless of physical address (returns index 0)
     // Same logical address, different physical addresses (different banks)
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8010, 0x00010, true));   // bank 0
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8010, 0x04010, true));   // bank 1
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8010, 0x08010, true));   // bank 2
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8010, 0x20010, true));   // RAM bank
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8010, 0x00010, true, index));   // bank 0
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8010, 0x04010, true, index));   // bank 1
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8010, 0x08010, true, index));   // bank 2
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8010, 0x20010, true, index));   // RAM bank
+    ASSERT_EQ(0, index);
 
     // Different logical address - should NOT trigger even if physical matches
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x4010, 0x00010, true));  // different logical
+    ASSERT_EQ(false, dm.checkWatchpoint(0x4010, 0x00010, true, index));  // different logical
 }
 
 // Test: Physical watchpoint only triggers when physical address matches
@@ -500,22 +538,28 @@ TEST(check_watchpoint_physical_honours_banking) {
     // Physical watchpoint at $08010 (bank 2, offset $0010)
     dm.addWatchpoint(0x08010, 16, true, true, true);  // physical watchpoint
 
+    size_t index;
+
     // Only triggers when physical address matches (returns index 0)
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8010, 0x08010, true));   // physical matches
-    ASSERT_EQ(0, dm.checkWatchpoint(0x4010, 0x08010, true));   // different logical, same physical
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8010, 0x08010, true, index));   // physical matches
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(true, dm.checkWatchpoint(0x4010, 0x08010, true, index));   // different logical, same physical
+    ASSERT_EQ(0, index);
 
     // Should NOT trigger for different physical addresses
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x8010, 0x00010, true));  // bank 0 - wrong physical
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x8010, 0x04010, true));  // bank 1 - wrong physical
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x8010, 0x20010, true));  // RAM - wrong physical
+    ASSERT_EQ(false, dm.checkWatchpoint(0x8010, 0x00010, true, index));  // bank 0 - wrong physical
+    ASSERT_EQ(false, dm.checkWatchpoint(0x8010, 0x04010, true, index));  // bank 1 - wrong physical
+    ASSERT_EQ(false, dm.checkWatchpoint(0x8010, 0x20010, true, index));  // RAM - wrong physical
 }
 
 // Test checkWatchpoint returns -1 when no watchpoints exist
 TEST(check_watchpoint_empty_list) {
     DebugManager dm;
+    size_t index;
+
     // Should return -1 and not crash when no watchpoints
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x8000, 0x08000, true));
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x8000, 0x08000, false));
+    ASSERT_EQ(false, dm.checkWatchpoint(0x8000, 0x08000, true, index));
+    ASSERT_EQ(false, dm.checkWatchpoint(0x8000, 0x08000, false, index));
 }
 
 // Test addWatchpoint rejects invalid parameters
@@ -578,16 +622,19 @@ TEST(check_breakpoint_returns_index) {
     dm.addBreakpoint(0x2000, false);  // index 1
     dm.addBreakpoint(0x3000, false);  // index 2
 
+    const Breakpoint* bp0 = dm.getBreakpoint(0);
+    const Breakpoint* bp1 = dm.getBreakpoint(1);
+    const Breakpoint* bp2 = dm.getBreakpoint(2);
     uint8_t memoryPage[4] = {0, 0, 0, 0};
 
     // Should return the index of the triggered breakpoint
-    ASSERT_EQ(0, dm.checkBreakpoint(0x1000, memoryPage));
-    ASSERT_EQ(1, dm.checkBreakpoint(0x2000, memoryPage));
-    ASSERT_EQ(2, dm.checkBreakpoint(0x3000, memoryPage));
+    ASSERT_EQ(bp0, dm.checkBreakpoint(0x1000, memoryPage));
+    ASSERT_EQ(bp1, dm.checkBreakpoint(0x2000, memoryPage));
+    ASSERT_EQ(bp2, dm.checkBreakpoint(0x3000, memoryPage));
 
     // Should return -1 when no breakpoint matches
-    ASSERT_EQ(-1, dm.checkBreakpoint(0x4000, memoryPage));
-    ASSERT_EQ(-1, dm.checkBreakpoint(0x0FFF, memoryPage));
+    ASSERT_NULL(dm.checkBreakpoint(0x4000, memoryPage));
+    ASSERT_NULL(dm.checkBreakpoint(0x0FFF, memoryPage));
 }
 
 // Test checkBreakpoint returns -1 for disabled breakpoints
@@ -598,11 +645,11 @@ TEST(check_breakpoint_returns_minus_one_when_disabled) {
 
     uint8_t memoryPage[4] = {0, 0, 0, 0};
 
-    ASSERT_EQ(-1, dm.checkBreakpoint(0x1000, memoryPage));
+    ASSERT_NULL(dm.checkBreakpoint(0x1000, memoryPage));
 
     // Re-enable and verify it returns index
     dm.setBreakpointEnabled(idx, true);
-    ASSERT_EQ(0, dm.checkBreakpoint(0x1000, memoryPage));
+    ASSERT_NOT_NULL(dm.checkBreakpoint(0x1000, memoryPage));
 }
 
 // Test checkWatchpoint returns index instead of bool
@@ -612,14 +659,19 @@ TEST(check_watchpoint_returns_index) {
     dm.addWatchpoint(0x9000, 16, false, true, true);  // index 1
     dm.addWatchpoint(0xA000, 16, false, true, true);  // index 2
 
+    size_t index;
+
     // Should return the index of the triggered watchpoint
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8008, 0xDEAD, true));
-    ASSERT_EQ(1, dm.checkWatchpoint(0x9008, 0xDEAD, true));
-    ASSERT_EQ(2, dm.checkWatchpoint(0xA008, 0xDEAD, true));
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8008, 0xDEAD, true, index));
+    ASSERT_EQ(0, index);
+    ASSERT_EQ(true, dm.checkWatchpoint(0x9008, 0xDEAD, true, index));
+    ASSERT_EQ(1, index);
+    ASSERT_EQ(true, dm.checkWatchpoint(0xA008, 0xDEAD, true, index));
+    ASSERT_EQ(2, index);
 
     // Should return -1 when no watchpoint matches
-    ASSERT_EQ(-1, dm.checkWatchpoint(0xB000, 0xDEAD, true));
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x7000, 0xDEAD, true));
+    ASSERT_EQ(false, dm.checkWatchpoint(0xB000, 0xDEAD, true, index));
+    ASSERT_EQ(false, dm.checkWatchpoint(0x7000, 0xDEAD, true, index));
 }
 
 // Test checkWatchpoint returns -1 for disabled watchpoints
@@ -628,11 +680,14 @@ TEST(check_watchpoint_returns_minus_one_when_disabled) {
     int idx = dm.addWatchpoint(0x8000, 16, false, true, true);
     dm.setWatchpointEnabled(idx, false);
 
-    ASSERT_EQ(-1, dm.checkWatchpoint(0x8008, 0xDEAD, true));
+    size_t index;
+
+    ASSERT_EQ(false, dm.checkWatchpoint(0x8008, 0xDEAD, true, index));
 
     // Re-enable and verify it returns index
     dm.setWatchpointEnabled(idx, true);
-    ASSERT_EQ(0, dm.checkWatchpoint(0x8008, 0xDEAD, true));
+    ASSERT_EQ(true, dm.checkWatchpoint(0x8008, 0xDEAD, true, index));
+    ASSERT_EQ(0, index);
 }
 
 // Test getBreakpointAtAddress returns info for breakpoints

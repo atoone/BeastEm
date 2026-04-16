@@ -43,17 +43,20 @@ class Listing: public Lookup {
         struct Location {
             unsigned int fileNum;   // Index into sources vector
             unsigned int lineNum;   // 0-based index into Source.lines[]
-            bool valid;             // false if address not found in any listing
+            bool valid = false;     // false if address not found in any listing
+            int page;
         };
 
         struct Symbol {
-            std::string label;
-            uint32_t    value;
-            int         page;
+            std::string  label;
+            uint32_t     value;
+            int          page;
+            unsigned int fileNum;
         };
 
         struct SymbolComp {
             bool operator()(const Symbol s1, const Symbol s2) const {
+                if (s1.label == s2.label) return s1.fileNum < s2.fileNum;
                 return s1.label < s2.label; 
             }
         };
@@ -183,8 +186,11 @@ class Listing: public Lookup {
         /* Get the numerical value for the n-th match in the most recent lookup */
         virtual int getValue(size_t index);
 
-        /* Get a second numerical value for the n-th match in the most recent lookup */
-        virtual int getAdditionalValue(size_t index);
+        /* Get a description for the n-th match in the most recent lookup */
+        virtual std::string getDescription1(size_t index);
+
+        /* Get a description for the n-th match in the most recent lookup */
+        virtual std::string getDescription2(size_t index);
 
     private:
         static const int DEFAULT_SYMBOL_COLUMN = 24; 

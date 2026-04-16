@@ -59,9 +59,13 @@ void Listing::removeFile(unsigned int fileNum) {
   sources.erase(sources.begin() + fileNum);
 
   // Renumber remaining source files
-  for (auto source : sources) {
+  for (auto &source : sources) {
     if (source.fileNum > fileNum) {
-      source.fileNum = source.fileNum - 1;
+      unsigned int newFileNum = source.fileNum -1;
+      source.fileNum = newFileNum;
+      for (auto& symbol:source.symbols) {
+        symbol.fileNum = newFileNum;
+      }
     }
   }
 
@@ -76,6 +80,8 @@ void Listing::removeFile(unsigned int fileNum) {
       ++it;
     }
   }
+
+  updateSymbolMap();
 }
 
 /**
@@ -250,7 +256,7 @@ void Listing::loadFile(Source &source) {
         // When address changes, record the mapping for the previous address
         // This handles multi-line instructions and data blocks
         if (foundAddress && (nextAddress != address)) {
-          Location loc = {source.fileNum, addressLine, true};
+          Location loc = {source.fileNum, addressLine, true, source.page};
           // Create physical address: (page << 14) | 14-bit offset
           // Use assignment so the most recently loaded listing takes precedence
           // when multiple listings map to the same address
@@ -339,7 +345,7 @@ void Listing::loadFile(Source &source) {
 
   // Don't forget to record the final address
   if (foundAddress) {
-    Location loc = {source.fileNum, addressLine, true};
+    Location loc = {source.fileNum, addressLine, true, source.page};
     lineMap[(source.page << 14) | (address & 0x3FFF)] = loc;
   }
 
@@ -372,7 +378,7 @@ void Listing::addSymbol( std::string &text, Listing::Line &line, Listing::Source
       }
 
       if (!isEquate) {
-        Symbol symbol = {label, line.address, source.page};
+        Symbol symbol = {label, line.address, source.page, source.fileNum};
         source.symbols.push_back(symbol);
         // std::cout << "Label '" << label << " = " << line.address << std::endl;
       }
@@ -382,8 +388,8 @@ void Listing::addSymbol( std::string &text, Listing::Line &line, Listing::Source
 
 void Listing::updateSymbolMap() {
   symbolMap.clear();
-  for(auto source: sources) {
-    for (auto symbol: source.symbols) {
+  for(auto &source: sources) {
+    for (auto &symbol: source.symbols) {
       symbolMap.insert(symbol);
     }
   }
@@ -466,11 +472,27 @@ void Listing::lookup(std::string match) {
     return;
   }
 
+  bool filterFile = false;
+  unsigned int  fileNum = 0;
 
-  for (Symbol symbol: symbolMap) {
+  if (match[1] == ':' && std::isdigit(match[0])) {
+    fileNum = match[0]-'0';
+    if (fileNum-- > 0) {
+      filterFile = true;
+      match = match.substr(2);
+
+      if (match.length()<2) {
+        return;
+      }
+    }
+  }
+
+  for (auto & symbol: symbolMap) {
     bool found = true;
     size_t i = match.length();
-    if( i>symbol.label.length() ) continue;
+
+    if (filterFile && symbol.fileNum != fileNum) continue;
+    if (i>symbol.label.length()) continue;
 
     while(i-->0) {
       if(tolower(match[i]) != tolower(symbol.label[i])) {
@@ -486,7 +508,8 @@ void Listing::lookup(std::string match) {
   }
 
  
-  for(auto symbol: symbolMap) {
+  for(auto & symbol: symbolMap) {
+    if (filterFile && symbol.fileNum != fileNum) continue;
     if (symbolLookup.size()>MAX_LOOKUP) break;
 
     size_t k = 0;
@@ -496,7 +519,7 @@ void Listing::lookup(std::string match) {
         if (k == match.size()) {
             bool found = false;
 
-            for (auto existing: symbolLookup) {
+            for (auto & existing: symbolLookup) {
 
               if (existing.label == symbol.label) {
                 found = true;
@@ -527,8 +550,16 @@ int Listing::getValue(size_t index) {
   return symbolLookup[index].value;
 }
 
-int Listing::getAdditionalValue(size_t index) {
+std::string Listing::getDescription1(size_t index) {
     if (index>symbolLookup.size()) return 0;
 
-    return (symbolLookup[index].value & 0x3FFF) | (symbolLookup[index].page << 14);
+    Symbol& symbol = symbolLookup[index];
+    return GUI::string_format("0x%04X  Physical: 0x%05X", symbol.value, (symbol.value & 0x3FFF) | (symbol.page << 14));
+}
+
+std::string Listing::getDescription2(size_t index) {
+    if (index>symbolLookup.size()) return 0;
+
+    Symbol& symbol = symbolLookup[index];
+    return GUI::string_format("File %d: %-14s", symbol.fileNum+1, sources[symbol.fileNum].filename.c_str());
 }

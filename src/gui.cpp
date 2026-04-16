@@ -378,7 +378,8 @@ void GUI::drawPrompt(bool immediate) {
     if(!promptStarted || promptCompleted) return;
     SDL_Color background = {0xF0, 0xF0, 0xFF};
 
-    boxRGBA(sdlRenderer, promptX-2*charWidth, promptY-promptHeight/2-charHeight, promptX+promptWidth+2*charWidth, promptY+promptHeight/2+charHeight, background.r, background.g, background.b, 0xFF);
+    int promptTop = promptY-promptHeight/2-charHeight;
+    boxRGBA(sdlRenderer, promptX-2*charWidth, promptTop, promptX+promptWidth+2*charWidth, promptY+promptHeight/2+charHeight, background.r, background.g, background.b, 0xFF);
 
     SDL_Rect textRect;
 
@@ -389,7 +390,7 @@ void GUI::drawPrompt(bool immediate) {
     SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
 
     textRect.x = promptX; 
-    textRect.y = (promptY-promptHeight/2);
+    textRect.y = promptTop+charHeight;
     textRect.w = textSurface->w;
     textRect.h = textSurface->h;
 
@@ -421,17 +422,16 @@ void GUI::drawPrompt(bool immediate) {
             std::size_t length = stringValue.copy(buffer, maxLen);
             buffer[length] = '\0';
 
-            printb(promptX + 3*charWidth, promptY-((LABEL_LIST_LENGTH/2+1)*charHeight), color, lookupIndex == 0 ? length: 0, bright, buffer);
+            printb(promptX + 3*charWidth, promptTop+3*charHeight, color, lookupIndex == 0 ? length: 0, bright, buffer);
         }
         for (size_t i=0; i<lookupSource->matches() && i<LABEL_LIST_LENGTH; i++ ) {
             std::size_t length = lookupSource->getLabel(i).copy(buffer, maxLen);
             buffer[length] = '\0';
 
-            printb(promptX + charWidth,  promptY-((LABEL_LIST_LENGTH/2-i-1)*charHeight), color, lookupIndex == i+1 ? length: 0, bright, buffer);
+            printb(promptX + charWidth,  promptTop+5*charHeight+i*MEM_ROW_HEIGHT, color, lookupIndex == i+1 ? length: 0, bright, buffer);
             if( lookupIndex == i+1 ) {
-                int value = lookupSource->getValue(i);
-                int physicalVal = lookupSource->getAdditionalValue(i);
-                print(promptX + 2*charWidth, promptY+((LABEL_LIST_LENGTH/2+2)*charHeight), color, 0, bright, "0x%04X  Physical: 0x%05X", value, physicalVal);
+                print(promptX + 2*charWidth, promptTop+promptHeight-1*charHeight, color, 0, bright, lookupSource->getDescription1(i).c_str());
+                print(promptX + 2*charWidth, promptTop+promptHeight, color, 0, bright, lookupSource->getDescription2(i).c_str());
             }
         }
     }
@@ -467,7 +467,7 @@ void GUI::promptLabel() {
     isFirstTextEvent = true;
     oldEditLength = editLength;
     editLength = MAX_LABEL_LENGTH;
-    promptHeight += (4+LABEL_LIST_LENGTH)*charHeight;
+    promptHeight += 5*charHeight + LABEL_LIST_LENGTH * MEM_ROW_HEIGHT;
     this->lookupSource = lookupSource;
     lookupSource->lookup(stringValue);
     lookupIndex = 0;
@@ -486,6 +486,10 @@ bool GUI::promptChanged() {
     return promptType == PT_VALUE && (oldPromptValue != editValue);
 }
 
+TTF_Font *GUI::getFont() {
+    return monoFont;
+}
+
 void GUI::prompt() {
     TTF_SizeUTF8(monoFont, promptBuffer, &promptWidth, &promptHeight);
 
@@ -498,7 +502,7 @@ void GUI::prompt() {
 }
 
 
-void GUI::printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer) {
+int GUI::printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer) {
     SDL_Surface *textSurface = TTF_RenderText_Blended(monoFont, buffer, color);
     SDL_Texture *textTexture = SDL_CreateTextureFromSurface(sdlRenderer, textSurface);
 
@@ -524,8 +528,15 @@ void GUI::printb(int x, int y, SDL_Color color, int highlight, SDL_Color backgro
     textRect.w = textSurface->w;
     textRect.h = textSurface->h;
 
+    int effectiveWidth = textSurface->w/zoom;
     SDL_RenderCopy(sdlRenderer, textTexture, NULL, &textRect);
 
     SDL_DestroyTexture(textTexture);
     SDL_FreeSurface(textSurface);
+
+    return effectiveWidth;
+}
+
+int GUI::getWidthFor(int characters) {
+    return charWidth * characters;
 }

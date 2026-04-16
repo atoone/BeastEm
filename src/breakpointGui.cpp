@@ -14,7 +14,7 @@ BreakpointGui::~BreakpointGui() {
 }
 
 GUI::Mode BreakpointGui::breakpointsMenu(SDL_Event windowEvent, GUI::Mode mode) {
-    int bpCount = debugManager->getBreakpointCount();
+    size_t bpCount = debugManager->getBreakpointCount();
 
     if (breakpointEditMode == BEdit::LOCATION)
     {
@@ -26,23 +26,7 @@ GUI::Mode BreakpointGui::breakpointsMenu(SDL_Event windowEvent, GUI::Mode mode) 
                 uint32_t address = gui->getEditValue();
                 bool isPhysical = !gui->isLogicalAddress();
 
-                // Check if we're editing an existing breakpoint or adding new
-                const Breakpoint *existingBp =
-                    debugManager->getBreakpoint(breakpointSelection);
-                if (existingBp)
-                {
-                    // Editing existing - remove old and add new with same enabled state
-                    debugManager->updateBreakpoint(breakpointSelection, address, isPhysical);
-                }
-                else
-                {
-                    // Adding new breakpoint
-                    int newIndex = debugManager->addBreakpoint(address, isPhysical);
-                    if (newIndex >= 0)
-                    {
-                        breakpointSelection = newIndex;
-                    }
-                }
+                addBreakpoint(address, isPhysical);
                 breakpointEditMode = BEdit::NOEDIT;
             }
             // Check if edit was canceled (e.g., by ESCAPE handled internally by GUI)
@@ -96,7 +80,7 @@ GUI::Mode BreakpointGui::breakpointsMenu(SDL_Event windowEvent, GUI::Mode mode) 
 
     case SDLK_a:
         // Add new breakpoint if list not full
-        if (bpCount < 8)
+        if (bpCount < DebugManager::MAX_BREAKPOINTS)
         {
             breakpointEditMode = BEdit::LOCATION;
             // Position edit after " %d   0x" prefix - default to logical (don't care)
@@ -105,7 +89,25 @@ GUI::Mode BreakpointGui::breakpointsMenu(SDL_Event windowEvent, GUI::Mode mode) 
             breakpointSelection = bpCount;
         }
         break;
-
+    case SDLK_c:
+        if (bpCount < DebugManager::MAX_BREAKPOINTS) {
+          breakpointSelection = bpCount;
+          addBreakpoint(cpuAddress, false);
+        }
+        break;
+    case SDLK_y:
+        if (bpCount < DebugManager::MAX_BREAKPOINTS) {
+          breakpointSelection = bpCount;
+          addBreakpoint(listingAddress, false);
+        }
+        break;
+    case SDLK_s:
+        if (bpCount < DebugManager::MAX_BREAKPOINTS) {
+          if (debugManager->addBreakpoint(&debugManager->BDOS_Trace)) {
+            breakpointSelection = debugManager->getBreakpointCount()-1;
+          }
+        }
+        break;
     case SDLK_d:
         // Delete selected breakpoint
         if (breakpointSelection < bpCount)
@@ -177,14 +179,32 @@ GUI::Mode BreakpointGui::breakpointsMenu(SDL_Event windowEvent, GUI::Mode mode) 
     case SDLK_g:
         // Switch to TraceLog screen
         mode = GUI::TRACELOG;
-        resetMode();
+        resetMode(false);
         break;
     case SDLK_w:
         mode = GUI::WATCHPOINTS;
-        resetMode();
+        resetMode(false);
         break;
     }
     return mode;
+}
+
+void BreakpointGui::addBreakpoint(uint32_t address, bool isPhysical)
+{
+  // Check if we're editing an existing breakpoint or adding new
+  const Breakpoint *existingBp = debugManager->getBreakpoint(breakpointSelection);
+  if (existingBp)
+  {
+    // Editing existing - remove old and add new with same enabled state
+    debugManager->updateBreakpoint(breakpointSelection, address, isPhysical);
+  }
+  else
+  {
+    // Adding new breakpoint
+    if (debugManager->addBreakpoint(address, isPhysical)) {
+      breakpointSelection = debugManager->getBreakpointCount()-1;
+    }
+  }
 }
 
 void BreakpointGui::breakpointTextEvent() {
@@ -208,7 +228,7 @@ void BreakpointGui::drawBreakpoints() {
   SDL_Color menuColor = {0x30, 0x30, 0xA0, 255};
   SDL_Color bright = {0xD0, 0xFF, 0xD0, 255};
 
-  int bpCount = debugManager->getBreakpointCount();
+  size_t bpCount = debugManager->getBreakpointCount();
 
   // Title and navigation hint
   gui->print(GUI::COL1, 34, menuColor, "BREAKPOINTS");
@@ -220,8 +240,8 @@ void BreakpointGui::drawBreakpoints() {
 
   gui->print(GUI::COL3, GUI::ROW2, textColor, "Name");
 
-  // Render 8 fixed rows
-  for (int i = 0; i < 8; i++) {
+  // Render MAX_BREAKPOINTS fixed rows
+  for (size_t i = 0; i < DebugManager::MAX_BREAKPOINTS; i++) {
     int row = GUI::ROW3 + (i * GUI::ROW_HEIGHT);
     bool isSelected = (i == breakpointSelection);
 
@@ -257,15 +277,20 @@ void BreakpointGui::drawBreakpoints() {
   }
 
   // Footer with key hints
-  if (bpCount >= 8) {
+  if (bpCount >= DebugManager::MAX_BREAKPOINTS) {
     gui->print(GUI::COL1, GUI::END_ROW, menuColor, "Full");
   } else {
-    gui->print(GUI::COL1, GUI::END_ROW, menuColor, "[A]dd");
+    gui->print(GUI::COL1, GUI::END_ROW - GUI::ROW_HEIGHT*2, menuColor, "[A]dd");
+    gui->print(GUI::COL2, GUI::END_ROW - GUI::ROW_HEIGHT*2, menuColor, "[C]pu.pc 0x%04X", cpuAddress);
+    if (listingAddress != cpuAddress) {
+      gui->print(GUI::COL3, GUI::END_ROW - GUI::ROW_HEIGHT*2, menuColor, "[Y]:Listing 0x%04X", listingAddress);
+    }
+    gui->print(GUI::COL5, GUI::END_ROW - GUI::ROW_HEIGHT*2, menuColor, "BDO[S]");
   }
-  gui->print(GUI::COL2 - 60, GUI::END_ROW, menuColor, "[D]elete");
-  gui->print(GUI::COL3 - 110, GUI::END_ROW, menuColor, "[Space]:Toggle");
-  gui->print(GUI::COL3 + 20, GUI::END_ROW, menuColor, "[Enter]:Edit");
-  gui->print(GUI::COL4 + 20, GUI::END_ROW, menuColor, "[N]ame");
+  gui->print(GUI::COL1, GUI::END_ROW, menuColor, "[Space]:Toggle");
+  gui->print(GUI::COL2, GUI::END_ROW, menuColor, "[Enter]:Edit");
+  gui->print(GUI::COL3, GUI::END_ROW, menuColor, "[N]ame");
+  gui->print(GUI::COL4, GUI::END_ROW, menuColor, "[D]elete");
   gui->print(GUI::COL5, GUI::END_ROW, menuColor, "[ESC]:Exit");
 }
 
@@ -278,7 +303,7 @@ void BreakpointGui::drawWatchpoints() {
   SDL_Color menuColor = {0x30, 0x30, 0xA0, 255};
   SDL_Color bright = {0xD0, 0xFF, 0xD0, 255};
 
-  int wpCount = debugManager->getWatchpointCount();
+  size_t wpCount = debugManager->getWatchpointCount();
 
   // Title and navigation hint
   gui->print(GUI::COL1, 34, menuColor, "WATCHPOINTS");
@@ -289,8 +314,8 @@ void BreakpointGui::drawWatchpoints() {
   gui->print(GUI::COL1, GUI::ROW2, textColor,
             " #    Address   Range    Type  Enabled");
 
-  // Render 8 fixed rows
-  for (int i = 0; i < 8; i++) {
+  // Render MAX_BREAKPOINTS fixed rows
+  for (size_t i = 0; i < DebugManager::MAX_WATCHPOINTS; i++) {
     int row = GUI::ROW3 + (i * GUI::ROW_HEIGHT);
     bool isSelected = (i == watchpointSelection);
 
@@ -344,11 +369,11 @@ void BreakpointGui::drawWatchpoints() {
 
         if (wp->isPhysical) {
           gui->print(GUI::COL1, row, rowColor, isSelected ? 40 : 0, bright,
-                    " %d    0x%05X  0x%04X   %s   %s", i + 1, wp->address,
+                    " %d    0x%05X  0x%04X    %s    %s", i + 1, wp->address,
                     wp->length, typeStr, enabledStr);
         } else {
           gui->print(GUI::COL1, row, rowColor, isSelected ? 40 : 0, bright,
-                    " %d    0x#%04X  0x%04X   %s   %s", i + 1, wp->address,
+                    " %d    0x#%04X  0x%04X    %s    %s", i + 1, wp->address,
                     wp->length, typeStr, enabledStr);
         }
       }
@@ -361,7 +386,7 @@ void BreakpointGui::drawWatchpoints() {
   }
 
   // Footer with key hints
-  if (wpCount >= 8 && !watchpointEditMode) {
+  if (wpCount >= DebugManager::MAX_WATCHPOINTS && !watchpointEditMode) {
     gui->print(GUI::COL1, GUI::END_ROW, menuColor, "Full");
   } else {
     gui->print(GUI::COL1, GUI::END_ROW, menuColor, "[A]dd");
@@ -372,18 +397,31 @@ void BreakpointGui::drawWatchpoints() {
   gui->print(GUI::COL5, GUI::END_ROW, menuColor, "[ESC]:Exit");
 }
 
-void BreakpointGui::resetMode() {
-    breakpointSelection = 0;
+void BreakpointGui::resetMode(bool selectLast) {
+    breakpointSelection = (selectLast && (debugManager->getBreakpointCount() > 0)) ? debugManager->getBreakpointCount()-1: 0;
     
     watchpointSelection = 0;
     watchpointEditMode = false;
     watchpointEditField = 0;
 
-    logStart = std::max(debugManager->getLogSize()-LOG_LIST_SIZE, 0);
+    logStart = debugManager->getLogSize();
+    if (logStart >= LOG_LIST_SIZE ) {
+      logStart -= LOG_LIST_SIZE;
+    }
+    else {
+      logStart = 0;
+    }
+    currentLog = logStart;
+}
+
+void BreakpointGui::setAddresses(uint16_t cpuAddress, uint8_t cpuPage, uint64_t listingAddress) {
+    this->cpuAddress = cpuAddress;
+    this->cpuPage    = cpuPage;
+    this->listingAddress = listingAddress;
 }
 
 GUI::Mode BreakpointGui::watchpointsMenu(SDL_Event windowEvent, GUI::Mode mode) {
-  int wpCount = debugManager->getWatchpointCount();
+  size_t wpCount = debugManager->getWatchpointCount();
 
   if (watchpointEditMode) {
     // Handle edit mode based on current field
@@ -527,7 +565,7 @@ GUI::Mode BreakpointGui::watchpointsMenu(SDL_Event windowEvent, GUI::Mode mode) 
 
   case SDLK_a:
     // Add new watchpoint if list not full
-    if (wpCount < 8) {
+    if (wpCount < DebugManager::MAX_WATCHPOINTS) {
       watchpointAddMode = true;
       watchpointEditMode = true;
       watchpointEditField = 0;
@@ -591,12 +629,12 @@ GUI::Mode BreakpointGui::watchpointsMenu(SDL_Event windowEvent, GUI::Mode mode) 
   case SDLK_b:
     // Switch to Breakpoints screen
     mode = GUI::BREAKPOINTS;
-    resetMode();
+    resetMode(false);
     break;
   case SDLK_g:
     // Switch to TraceLog screen
     mode = GUI::TRACELOG;
-    resetMode();
+    resetMode(false);
     break;
   case SDLK_ESCAPE:
     mode = GUI::DEBUG;
@@ -611,6 +649,7 @@ void BreakpointGui::drawTraceLog() {
           (screenHeight - 24) * zoom, 0xF0, 0xF0, 0xE0, 0xE8);
 
   SDL_Color textColor = {0, 0x30, 0x30, 255};
+  SDL_Color highColor = {0xA0, 0x30, 0x30};
   SDL_Color menuColor = {0x30, 0x30, 0xA0, 255};
   SDL_Color bright = {0xD0, 0xFF, 0xD0, 255};
 
@@ -620,19 +659,167 @@ void BreakpointGui::drawTraceLog() {
   gui->print(GUI::COL5, 34, menuColor, "[W]atchpoints");
 
   std::deque<TraceLog>* logs = debugManager->getTraceLogs();
+
+  uint64_t lastTick = ((logStart < logs->size()) && (logStart > 0)) ? logs->at(logStart-1).tick: 0;
+
   for (size_t i=logStart; i<logStart+LOG_LIST_SIZE; i++) {
     if (i<logs->size()) {
-        int row = GUI::ROW3 + (i * GUI::ROW_HEIGHT);
+        int row = GUI::ROW3 + ((i-logStart) * GUI::ROW_HEIGHT);
         TraceLog log = logs->at(i);
 
-        gui->print(GUI::COL1, row, textColor, 0, bright, "0x%05X", log.physicalAddress);
+        int offset = 0;
+        if (!showRelative) {
+          offset = gui->print(GUI::COL1, row, textColor, i==currentLog ? 15: 0, bright, "%15s ", addSeparator(log.tick).c_str());
+        }
+        else {
+          offset = gui->print(GUI::COL1, row, textColor, i==currentLog ? 15: 0, bright, "%+15d ", log.tick-lastTick);
+        }
+        lastTick = log.tick;
 
+        offset += gui->print(GUI::COL1 + offset, row, textColor, i==currentLog ? 7: 0, bright, "0x%05X", log.physicalAddress) + gui->getWidthFor(2);
+       
         if (!log.breakpoint->name.empty()) {
-            gui->print(GUI::COL3, row, textColor, 0, bright, "%12s", log.breakpoint->name.c_str());
+            offset += gui->print(GUI::COL1 + offset, row, textColor, 0, bright, "%-12s", log.breakpoint->name.c_str()) + gui->getWidthFor(2);
+        }
+
+        if (log.breakpoint->traces.size() > 0) {
+          int value = 0;
+          std::string traceStr = getTraceString(log, log.breakpoint->traces[0], value);
+
+          offset += gui->print(GUI::COL1 + offset, row, textColor, 0 , bright, traceStr.c_str());
         }
     }
   }
+
+  if (currentLog < debugManager->getLogSize()) {
+    int row = GUI::ROW3 + (LOG_LIST_SIZE+1) * GUI::ROW_HEIGHT;
+
+    TraceLog log = logs->at(currentLog);
+    bool firstTrace = true;
+
+    for (auto trace:log.breakpoint->traces) {
+      int value = 0;
+      std::string traceStr = getTraceString(log, trace, value);
+
+      gui->print(GUI::COL1, row, firstTrace? highColor: textColor, 0 , bright, traceStr.c_str());
+      firstTrace = false;
+
+      row+=GUI::ROW_HEIGHT;
+
+      if (trace.traceType == TraceType::ADDRESS) {
+        for( auto & dataLog: log.data) {
+          if (dataLog.traceValue == trace.traceValue) {
+            uint16_t address = dataLog.logicalAddress;
+            int index = 0;
+            while (index < dataLog.length) {
+              int offset = gui->getWidthFor(3);
+              offset += gui->print(GUI::COL1 + offset, row, textColor, 0, bright, "0x%04X  ", address+index);
+              for (size_t i=0; i<16; i++) {
+                if( index+i < dataLog.length ) {
+                  int charOff = gui->getWidthFor(i);
+                  uint8_t val = dataLog.data[index+i];
+                  gui->print(GUI::COL1 + offset + charOff*3, row, textColor, 0, bright, "%02X", val);
+                  gui->print(GUI::COL1 + offset + gui->getWidthFor(48) + charOff, row, textColor, 0, bright, "%c", val < 32 || val > 128 ? '.' : val);
+                }
+              }
+              index += 16;
+              row+=GUI::ROW_HEIGHT;
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    char carry = (log.af & Z80_CF) ? 'C' : 'c';
+    char neg = (log.af & Z80_NF) ? 'N' : 'n';
+    char overflow = (log.af & Z80_VF) ? 'V' : 'v';
+    char zero = (log.af & Z80_ZF) ? 'Z' : 'z';
+    char sign = (log.af & Z80_SF) ? 'S' : 's';
+
+    char xflag = (log.af & Z80_XF) ? '1' : '0';
+    char hflag = (log.af & Z80_HF) ? '1' : '0';
+    char yflag = (log.af & Z80_YF) ? '1' : '0';
+
+    gui->print(GUI::COL1, row, firstTrace? highColor: textColor, 0 , bright, "PC:%04X SP:%04X A:%02X F:%c%c%c%c%c%c%c%c HL:%04X BC:%04X DE:%04X    Tick %14s", 
+      log.pc, log.sp, log.af>>8, 
+      sign, zero, yflag, hflag, xflag, overflow, neg, carry,
+      log.hl, log.bc, log.de,
+      addSeparator(log.tick).c_str());
+  }
+
+  gui->print(GUI::COL1, GUI::END_ROW, menuColor, "[C]lear");
+  gui->print(GUI::COL2, GUI::END_ROW, menuColor, "[R]elative");
   gui->print(GUI::COL5, GUI::END_ROW, menuColor, "[ESC]:Exit");
+}
+
+std::string BreakpointGui::addSeparator(uint64_t value) {
+   auto s = std::to_string(value);
+
+   int n = s.length() - 3;
+   int end = (value >= 0) ? 0 : 1; // Support for negative numbers
+   while (n > end) {
+      s.insert(n, ",");
+      n -= 3;
+   }
+   return s;
+}
+
+std::string BreakpointGui::getTraceString(TraceLog log, Trace trace, int &value) {
+  std::string traceStr;
+
+  switch( trace.traceValue ) {
+    case TraceValue::A : traceStr = "A=";  value = log.af & 0x0FF; break;
+    case TraceValue::F : traceStr = "F=";  value = log.af & 0x0FF; break;
+    case TraceValue::B : traceStr = "B=";  value = (log.bc >> 8) & 0x0FF; break;
+    case TraceValue::C : traceStr = "C=";  value = log.bc & 0x0FF; break;
+    case TraceValue::D : traceStr = "D=";  value = (log.de >> 8) & 0x0FF; break;
+    case TraceValue::E : traceStr = "E=";   value = log.de & 0x0FF; break;
+    case TraceValue::H : traceStr = "H=";  value = (log.hl >> 8) & 0x0FF; break;
+    case TraceValue::L : traceStr = "L=";  value = log.hl & 0x0FF; break;
+    case TraceValue::BC : traceStr = "BC=";  value = log.bc & 0x0FFFF; break;
+    case TraceValue::DE : traceStr = "DE=";  value = log.de & 0x0FFFF; break;
+    case TraceValue::HL : traceStr = "HL=";  value = log.hl & 0x0FFFF; break;
+    case TraceValue::IX : traceStr = "IX=";  value = log.ix & 0x0FFFF; break;
+    case TraceValue::IY : traceStr = "IY=";  value = log.iy & 0x0FFFF; break;
+    case TraceValue::PC : traceStr = "PC=";  value = log.pc & 0x0FFFF; break;
+    case TraceValue::SP : traceStr = "SP=";  value = log.sp & 0x0FFFF; break;
+  }
+
+  switch( trace.traceType) {
+    case TraceType::BYTE    : traceStr = gui->string_format("%s0x%02X ", traceStr.c_str(), value & trace.modifier); break;
+    case TraceType::CHAR    : 
+        if ((value < 32) || (value > 127)) {
+          traceStr = gui->string_format("%s? ", traceStr.c_str()); 
+        }
+        else {
+          traceStr = gui->string_format("%s'%c' ", traceStr.c_str(),  value); 
+        }
+        break;
+    case TraceType::WORD    : traceStr = gui->string_format("%s0x%04X ", traceStr.c_str(), value & trace.modifier); break;
+    case TraceType::ADDRESS : 
+        if (log.pagingEnabled) {
+          int bank    = (value >> 14) & 0x03;
+          int address = ((value & 0x3FFF) | (log.memoryPage[bank] << 14));
+          traceStr = gui->string_format("%s0x%05X (0x%04X)", traceStr.c_str(), address, value); break;
+        }
+        else {
+          traceStr = gui->string_format("%s0x%05X", traceStr.c_str(), value & 0x3FFF); break;
+        }
+        break;   
+    case TraceType::STRING : traceStr = "Unimplemented"; break;
+  }
+
+  if (trace.isMap) {
+    for (auto tmap: trace.map) {
+      if( tmap.value == value) {
+        traceStr += " "+tmap.name+"  ";
+        break;
+      }
+    }
+  }
+
+  return traceStr;
 }
 
 GUI::Mode BreakpointGui::traceLogMenu(SDL_Event windowEvent, GUI::Mode mode) {
@@ -645,13 +832,38 @@ GUI::Mode BreakpointGui::traceLogMenu(SDL_Event windowEvent, GUI::Mode mode) {
 
     case SDLK_b:
         mode = GUI::BREAKPOINTS;
-        resetMode();
+        resetMode(false);
         break;
 
     case SDLK_w:
         mode = GUI::WATCHPOINTS;
-        resetMode();
+        resetMode(false);
         break;
+
+    case SDLK_c:
+      debugManager->clearAllLogs();
+      break;
+
+    case SDLK_r:
+      showRelative = !showRelative;
+      break;
+
+    case SDLK_DOWN:
+      if( currentLog < debugManager->getLogSize() ) {
+        currentLog++;
+        if( currentLog >= logStart+LOG_LIST_SIZE ) {
+          logStart = currentLog - LOG_LIST_SIZE+1;
+        }
+      }
+      break;
+    case SDLK_UP:
+      if( currentLog > 0 ) {
+        currentLog--;
+        if( currentLog < logStart) {
+          logStart = currentLog;
+        }
+      }
+      break;
     }
     return mode;
 }

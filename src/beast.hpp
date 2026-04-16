@@ -11,6 +11,7 @@
 #include "i2c.hpp"
 #include "display.hpp"
 #include "gui.hpp"
+#include "helpGui.hpp"
 #include "rtc.hpp"
 #include "uart16c550.h"
 #include "listing.hpp"
@@ -49,6 +50,8 @@ class Beast {
 
     enum VideoView{VV_RAM, VV_REG, VV_PAL1, VV_PAL2, VV_SPR};
 
+    enum ListMode {LM_CPU, LM_ADDRESS, LM_HISTORY};
+
     static const int PROMPT_SOURCE_FILE    = 1;
     static const int PROMPT_BINARY_FILE    = 2;
     static const int PROMPT_LISTING        = 3;
@@ -60,7 +63,7 @@ class Beast {
     static const int PROMPT_WRITE_ADDRESS  = 9; 
     static const int PROMPT_WRITE_LENGTH   = 10;
     static const int PROMPT_LABEL          = 11;
-    
+
     static const int ROM_SIZE = 1<<19;
     static const int RAM_SIZE = 1<<19;
 
@@ -79,7 +82,7 @@ class Beast {
         void init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate, VideoBeast *videoBeast);
         void reset();
         void mainLoop();
-        uint64_t run(bool run, uint64_t tickCount);
+        void run(bool run);
 
         uint8_t *getRom();
         uint8_t *getRam();
@@ -101,7 +104,7 @@ class Beast {
         static const uint64_t ONE_SECOND_PS = UINT64_C(1000000000000);
         static const uint64_t UART_CLOCK_HZ = UINT64_C(1843200);
 
-        static const uint64_t NOT_SET = 0xFFFFFFFFULL;
+        static const uint64_t NOT_SET = UINT64_MAX;
 
     private:
         SDL_Window    *window;
@@ -115,7 +118,8 @@ class Beast {
         uint8_t*      videoRam = {0};
 
         uint8_t                 memoryPage[4];
-        Listing                &listing;
+        Listing                 &listing;
+        Listing::Location       currentLoc;
         std::vector<BinaryFile> binaryFiles;
         GUI                     gui;
 
@@ -126,7 +130,7 @@ class Beast {
         int screenWidth, screenHeight;
         float zoom = 1.0f;
 
-        GUI::Mode    mode = GUI::DEBUG;
+        GUI::Mode    mode = GUI::HELP;
         int     selection = 0;
         int     fileActionIndex = -1;
 
@@ -134,6 +138,7 @@ class Beast {
         z80pio_t pio;
         uart_t     uart;
         Instructions *instr;
+        uint64_t  tickCount = 0;
 
         I2c      *i2c;
         I2cDisplay *display1;
@@ -146,11 +151,15 @@ class Beast {
         DebugManager    *debugManager;
         BreakpointGui   *breakpointGui;
 
+        static const int HISTORY_SIZE = 1000;
+        uint16_t        history[HISTORY_SIZE];
+        size_t          historyIndex = 0;
+        size_t          historyCount = 0;
+
         // Stop reason tracking for debug display
         StopReason stopReason = STOP_NONE;
         uint16_t   watchpointTriggerAddress = 0;  // Address of instruction that caused WP trigger
-        int        watchpointTriggerIndex = -1;   // Which WP (0-7) was triggered
-        int        breakpointTriggerIndex = -1;   // Which BP (0-7) was triggered
+        size_t     watchpointTriggerIndex;   // Which WP (0-7) was triggered
         uint16_t   currentInstructionPC = 0;      // PC at start of current instruction (for accurate WP trigger address)
 
         uint64_t pins;
@@ -186,7 +195,10 @@ class Beast {
         int        memoryEditPage = 0;
         int        memoryEditView = 0;
 
-        uint64_t              listAddress = NOT_SET;
+        uint64_t   listAddress = 0;
+        ListMode   listMode = LM_CPU;
+        size_t     historyOffset = 0;
+
         std::vector<uint16_t> decodedAddresses;         // Addresses decoded on screen
 
         static const int FRAME_RATE = 50;
@@ -238,6 +250,8 @@ class Beast {
         bool itemEdit(bool getLabel);
         void editValue(uint32_t value, int x, int y, int characterOffset, int digits, bool getLabel);
         void editComplete();
+
+        void navigateList(int direction);
 
         void fileMenu(SDL_Event windowEvent);
         void debugMenu(SDL_Event windowEvent);

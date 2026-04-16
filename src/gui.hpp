@@ -2,7 +2,8 @@
 #include <utility>
 #include <vector>
 #include <string>
-
+#include <memory>
+#include <stdexcept>
 
 #include "SDL.h"
 #include "SDL_ttf.h"
@@ -23,8 +24,11 @@ class Lookup {
         /* Get the numerical value for the n-th match in the most recent lookup */
         virtual int getValue(size_t index) = 0;
 
-        /* Get a second numerical value for the n-th match in the most recent lookup */
-        virtual int getAdditionalValue(size_t index) = 0;
+        /* Get a description for the n-th match in the most recent lookup */
+        virtual std::string getDescription1(size_t index) = 0;
+
+        /* Get a description for the n-th match in the most recent lookup */
+        virtual std::string getDescription2(size_t index) = 0;
 };
 
 
@@ -33,7 +37,7 @@ class GUI {
     enum PromptType {PT_NONE, PT_CONFIRM, PT_VALUE, PT_CHOICE, PT_LABEL};
 
     public:
-        enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, BREAKPOINTS, WATCHPOINTS, TRACELOG, QUIT};
+        enum Mode {RUN, STEP, OUT, OVER, TAKE, DEBUG, FILES, BREAKPOINTS, WATCHPOINTS, TRACELOG, HELP, QUIT};
 
         static const int COL1 = 50;
         static const int COL2 = 190;
@@ -70,7 +74,7 @@ class GUI {
         static const int ROW22 = ROW20+28;
         static const int END_ROW = ROW22+(13*14);
 
-        static const int LABEL_LIST_LENGTH = 10;
+        static const int LABEL_LIST_LENGTH = 12;
         static const int MAX_LABEL_LENGTH  = 12;
 
         enum EditType {ET_HEX, ET_BASE_10, ET_ADDRESS, ET_STRING};
@@ -114,7 +118,9 @@ class GUI {
         bool      isPromptOK();
         bool      promptChanged();
 
-        template<typename... Args> void print(int x, int y, SDL_Color color, const char *fmt, Args... args) {
+        TTF_Font *getFont();
+        
+        template<typename... Args> int print(int x, int y, SDL_Color color, const char *fmt, Args... args) {
             char buffer[200];
             int c;
             if constexpr (sizeof...(Args) == 0) {
@@ -123,11 +129,12 @@ class GUI {
                 c = snprintf(buffer, sizeof(buffer), fmt, args...);
             }
             if( c > 0 && c<(int)sizeof(buffer)) {
-                printb(x,y, color, 0, {0}, buffer);
+                return printb(x,y, color, 0, {0}, buffer);
             }
+            return 0;
         }
 
-        template<typename... Args> void print(int x, int y, SDL_Color color, int highlight, SDL_Color background, const char *fmt, Args... args) {
+        template<typename... Args> int print(int x, int y, SDL_Color color, int highlight, SDL_Color background, const char *fmt, Args... args) {
             char buffer[200];
             int c;
             if constexpr (sizeof...(Args) == 0) {
@@ -136,8 +143,9 @@ class GUI {
                 c = snprintf(buffer, sizeof(buffer), fmt, args...);
             }
             if( c > 0 && c<(int)sizeof(buffer)) {
-                printb(x,y, color, highlight, background, buffer);
+                return printb(x,y, color, highlight, background, buffer);
             }
+            return 0;
         }
 
         template<typename... Args> void startPrompt(int id, const char *fmt, Args... args) {
@@ -153,10 +161,23 @@ class GUI {
             }
         }
 
-         template<typename... Args> void updatePrompt(const char *fmt, Args... args) {
+        template<typename... Args> void updatePrompt(const char *fmt, Args... args) {
             snprintf(promptBuffer, sizeof(promptBuffer), fmt, args...);
             oldPromptValue = editValue;
         }
+
+        /* Helper function to give string format functionality for generating a std::string */
+        template<typename ... Args> static std::string string_format( const std::string& format, Args ... args ) {
+            int size_s = std::snprintf( nullptr, 0, format.c_str(), args ... ) + 1; // Extra space for '\0'
+            if( size_s <= 0 ){ throw std::runtime_error( "Error during formatting." ); }
+            auto size = static_cast<size_t>( size_s );
+            std::unique_ptr<char[]> buf( new char[ size ] );
+            std::snprintf( buf.get(), size, format.c_str(), args ... );
+            return std::string( buf.get(), buf.get() + size - 1 ); // We don't want the '\0' inside
+        }
+
+        /* Returns the gui width for a string of the given number of characters */
+        int       getWidthFor(int characters);
 
     private:
     
@@ -206,5 +227,8 @@ class GUI {
         void      editBackspace();
         void      editDigit(uint8_t digit);
         void      prompt();
-        void      printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer);
+
+        /* Print a buffer at the given location, returning the gui width of the displayed string */
+        int       printb(int x, int y, SDL_Color color, int highlight, SDL_Color background, char* buffer);
+
 };

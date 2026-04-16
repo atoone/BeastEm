@@ -9,7 +9,7 @@
 
 enum TraceValue {PC, SP, A, F, B, C, D, E, H, L, BC, DE, HL, IX, IY};
 
-enum TraceType {BYTE, WORD, ADDRESS, STRING};
+enum TraceType {BYTE, CHAR, WORD, ADDRESS, STRING};
 
 struct TraceMap {
     // A Map converts a traced value to a (string) label
@@ -21,7 +21,7 @@ struct Trace {
     // A trace keeps track of data at the point the trace is triggered.
     TraceValue traceValue;  // Which register is being monitored
     TraceType  traceType;
-    int        modifier = 0xFFFF;  // Mask for BYTE and WORD values, length of data for ADDRESS, terminator for STRING
+    uint16_t   modifier = (uint16_t)0xFFFF;  // Mask for BYTE and WORD values, length of data for ADDRESS, terminator for STRING
     bool       isMap    = false;
     std::vector<TraceMap>   map;
     std::string unknownMap = "UNKNOWN";  // The value to display when a map is not matched
@@ -46,7 +46,7 @@ struct Watchpoint {
 };
 
 struct BreakpointInfo {
-    int index;      // 0-7
+    size_t index;      // 0-7
     bool enabled;
     bool isTrace;
 };
@@ -63,6 +63,8 @@ struct TraceLog {
     uint32_t    physicalAddress;
     uint64_t    tick;
     uint16_t    pc, sp, af, bc, de, hl, ix, iy;
+    uint8_t     memoryPage[4];
+    bool        pagingEnabled;
     const Breakpoint* breakpoint;
     std::vector<DataLog> data;
 };
@@ -70,27 +72,28 @@ struct TraceLog {
 class DebugManager {
 public:
     // User breakpoint CRUD (8 slots)
-    int  addBreakpoint(uint32_t address, bool isPhysical);
-    int  addBreakpoint(Breakpoint* breakpoint);
-    bool removeBreakpoint(int index);
-    void updateBreakpoint(int index, uint32_t address, bool isPhysical);
-    void setBreakpointEnabled(int index, bool enabled);
-    void setBreakpointIsTrace(int index, bool isTrace);
-    void setBreakpointName(int index, std::string name);
-    const Breakpoint* getBreakpoint(int index) const;
-    int  getBreakpointCount() const;
+    bool addBreakpoint(uint32_t address, bool isPhysical);
+    bool addBreakpoint(const Breakpoint* breakpoint);
+    void copyBreakpoint(const Breakpoint *source, Breakpoint *dest);
+    bool removeBreakpoint(size_t index);
+    void updateBreakpoint(size_t index, uint32_t address, bool isPhysical);
+    void setBreakpointEnabled(size_t index, bool enabled);
+    void setBreakpointIsTrace(size_t index, bool isTrace);
+    void setBreakpointName(size_t index, std::string name);
+    const Breakpoint* getBreakpoint(size_t) const;
+    size_t  getBreakpointCount() const;
     void clearAllBreakpoints();
-    int  findBreakpointByAddress(uint32_t address, bool isPhysical) const;
+    bool findBreakpointByAddress(uint32_t address, bool isPhysical, size_t &index) const;
 
     // System breakpoints (2 slots, reserved for DeZog/step-over)
-    void setSystemBreakpoint(int index, uint32_t address, bool isPhysical);
-    void clearSystemBreakpoint(int index);
+    void setSystemBreakpoint(size_t index, uint32_t address, bool isPhysical);
+    void clearSystemBreakpoint(size_t index);
     void clearAllSystemBreakpoints();
-    const Breakpoint* getSystemBreakpoint(int index) const;
+    const Breakpoint* getSystemBreakpoint(size_t index) const;
 
     // Emulation integration (checks both user and system breakpoints)
-    // Returns index of triggered breakpoint (0-7 for user, 8-9 for system) or -1 if none
-    int checkBreakpoint(uint16_t pc, uint8_t* memoryPage) const;
+    // Returns triggered breakpoint or nullptr if none
+    const Breakpoint* checkBreakpoint(uint16_t pc, uint8_t* memoryPage) const;
     bool hasActiveBreakpoints() const;
 
     // Get breakpoint info for a logical address (for display purposes)
@@ -100,47 +103,28 @@ public:
     std::optional<BreakpointInfo> getBreakpointAtAddress(uint16_t addr, uint8_t* memoryPage, bool pagingEnabled) const;
 
     // User watchpoint CRUD (8 slots)
-    int  addWatchpoint(uint32_t address, uint16_t length, bool isPhysical, bool onRead, bool onWrite);
-    bool removeWatchpoint(int index);
-    void setWatchpointEnabled(int index, bool enabled);
-    const Watchpoint* getWatchpoint(int index) const;
-    int  getWatchpointCount() const;
+    bool addWatchpoint(uint32_t address, uint16_t length, bool isPhysical, bool onRead, bool onWrite);
+    bool removeWatchpoint(size_t index);
+    void setWatchpointEnabled(size_t index, bool enabled);
+    const Watchpoint* getWatchpoint(size_t index) const;
+    size_t  getWatchpointCount() const;
     void clearAllWatchpoints();
-    int  findWatchpointByStartAddress(uint32_t address, bool isPhysical) const;
+    bool findWatchpointByStartAddress(uint32_t address, bool isPhysical, size_t& index) const;
 
     // Watchpoint emulation integration
     bool hasActiveWatchpoints() const;
-    // Returns index of triggered watchpoint (0-7) or -1 if none
-    int checkWatchpoint(uint16_t logicalAddress, uint32_t physicalAddress, bool isRead) const;
+    // Returns triggered watchpoint or nullptr if none
+    bool checkWatchpoint(uint16_t logicalAddress, uint32_t physicalAddress, bool isRead, size_t &index) const;
 
-    void logTrace(const Breakpoint* breakpoint, z80_t cpu, uint32_t physicalAddress, uint64_t tick, std::function<uint8_t(uint16_t)> memRead);
+    void logTrace(const Breakpoint* breakpoint, z80_t cpu, uint32_t physicalAddress, uint8_t memoryPage[4], bool pageEnabled, uint64_t tick, std::function<uint8_t(uint16_t)> memRead);
 
     std::deque<TraceLog> *getTraceLogs();
-    int getLogSize();
+    size_t getLogSize();
 
-private:
-    static const int MAX_BREAKPOINTS = 8;
-    static const int MAX_SYSTEM_BREAKPOINTS = 2;
-    static const int MAX_WATCHPOINTS = 8;
-
-    static const int DEFAULT_TRACE_SIZE = 1000;
-
-    Breakpoint* breakpoints[MAX_BREAKPOINTS] = {};
-    Breakpoint systemBreakpoints[MAX_SYSTEM_BREAKPOINTS] = {};
-    Watchpoint watchpoints[MAX_WATCHPOINTS] = {};
-    int breakpointCount = 0;
-    int watchpointCount = 0;
-    bool activeBreakpoints = false;
-    bool activeWatchpoints = false;
-
-    void updateActiveBreakpoints();
-    void updateActiveWatchpoints();
-
-    std::deque<TraceLog> traceLogs;
-    size_t maxTraceLogSize = DEFAULT_TRACE_SIZE;
+    void clearAllLogs();
 
     const Breakpoint BDOS_Trace = Breakpoint{ 0x05, false, true, true, "BDOS", {
-        {C, BYTE, 0xFF, true, {
+        {C, BYTE, 0x0FF, true, {
             {0, "P_TERMCPM: Reset"}, 
             {1, "C_READ: Console input"},
             {2, "C_WRITE: Console output"},
@@ -181,7 +165,29 @@ private:
             {37, "DRV_RESET: Reset drives"},
             {40, "F_WRITEZF: Write random, zero fill"}
         }},
-        {E, BYTE},
+        {E, CHAR},
         {DE, ADDRESS, 36}
     } };
+    static const size_t MAX_BREAKPOINTS = 8;
+    static const size_t MAX_WATCHPOINTS = 8;
+
+private:
+    static const size_t MAX_SYSTEM_BREAKPOINTS = 2;
+
+    static const int DEFAULT_TRACE_SIZE = 1000;
+
+    Breakpoint* breakpoints[MAX_BREAKPOINTS] = {};
+    Breakpoint systemBreakpoints[MAX_SYSTEM_BREAKPOINTS] = {};
+    Watchpoint watchpoints[MAX_WATCHPOINTS] = {};
+    size_t breakpointCount = 0;
+    size_t watchpointCount = 0;
+    bool activeBreakpoints = false;
+    bool activeWatchpoints = false;
+
+    void updateActiveBreakpoints();
+    void updateActiveWatchpoints();
+
+    std::deque<TraceLog> traceLogs;
+    size_t maxTraceLogSize = DEFAULT_TRACE_SIZE;
+
 };

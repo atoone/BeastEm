@@ -1,7 +1,7 @@
 Hex	Opcode	Length	Cycles	After CB	Length	Cycles	After DDFDCB	Length	Cycles	After ED	Length	Cycles			Key	
 00	NOP	1	4	RLC B	1	8	"LD B, RLC (HL)"	1	0						^	16-bit number (two bytes)
 01	"LD BC, ^"	3	10	RLC C	1	8	"LD C, RLC (HL)"	1	0						$	8-bit number (one byte)
-02	"LD BC, (A)"	1	7	RLC D	1	8	"LD D, RLC (HL)"	1	0						%	2s comp offset (1 byte)
+02	"LD (BC), A"	1	7	RLC D	1	8	"LD D, RLC (HL)"	1	0						%	2s comp offset (1 byte)
 03	INC BC	1	6	RLC E	1	8	"LD E, RLC (HL)"	1	0							
 04	INC B	1	4	RLC H	1	8	"LD H, RLC (HL)"	1	0							
 05	DEC B	1	4	RLC L	1	8	"LD L, RLC (HL)"	1	0							
