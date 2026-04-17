@@ -69,5 +69,6 @@
         "iomanip": "cpp",
         "filesystem": "cpp"
     },
-    "idf.pythonInstallPath": "C:\\Users\\Andy\\.espressif\\tools\\idf-python\\3.8.7\\python.exe"
+    "idf.pythonInstallPath": "C:\\Users\\Andy\\.espressif\\tools\\idf-python\\3.8.7\\python.exe",
+    "idf.currentSetup": "d:\\projects\\esp\\esp-idf"
 }

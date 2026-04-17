@@ -428,7 +428,7 @@ void GUI::drawPrompt(bool immediate) {
             std::size_t length = lookupSource->getLabel(i).copy(buffer, maxLen);
             buffer[length] = '\0';
 
-            printb((promptX + charWidth)/zoom,  (promptTop+5*charHeight)/zoom+i*MEM_ROW_HEIGHT, color, lookupIndex == i+1 ? length: 0, bright, buffer);
+            printb((promptX + charWidth)/zoom,  (promptTop+4.5*charHeight)/zoom+i*MEM_ROW_HEIGHT, color, lookupIndex == i+1 ? length: 0, bright, buffer);
             if( lookupIndex == i+1 ) {
                 print((promptX + 2*charWidth)/zoom, (promptTop-1*charHeight)/zoom+promptHeight, color, 0, bright, lookupSource->getDescription1(i).c_str());
                 print((promptX + 2*charWidth)/zoom, promptTop/zoom+promptHeight, color, 0, bright, lookupSource->getDescription2(i).c_str());
@@ -467,7 +467,7 @@ void GUI::promptLabel() {
     isFirstTextEvent = true;
     oldEditLength = editLength;
     editLength = MAX_LABEL_LENGTH;
-    promptHeight += 5*charHeight + LABEL_LIST_LENGTH * MEM_ROW_HEIGHT;
+    promptHeight += 5*ROW_HEIGHT + LABEL_LIST_LENGTH * MEM_ROW_HEIGHT;
     this->lookupSource = lookupSource;
     lookupSource->lookup(stringValue);
     lookupIndex = 0;
@@ -513,12 +513,12 @@ int GUI::printb(int x, int y, SDL_Color color, int highlight, SDL_Color backgrou
         if( highlight > 0 ) {
             buffer[highlight] = (char)0;
             TTF_SizeUTF8(monoFont, buffer, &width, &height);
-            boxRGBA(sdlRenderer, x*zoom, (y+1)*zoom, x*zoom+width, (y-2)*zoom+height, background.r, background.g, background.b, 0xFF);
+            boxRGBA(sdlRenderer, x*zoom, (y+3)*zoom, x*zoom+width, y*zoom+textSurface->h, background.r, background.g, background.b, 0xFF);
         }
         else if( highlight < 0 ) {
             buffer += strlen(buffer)+highlight;
             TTF_SizeUTF8(monoFont, buffer, &width, &height);
-            boxRGBA(sdlRenderer, x*zoom+textSurface->w-width, (y+1)*zoom, x*zoom+textSurface->w, (y-2)*zoom+height, background.r, background.g, background.b, 0xFF);
+            boxRGBA(sdlRenderer, x*zoom+textSurface->w-width, (y+3)*zoom, x*zoom+textSurface->w, y*zoom+textSurface->h, background.r, background.g, background.b, 0xFF);
         }
     }
 

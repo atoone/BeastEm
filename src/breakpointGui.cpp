@@ -659,17 +659,18 @@ void BreakpointGui::drawTraceLog() {
 
   uint64_t lastTick = ((logStart < logs->size()) && (logStart > 0)) ? logs->at(logStart-1).tick: 0;
 
+  int row = GUI::ROW2;
+
   for (size_t i=logStart; i<logStart+LOG_LIST_SIZE; i++) {
     if (i<logs->size()) {
-        int row = GUI::ROW3 + ((i-logStart) * GUI::ROW_HEIGHT);
         TraceLog log = logs->at(i);
 
         int offset = 0;
         if (!showRelative) {
-          offset = gui->print(GUI::COL1, row, textColor, i==currentLog ? 15: 0, bright, "%15s ", addSeparator(log.tick).c_str());
+          offset = gui->print(GUI::COL1, row, textColor, i==currentLog ? 16: 0, bright, "%15s ", addSeparator(log.tick).c_str());
         }
         else {
-          offset = gui->print(GUI::COL1, row, textColor, i==currentLog ? 15: 0, bright, "%+15d ", log.tick-lastTick);
+          offset = gui->print(GUI::COL1, row, textColor, i==currentLog ? 16: 0, bright, "%+15d ", log.tick-lastTick);
         }
         lastTick = log.tick;
 
@@ -685,7 +686,12 @@ void BreakpointGui::drawTraceLog() {
 
           offset += gui->print(GUI::COL1 + offset, row, textColor, 0 , bright, traceStr.c_str());
         }
+      
+        row+=GUI::ROW_HEIGHT;
     }
+  }
+  if (logStart+LOG_LIST_SIZE+1 <= logs->size()) {
+    gui->print(GUI::COL5, row, textColor, 0, bright, "... +%d more", logs->size()-logStart-LOG_LIST_SIZE);
   }
 
   if (currentLog < debugManager->getLogSize()) {
@@ -784,16 +790,18 @@ std::string BreakpointGui::getTraceString(TraceLog log, Trace trace, int &value)
   }
 
   switch( trace.traceType) {
-    case TraceType::BYTE    : traceStr = gui->string_format("%s0x%02X ", traceStr.c_str(), value & trace.modifier); break;
-    case TraceType::CHAR    : 
-        if ((value < 32) || (value > 127)) {
-          traceStr = gui->string_format("%s? ", traceStr.c_str()); 
+    case TraceType::BYTE    : 
+        if (trace.isMap) {
+          traceStr = gui->string_format("%s0x%02X",traceStr.c_str(), value);
+        }
+        else if ((value < 32) || (value > 127)) {
+          traceStr = gui->string_format("%s0x%02X  (%4d)  -?-", traceStr.c_str(), value, (int8_t)value); 
         }
         else {
-          traceStr = gui->string_format("%s'%c' ", traceStr.c_str(),  value); 
+          traceStr = gui->string_format("%s0x%02X  (%4d)  '%c'", traceStr.c_str(), value, (int8_t)value,  value); 
         }
         break;
-    case TraceType::WORD    : traceStr = gui->string_format("%s0x%04X ", traceStr.c_str(), value & trace.modifier); break;
+    case TraceType::WORD    : traceStr = gui->string_format("%s0x%04X (%6d)", traceStr.c_str(), value, (int16_t)value); break;
     case TraceType::ADDRESS : 
         if (log.pagingEnabled) {
           int bank    = (value >> 14) & 0x03;
@@ -846,7 +854,7 @@ GUI::Mode BreakpointGui::traceLogMenu(SDL_Event windowEvent, GUI::Mode mode) {
       break;
 
     case SDLK_DOWN:
-      if( currentLog < debugManager->getLogSize() ) {
+      if( currentLog < debugManager->getLogSize()-1 ) {
         currentLog++;
         if( currentLog >= logStart+LOG_LIST_SIZE ) {
           logStart = currentLog - LOG_LIST_SIZE+1;

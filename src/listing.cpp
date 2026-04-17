@@ -541,14 +541,14 @@ int Listing::getValue(size_t index) {
 }
 
 std::string Listing::getDescription1(size_t index) {
-    if (index>symbolLookup.size()) return 0;
+    if (index>symbolLookup.size()) return "";
 
     Symbol& symbol = symbolLookup[index];
     return GUI::string_format("0x%04X  Physical: 0x%05X", symbol.value, (symbol.value & 0x3FFF) | (symbol.page << 14));
 }
 
 std::string Listing::getDescription2(size_t index) {
-    if (index>symbolLookup.size()) return 0;
+    if (index>symbolLookup.size()) return "";
 
     Symbol& symbol = symbolLookup[index];
     return GUI::string_format("File %d: %-14s", symbol.fileNum+1, sources[symbol.fileNum].filename.c_str());

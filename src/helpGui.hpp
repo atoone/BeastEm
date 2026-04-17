@@ -82,6 +82,9 @@ class HelpGui {
             row += GUI::ROW_HEIGHT;
 
             gui->print(GUI::COL1, row, textColor, "click on the display window and use the '[' and ']' keys");
+            row += GUI::ROW_HEIGHT*2;
+
+            gui->print(GUI::COL1, row, textColor, "Start with '-r' to Run on launch, or '-g' to open debug instead of this help");
             row += GUI::ROW_HEIGHT;
 
             gui->print(GUI::COL1, GUI::END_ROW, menuColor, "[R]un");

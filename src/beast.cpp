@@ -14,7 +14,7 @@
 #include <stdio.h>
 
 Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom,
-             Listing &listing, std::vector<BinaryFile> files)
+             Listing &listing, std::vector<BinaryFile> files, GUI::Mode startMode)
     : rom{}, ram{}, memoryPage{0}, listing(listing), binaryFiles(files),
       gui(&listing, createRenderer(window), screenWidth, screenHeight) {
 
@@ -25,6 +25,8 @@ Beast::Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom,
   this->screenHeight = screenHeight;
   this->zoom = checkZoomFactor(screenWidth, screenHeight, zoom);
 
+  this->mode = startMode;
+  
   TTF_Init();
   gui.init(this->zoom);
 
