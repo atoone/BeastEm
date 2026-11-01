@@ -54,7 +54,11 @@ bool BinaryFile::isWatched() {
 
 bool BinaryFile::isUpdated() {
     if( watch ) {
-        return lastRead < std::filesystem::last_write_time(filename);
+        // The file can briefly vanish while an editor or assembler rewrites it;
+        // treat that as unchanged and check again next time.
+        std::error_code ec;
+        auto writeTime = std::filesystem::last_write_time(filename, ec);
+        return !ec && lastRead < writeTime;
     }
     return false;
 }
@@ -66,15 +70,12 @@ void BinaryFile::toggleWatch() {
 size_t BinaryFile::load(uint8_t *rom, uint8_t *ram, bool pagingEnabled, uint8_t pageMap[4], uint8_t *videoRam) {
     uint32_t loadAddress = address;
     std::stringstream ss;
-    
-    bool isRom = loadAddress < ROM_SIZE;
-    unsigned int space = isRom ? (ROM_SIZE-loadAddress) : (RAM_SIZE+ROM_SIZE-loadAddress);
     std::string destName;
 
     switch( destination ) {
         case PAGE_OFFSET: {
             loadAddress = (page << 14) | (address & 0x3FFF);
-            ss << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex << page;
+            ss << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex << (int)page;
             ss << ":0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << (address & 0x3FFF);
             break;
         }
@@ -83,13 +84,27 @@ size_t BinaryFile::load(uint8_t *rom, uint8_t *ram, bool pagingEnabled, uint8_t 
             break;
         case PHYSICAL: 
             ss << "0x" << std::uppercase << std::setfill('0') << std::setw(5) << std::hex << address;
-            destName = isRom? "ROM": "RAM";
             break;
         case VIDEO_RAM:
             ss << "0x" << std::uppercase << std::setfill('0') << std::setw(5) << std::hex << address;
-            destName = "Video RAM";
-            space = VIDEO_RAM_SIZE;
             break;
+    }
+
+    // Work out ROM/RAM and available space from the final load address, which
+    // for PAGE_OFFSET differs from the address given on the command line.
+    bool isRom = loadAddress < ROM_SIZE;
+    unsigned int space;
+    if( destination == VIDEO_RAM ) {
+        destName = "Video RAM";
+        space = (loadAddress < VIDEO_RAM_SIZE) ? (VIDEO_RAM_SIZE-loadAddress) : 0;
+    }
+    else if( isRom ) {
+        destName = "ROM";
+        space = ROM_SIZE-loadAddress;
+    }
+    else {
+        destName = "RAM";
+        space = (loadAddress < ROM_SIZE+RAM_SIZE) ? (ROM_SIZE+RAM_SIZE-loadAddress) : 0;
     }
 
     std::string destStr = ss.str();
@@ -97,12 +112,12 @@ size_t BinaryFile::load(uint8_t *rom, uint8_t *ram, bool pagingEnabled, uint8_t 
     std::ifstream ifs(filename, std::ios::binary|std::ios::ate);
     std::ifstream::pos_type pos = ifs.tellg();
 
-    unsigned int length = pos;
-
-    if( length == 0 ) {
+    if( !ifs || pos <= 0 ) {
         std::cout << "Binary file does not exist: " << filename << std::endl;
         return 0;
     }
+    unsigned int length = pos;
+
     if( destination == LOGICAL && ((address & 0x0FFFF) + length) > 0x0FFFF ) {
         std::cout << "Binary file exceeds space starting at " << destStr << " with " << length << " bytes" << std::endl;
         return 0;
@@ -113,6 +128,13 @@ size_t BinaryFile::load(uint8_t *rom, uint8_t *ram, bool pagingEnabled, uint8_t 
     }
 
     ifs.seekg(0, std::ios::beg);
+
+    // Record the timestamp before reading, so a write during the read triggers another reload
+    std::error_code ec;
+    auto writeTime = std::filesystem::last_write_time(filename, ec);
+    if( !ec ) {
+        lastRead = writeTime;
+    }
 
     if( destination == LOGICAL ) {
         int cpuBank = (address >> 14) & 0x03;
@@ -141,7 +163,6 @@ size_t BinaryFile::load(uint8_t *rom, uint8_t *ram, bool pagingEnabled, uint8_t 
             loadAddress += loadLength;
             remaining -= loadLength;
         }
-        lastRead = std::filesystem::last_write_time(filename);
 
         std::cout << "Read file '" << filename << "' (" << (length/1024) << "K) to " << destStr << std::endl;
     }

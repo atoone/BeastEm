@@ -224,7 +224,11 @@ void Listing::loadFile(Source &source) {
 
   std::string text;
 
-  source.lastRead = std::filesystem::last_write_time(source.filename);
+  std::error_code ec;
+  auto writeTime = std::filesystem::last_write_time(source.filename, ec);
+  if (!ec) {
+    source.lastRead = writeTime;
+  }
   std::ifstream myfile(source.filename);
 
   if (!isValidListing(myfile)) {
@@ -463,7 +467,11 @@ bool Listing::isWatched(Source &file) { return file.watch; }
  */
 bool Listing::isUpdated(Source &file) {
   if (file.watch) {
-    return file.lastRead < std::filesystem::last_write_time(file.filename);
+    // The file can briefly vanish while the assembler rewrites it;
+    // treat that as unchanged and check again next time.
+    std::error_code ec;
+    auto writeTime = std::filesystem::last_write_time(file.filename, ec);
+    return !ec && file.lastRead < writeTime;
   }
   return false;
 }
