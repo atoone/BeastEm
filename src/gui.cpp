@@ -449,7 +449,7 @@ void GUI::drawPrompt(bool immediate) {
             std::size_t length = lookupSource->getLabel(i).copy(buffer, maxLen);
             buffer[length] = '\0';
 
-            printfb(monoFont, (promptX + charWidth)/zoom,  (promptTop+5*charHeight)/zoom+i*MEM_ROW_HEIGHT, color, lookupIndex == i+1 ? length: 0, bright, buffer);
+            printfb(monoFont, (promptX + charWidth)/zoom,  (promptTop+4.5*charHeight)/zoom+i*MEM_ROW_HEIGHT, color, lookupIndex == i+1 ? length: 0, bright, buffer);
             if( lookupIndex == i+1 ) {
                 print((promptX + 2*charWidth)/zoom, (promptTop-1*charHeight)/zoom+promptHeight, color, 0, bright, lookupSource->getDescription1(i).c_str());
                 print((promptX + 2*charWidth)/zoom, promptTop/zoom+promptHeight, color, 0, bright, lookupSource->getDescription2(i).c_str());
@@ -488,7 +488,7 @@ void GUI::promptLabel() {
     isFirstTextEvent = true;
     oldEditLength = editLength;
     editLength = MAX_LABEL_LENGTH;
-    promptHeight += 5*charHeight + LABEL_LIST_LENGTH * MEM_ROW_HEIGHT;
+    promptHeight += 5*ROW_HEIGHT + LABEL_LIST_LENGTH * MEM_ROW_HEIGHT;
     this->lookupSource = lookupSource;
     lookupSource->lookup(stringValue);
     lookupIndex = 0;
@@ -563,7 +563,7 @@ int GUI::printfb(TTF_Font *font, int x, int y, SDL_Color color, int highlight, S
             boxX = x*zoom + textSurface->w - hWidth;
         }
 
-        boxRGBA(sdlRenderer, boxX, (y+1)*zoom, boxX + hWidth, (y-2)*zoom + hHeight,
+        boxRGBA(sdlRenderer, boxX, (y+3)*zoom, boxX + hWidth, y*zoom + textSurface->h,
                 background.r, background.g, background.b, 0xFF);
 
         SDL_Color inkColor = Theme::instance().highlight_ink;

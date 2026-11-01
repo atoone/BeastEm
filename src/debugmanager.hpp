@@ -9,7 +9,7 @@
 
 enum TraceValue {PC, SP, A, F, B, C, D, E, H, L, BC, DE, HL, IX, IY};
 
-enum TraceType {BYTE, CHAR, WORD, ADDRESS, STRING};
+enum TraceType {BYTE, WORD, ADDRESS, STRING};
 
 struct TraceMap {
     // A Map converts a traced value to a (string) label
@@ -165,7 +165,7 @@ public:
             {37, "DRV_RESET: Reset drives"},
             {40, "F_WRITEZF: Write random, zero fill"}
         }},
-        {E, CHAR},
+        {E, BYTE},
         {DE, ADDRESS, 36}
     } };
     static const size_t MAX_BREAKPOINTS = 8;

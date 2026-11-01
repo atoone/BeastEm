@@ -60,6 +60,8 @@ void printHelp() {
     std::cout << "   -z <zoom-level>                  : Zoom the user interface by the given value" << std::endl;
     std::cout << "   -d <filename> | -d2 <filename>   : Start VideoBeast with the given file in video ram" << std::endl;
     std::cout << "   -A <asset-path>                  : Path to asset files (default: BEASTEM_ASSETS env or cwd)" << std::endl;
+    std::cout << "   -r                               : Run MicroBeast on launch" << std::endl;
+    std::cout << "   -g                               : Open Debug page on launch" << std::endl;
 }
 
 int main( int argc, char *argv[] ) {
@@ -71,6 +73,7 @@ int main( int argc, char *argv[] ) {
     float zoom = 1.0;
     std::string assetPathArg;
 
+    GUI::Mode startMode = GUI::HELP;
     uint64_t breakpoint = Beast::NOT_SET;
     Listing listing;
     VideoBeast *videoBeast = nullptr;
@@ -202,6 +205,12 @@ int main( int argc, char *argv[] ) {
             printHelp();
             exit(1);
         }
+        else if( strcmp(argv[index], "-r") == 0 ) {
+            startMode = GUI::RUN;
+        }
+        else if( strcmp(argv[index], "-g") == 0 ) {
+            startMode = GUI::DEBUG;
+        }
         else {
             std::cout << "** Unknown option: " << argv[index] << std::endl;
             printHelp();
@@ -215,7 +224,7 @@ int main( int argc, char *argv[] ) {
     NFD_Init();
     SDL_Init( SDL_INIT_EVERYTHING );
 
-    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator v1.3rc1", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
+    SDL_Window *window = SDL_CreateWindow("Feersum MicroBeast Emulator v1.3rc2", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*zoom, HEIGHT*zoom, SDL_WINDOW_ALLOW_HIGHDPI);
 
     if( NULL == window ) {
         std::cout << "Could not create window: " << SDL_GetError() << std::endl;
@@ -233,7 +242,7 @@ int main( int argc, char *argv[] ) {
         binaries.push_back(BinaryFile(assetPath("flash_v1.7.bin"), 0, false));
     }
 
-    Beast beast = Beast(window, WIDTH, HEIGHT, zoom, listing, binaries);
+    Beast beast = Beast(window, WIDTH, HEIGHT, zoom, listing, binaries, startMode);
  
     beast.init(targetSpeed*ONE_KILOHERTZ, breakpoint, audioDevice, volume, sampleRate, videoBeast);
 

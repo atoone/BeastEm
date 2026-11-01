@@ -77,7 +77,7 @@ class Beast {
 
 
     public:
-        Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing, std::vector<BinaryFile> files);
+        Beast(SDL_Window *window, int screenWidth, int screenHeight, float zoom, Listing &listing, std::vector<BinaryFile> files, GUI::Mode startMode);
         ~Beast();
 
         void init(uint64_t targetSpeedHz, uint64_t breakpoint, int audioDevice, int volume, int sampleRate, VideoBeast *videoBeast);
@@ -131,7 +131,7 @@ class Beast {
         int screenWidth, screenHeight;
         float zoom = 1.0f;
 
-        GUI::Mode    mode = GUI::HELP;
+        GUI::Mode    mode;
         int     selection = 0;
         int     fileActionIndex = -1;
 
