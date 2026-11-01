@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.7)
 project(BeastEm VERSION 0.1.0)
 
+# Default to an optimised build; an unoptimised emulator runs far below real speed.
+# Pass -DCMAKE_BUILD_TYPE=Debug for a debug build.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 set(BeastEm_PLATFORM Undefined)
 if(WIN32)
     set(BeastEm_PLATFORM PLATFORM_WIN32)
